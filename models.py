@@ -190,13 +190,30 @@ class TaxFee(Base):
     ED = Column(Numeric)
     Cust_docs = Column(Numeric)
     Bank_fee = Column(Numeric)
-    Eco_Fee = Column(Numeric)
-    Eco_norm = Column(Numeric)
     Moving = Column(Numeric)
     Storing = Column(Numeric)
     Money = Column(Numeric)
     Add_money = Column(Numeric)
     
+class EcoFee_amount(Base):
+    __tablename__ = 'ecofee_amount'
+    
+    id = Column(Integer, primary_key=True)
+    merge = Column(String)
+    TNVED = Column(String)
+    Year = Column(Integer)
+    Amount = Column(Numeric)
+    
+    
+class EcoFee_standard(Base):
+    __tablename__ = 'ecofee_standard'
+    
+    id = Column(Integer, primary_key=True)
+    merge = Column(String)
+    TNVED = Column(String)
+    Year = Column(Integer)
+    Standard = Column(Numeric)
+
 
 class DOCType(Base):
     __tablename__ = 'doctype'

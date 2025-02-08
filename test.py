@@ -247,17 +247,17 @@ data_file = "C:\\работа\\My_Work_Phoenix\\Daily_Report\\! All DATA !.xlsx"
 #     sys.exit(app.exec())
 
 
-import sys
-import pandas as pd
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QLineEdit, QTableWidget, QTableWidgetItem,
-                             QHeaderView)
-from PySide6.QtCore import Qt
+# import sys
+# import pandas as pd
+# from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+#                              QLineEdit, QTableWidget, QTableWidgetItem,
+#                              QHeaderView)
+# from PySide6.QtCore import Qt
 
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+# class MainWindow(QMainWindow):
+#     def __init__(self):
+#         super().__init__()
 
         # self.df = pd.DataFrame({  # DataFrame remains the same
         #     "Артикул": ["550042231", "550046940", "550046808", "ATF6011RC", "W309", "W309_", "GS55545D2EUR"],
@@ -275,56 +275,69 @@ class MainWindow(QMainWindow):
         #     "Плотность": [880, 877, 877, 847, 1000, 1000, 838],
         #     "Код ТНВЭД": [2710198800, 2710198400, 2710198400, 2710199800, 2712209000, 2712209000, 2710198200]
         # })
-        self.df = pd.read_excel(data_file, sheet_name="Oils")
-        self.df = self.df[["Артикул", "ID 1C", "Продукт + упаковка", "Product name", "Type", "Категория", "Brand", 
-                            "Family", "ЕИ в 1С", "ЕИ", "Вид упаковки", "Акциз (да/нет)", "ЭкоСбор (да/нет)", 
-                            "Упаковка для названия", "Упаковка", "Кол-во в упак", "Плотность", "Код ТНВЭД", 
-                            "проверка ТН ВЭД", "Страна происх.", "Stock strategy", "Статус", "ABC"]]
+#         self.df = pd.read_excel(data_file, sheet_name="Oils")
+#         self.df = self.df[["Артикул", "ID 1C", "Продукт + упаковка", "Product name", "Type", "Категория", "Brand", 
+#                             "Family", "ЕИ в 1С", "ЕИ", "Вид упаковки", "Акциз (да/нет)", "ЭкоСбор (да/нет)", 
+#                             "Упаковка для названия", "Упаковка", "Кол-во в упак", "Плотность", "Код ТНВЭД", 
+#                             "проверка ТН ВЭД", "Страна происх.", "Stock strategy", "Статус", "ABC"]]
         
-        self.table = QTableWidget()
-        self.table.setColumnCount(len(self.df.columns))
-        self.table.setRowCount(len(self.df))
-        self.table.setHorizontalHeaderLabels(self.df.columns)
-        self.populate_table()
+#         self.table = QTableWidget()
+#         self.table.setColumnCount(len(self.df.columns))
+#         self.table.setRowCount(len(self.df))
+#         self.table.setHorizontalHeaderLabels(self.df.columns)
+#         self.populate_table()
 
-        filter_columns = ["Артикул", "Продукт + упаковка", "Вид упаковки", "Код ТНВЭД"]
-        self.filters = {col: QLineEdit() for col in filter_columns}
-        for i, col in enumerate(filter_columns):
-            self.filters[col].textChanged.connect(lambda text, col=col: self.filter_table(col, text))
+#         filter_columns = ["Артикул", "Продукт + упаковка", "Вид упаковки", "Код ТНВЭД"]
+#         self.filters = {col: QLineEdit() for col in filter_columns}
+#         for i, col in enumerate(filter_columns):
+#             self.filters[col].textChanged.connect(lambda text, col=col: self.filter_table(col, text))
 
-        layout = QVBoxLayout()
-        for col in filter_columns:
-            layout.addWidget(self.filters[col])
-        layout.addWidget(self.table)
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
+#         layout = QVBoxLayout()
+#         for col in filter_columns:
+#             layout.addWidget(self.filters[col])
+#         layout.addWidget(self.table)
+#         container = QWidget()
+#         container.setLayout(layout)
+#         self.setCentralWidget(container)
 
-    def populate_table(self):
-        for i, row in self.df.iterrows():
-            for j, col in enumerate(self.df.columns):
-                item = QTableWidgetItem(str(row[col]))
-                self.table.setItem(i, j, item)
+#     def populate_table(self):
+#         for i, row in self.df.iterrows():
+#             for j, col in enumerate(self.df.columns):
+#                 item = QTableWidgetItem(str(row[col]))
+#                 self.table.setItem(i, j, item)
 
-    def filter_table(self, column, text):
-        filter_string = text.lower()
-        filtered_df = self.df[self.df[column].str.lower().str.contains(filter_string)]
-        self.table.setRowCount(len(filtered_df))
-        self.populate_table(filtered_df)  # Update the table with filtered data
+#     def filter_table(self, column, text):
+#         filter_string = text.lower()
+#         filtered_df = self.df[self.df[column].str.lower().str.contains(filter_string)]
+#         self.table.setRowCount(len(filtered_df))
+#         self.populate_table(filtered_df)  # Update the table with filtered data
 
-    def populate_table(self, df=None):
-        df_to_use = df if df is not None else self.df
-        for i, row in df_to_use.iterrows():
-            for j, col in enumerate(df_to_use.columns):
-                item = QTableWidgetItem(str(row[col]))
-                self.table.setItem(i, j, item)
+#     def populate_table(self, df=None):
+#         df_to_use = df if df is not None else self.df
+#         for i, row in df_to_use.iterrows():
+#             for j, col in enumerate(df_to_use.columns):
+#                 item = QTableWidgetItem(str(row[col]))
+#                 self.table.setItem(i, j, item)
 
-    def sort_table(self, column, order):
-        self.df.sort_values(by=self.df.columns[column], ascending=order == Qt.AscendingOrder, inplace=True)
-        self.populate_table()
+#     def sort_table(self, column, order):
+#         self.df.sort_values(by=self.df.columns[column], ascending=order == Qt.AscendingOrder, inplace=True)
+#         self.populate_table()
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+# if __name__ == "__main__":
+#     app = QApplication(sys.argv)
+#     window = MainWindow()
+#     window.show()
+#     sys.exit(app.exec())
+
+data_file = "C:\\работа\\My_Work_Phoenix\\Daily_Report_QT\\WorkFiles\\! All DATA !.xlsx"
+import pandas as pd
+
+
+df = pd.read_excel(data_file, sheet_name="экосбор_ставки", skiprows=1)
+df = df.drop(["признак", "группа"], axis=1)
+df_melted = df.melt(id_vars=["Код ТНВЭД",  ])
+df_melted = df_melted.rename(columns={"Код ТНВЭД": "TNVED", "variable": "Year", "value": "amount"})
+df_melted = df_melted.sort_values(["TNVED", "Year"])
+df_melted["id"] = df_melted.TNVED.astype(str) + "_" + df_melted.Year.astype(str)
+# print(df_melted.to_string())
+print(df_melted)
