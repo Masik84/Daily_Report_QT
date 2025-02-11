@@ -330,14 +330,26 @@ data_file = "C:\\работа\\My_Work_Phoenix\\Daily_Report\\! All DATA !.xlsx"
 #     sys.exit(app.exec())
 
 data_file = "C:\\работа\\My_Work_Phoenix\\Daily_Report_QT\\WorkFiles\\! All DATA !.xlsx"
-import pandas as pd
+# import pandas as pd
 
 
-df = pd.read_excel(data_file, sheet_name="экосбор_ставки", skiprows=1)
-df = df.drop(["признак", "группа"], axis=1)
-df_melted = df.melt(id_vars=["Код ТНВЭД",  ])
-df_melted = df_melted.rename(columns={"Код ТНВЭД": "TNVED", "variable": "Year", "value": "amount"})
-df_melted = df_melted.sort_values(["TNVED", "Year"])
-df_melted["id"] = df_melted.TNVED.astype(str) + "_" + df_melted.Year.astype(str)
-# print(df_melted.to_string())
-print(df_melted)
+# df = pd.read_excel(data_file, sheet_name="экосбор_ставки", skiprows=1)
+# df = df.drop(["признак", "группа"], axis=1)
+# df_melted = df.melt(id_vars=["Код ТНВЭД",  ])
+# df_melted = df_melted.rename(columns={"Код ТНВЭД": "TNVED", "variable": "Year", "value": "amount"})
+# df_melted = df_melted.sort_values(["TNVED", "Year"])
+# df_melted["id"] = df_melted.TNVED.astype(str) + "_" + df_melted.Year.astype(str)
+# # print(df_melted.to_string())
+# print(df_melted)
+
+import polars as pl
+import polars.selectors as cs
+
+df = pl.read_excel(data_file, engine='xlsx2csv', sheet_name="экосбор_ставки", 
+                   engine_options={"skip_hidden_rows": False, "ignore_formats": ["float"]}, read_options={'ignore_errors': True, 'skip_rows': 1})
+df = df.drop(["признак", "группа"])
+df = df.unpivot(index="Код ТНВЭД", )
+df = df.rename({"Код ТНВЭД": "TNVED", "variable": "Year", "value": "amount"})
+df = df.with_columns(pl.col("TNVED").cast(pl.String), pl.col("Year").cast(pl.Int64), pl.col("amount").cast(pl.Float64))
+df = df.with_columns(pl.concat_str([pl.col('TNVED'), pl.col('Year'), ], separator='_', ignore_nulls=True).alias('merge'))
+print(df)

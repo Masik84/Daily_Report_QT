@@ -135,7 +135,7 @@ class ProdName(Base):
     Family = Column(String)
 
     Brand_id = Column(Integer, ForeignKey(Brand.id), index=True)
-    Brand_Table = relationship('Brand')   
+    Brand_Table = relationship('Brand', )  # Corrected backref
 
 
 class Material(Base):
