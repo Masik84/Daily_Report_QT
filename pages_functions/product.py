@@ -141,105 +141,6 @@ class Product(QWidget):
         return prod_df
 
 
-    def save_Brand(self, data):
-        processed = []
-        brand_unique = []
-        for row in data:
-            if row['Brand'] not in processed:
-                brand = {'Brand': row['Brand']}
-                brand_unique.append(brand)
-                processed.append(brand['Brand'])
-
-        brand_for_upload = []
-        brand_for_update = []
-        for mylist in brand_unique:
-            brand_exists = Brand.query.filter(Brand.Brand == mylist['Brand']).count()
-            if brand_exists == 0:
-                new_brand = {'Brand': mylist['Brand']}
-                brand_for_upload.append(new_brand)
-
-            elif brand_exists >0:
-                new_brand = {'id': self.get_id_Brand(mylist['Brand']), 'Brand': mylist['Brand']}
-                brand_for_update.append(new_brand)
-
-        db.bulk_insert_mappings(Brand, brand_for_upload)
-        db.bulk_update_mappings(Brand, brand_for_update)
-        
-        try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-        return brand_for_upload
-
-
-    def get_id_Brand(self, brand):
-        db_data = Brand.query.filter(Brand.Brand == brand).first()
-        brand_id = db_data.id
-        return brand_id
-
-
-    def save_ProdName(self, data):
-        processed = []
-        prod_name_unique = []
-        for row in data:
-            if row['Product_Name'] not in processed:
-                prod_name = {'Product_Name': row['Product_Name'],
-                                        'Type': row['Type'],
-                                        'Category': row['Category'],
-                                        'Family': row['Family'],
-                                        'Brand_id': self.get_id_Brand(row["Brand"])}
-                prod_name_unique.append(prod_name)
-                processed.append(prod_name['Product_Name'])
-
-        prod_name_for_upload = []
-        prod_name_for_update = []
-        for mylist in prod_name_unique:
-            prod_name_exists = ProdName.query.filter(ProdName.Product_Name == mylist['Product_Name']).count()
-            if prod_name_exists == 0:
-                new_prod_name = {'Product_Name': mylist['Product_Name'],
-                                                'Type': mylist['Type'],
-                                                'Category': mylist['Category'],
-                                                'Family': mylist['Family'],
-                                                'Brand_id': mylist['Brand_id'] }
-                prod_name_for_upload.append(new_prod_name)
-            elif prod_name_exists > 0:
-                new_prod_name = {'id': self.get_id_ProdName(mylist['Product_Name']), 
-                                                'Product_Name': mylist['Product_Name'],
-                                                'Type': mylist['Type'],
-                                                'Category': mylist['Category'],
-                                                'Family': mylist['Family'],
-                                                'Brand_id': mylist["Brand_id"] }
-                prod_name_for_update.append(new_prod_name)
-
-        db.bulk_insert_mappings(ProdName, prod_name_for_upload)
-        db.bulk_update_mappings(ProdName, prod_name_for_update)
-        
-        try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-        return prod_name_for_upload
-
-
-    def get_id_ProdName(self, prodName):
-        db_data = ProdName.query.filter(ProdName.Product_Name == prodName).first()
-        prodName_id = db_data.id
-
-        return prodName_id
-
-
     def save_Material(self, data):
         processed = []
         prod_unique = []
@@ -250,7 +151,11 @@ class Product(QWidget):
                             'prod_art': str(row['prod_art']),
                             'prod_art_for_price': str(row['prod_art_for_price']),
                             'Material_Name': row['Material_Name'],
-                            'ProdName_id': self.get_id_ProdName(row['Product_Name']),
+                            "Product_Name" : row['Product_Name'],
+                            "Type" : row['Type'],
+                            "Category" : row['Category'],
+                            "Brand" : row['Brand'],
+                            "Family" : row['Family'],
                             'UoM': row['UoM'],
                             'UoM_1C': row['UoM_1C'],
                             'Pack_type': row['Pack_type'],
@@ -284,7 +189,11 @@ class Product(QWidget):
                                     'prod_art': str(mylist['prod_art']),
                                     'prod_art_for_price': str(mylist['prod_art_for_price']),
                                     'Material_Name': mylist['Material_Name'],
-                                    'ProdName_id': mylist['ProdName_id'],
+                                    "Product_Name" : mylist['Product_Name'],
+                                    "Type" : mylist['Type'],
+                                    "Category" : mylist['Category'],
+                                    "Brand" : mylist['Brand'],
+                                    "Family" : mylist['Family'],
                                     'UoM': mylist['UoM'],
                                     'UoM_1C': mylist['UoM_1C'],
                                     'Pack_type': mylist['Pack_type'],
@@ -312,7 +221,11 @@ class Product(QWidget):
                                     'prod_art': str(mylist['prod_art']),
                                     'prod_art_for_price': str(mylist['prod_art_for_price']),
                                     'Material_Name': mylist['Material_Name'],
-                                    'ProdName_id': mylist['ProdName_id'],
+                                    "Product_Name" : mylist['Product_Name'],
+                                    "Type" : mylist['Type'],
+                                    "Category" : mylist['Category'],
+                                    "Brand" : mylist['Brand'],
+                                    "Family" : mylist['Family'],
                                     'UoM': mylist['UoM'],
                                     'UoM_1C': mylist['UoM_1C'],
                                     'Pack_type': mylist['Pack_type'],
@@ -353,18 +266,11 @@ class Product(QWidget):
 
 
     def get_all_Products_from_db(self):
-        brand_request= db.query(ProdName, Brand).join(Brand)
         prod_reques = db.query(Material)
-        
-        brand_data = pl.read_database(query=brand_request.statement, connection=engine)
         prod_data = pl.read_database(query=prod_reques.statement, connection=engine)
         
         if prod_data.is_empty() == False:
-            prod_data = (prod_data.join(brand_data, how="left", left_on="ProdName_id", right_on="id")
-                                                .with_columns(pl.col("Pack", "Pack_qty", "Density", "Net_Weight").cast(pl.Float32)))
-            prod_data = prod_data[["id", "prod_art", "Material_Name", "Product_Name", "Family", "Brand", "UoM_1C", "Pack_type", "Pack", 
-                                                    "Pack_qty", "ED_type", "Ecofee_type", "Density", "Net_Weight", "Cntr_of_origin", "Stock_strategy", 
-                                                    "Status", "ABC", "Category", "Comment" ]]
+            prod_data = prod_data
         else:
             prod_data = pl.DataFrame()
 

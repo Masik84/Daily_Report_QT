@@ -117,26 +117,6 @@ class Comp_Plans(Base):
     
     TeamLead_Table = relationship('TeamLead')
     
-        
-class Brand(Base):
-    __tablename__ = 'brand'
-    
-    id = Column(Integer, primary_key=True)
-    Brand = Column(String)
-    
-
-class ProdName(Base):
-    __tablename__ = 'prod_name'
-    
-    id = Column(Integer, primary_key=True)
-    Product_Name = Column(String)
-    Type = Column(String)
-    Category = Column(String)
-    Family = Column(String)
-
-    Brand_id = Column(Integer, ForeignKey(Brand.id), index=True)
-    Brand_Table = relationship('Brand', )  # Corrected backref
-
 
 class Material(Base):
     __tablename__ = 'material'
@@ -145,9 +125,11 @@ class Material(Base):
     prod_art = Column(String, index=True)
     prod_art_for_price = Column(String, index=True)
     Material_Name = Column(String, nullable=False)
-    
-    ProdName_id = Column(Integer, ForeignKey(ProdName.id), index=True)
-
+    Product_Name = Column(String)
+    Type = Column(String)
+    Category = Column(String)
+    Brand = Column(String)
+    Family = Column(String)
     UoM = Column(String)
     UoM_1C = Column(String)
     Pack_type = Column(String)
@@ -168,8 +150,6 @@ class Material(Base):
     Material_Name_engl = Column(String)
     Comment = Column(String)
     ABC = Column(String)
-    
-    ProdName_Table = relationship('ProdName')
 
 
 class Supplier(Base):
