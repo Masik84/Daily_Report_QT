@@ -16,6 +16,7 @@ convention = {
 # SQLALCHEMY_DATABASE_URI = 'sqlite:///Report_db.db'
 engine = create_engine(SQLALCHEMY_DATABASE_URI)
 db = scoped_session(sessionmaker(bind=engine))
+db.session = db
 
 metadata = MetaData(
     naming_convention={

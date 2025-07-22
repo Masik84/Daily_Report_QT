@@ -1,13 +1,16 @@
+import os
 import pandas as pd
-import polars as pl
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem, QWidget
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
+                              QTableWidgetItem, QWidget)
+from PySide6.QtCore import Qt
+from functools import lru_cache
 
 from db import db, engine
-from models import Manager, TeamLead, Customer as Cust_db, Sector, Holding, Manager_Prev, HYUNDAI
+from models import Manager, TeamLead, Customer as Cust_db, Sector, Holding, Hyundai_Dealer, Contract
 from wind.pages.customers_ui import Ui_Form
-
-from config import All_data_file
+from config import All_data_file, Customer_file, Contract_file
 
 
 class Customer(QWidget):
@@ -16,690 +19,564 @@ class Customer(QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        self.table = self.ui.table
-        self.ui.table.resizeColumnsToContents()
+        self._setup_ui()
+        self._setup_connections()
 
-        self.fill_in_tl_list()
-        self.fill_in_kam_list()
-        self.fill_in_cust_list()
+        self.current_upload_step = 0  # 0 - ожидание Customer, 1 - ожидание Contract
+        self.cust_file_path = None
+        self.contract_file_path = None
         
-        self.fill_in_dealer_tl_list()
-        self.fill_in_dealer_kam_list()
-        self.fill_in_dealer_list()
-                   
+        self.refresh_all_comboboxes()
+        
+    def _setup_ui(self):
+        """Настройка интерфейса"""
+        self.table = self.ui.table
+        self.table.resizeColumnsToContents()
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSortingEnabled(True)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+
+    def _setup_connections(self):
+        """Настройка сигналов и слотов"""
         self.ui.line_TL.currentTextChanged.connect(self.fill_in_kam_list)
         self.ui.line_AM.currentTextChanged.connect(self.fill_in_cust_list)
-
         self.ui.line_TL_Hyundai.currentTextChanged.connect(self.fill_in_dealer_kam_list)
         self.ui.line_AM_Hyundai.currentTextChanged.connect(self.fill_in_dealer_list)
-                
         self.ui.btn_find_cust.clicked.connect(self.find_Customer)
         self.ui.btn_find_Hyundai.clicked.connect(self.find_Hyundai)
+        self.ui.btn_open_file.clicked.connect(self.get_file)
+        self.ui.btn_upload_file.clicked.connect(self.upload_data)
+
+    def get_file(self):
+        """Выбор файла через диалоговое окно"""
+        title = 'Выберите файл для Customer и Holding' if self.current_upload_step == 0 else 'Выберите файл для Contract'
+        file_path, _ = QFileDialog.getOpenFileName(self, title)
         
-        self.ui.btn_open_file.setToolTip('выбери файл ! ALL DATA !.xlsx')
-        self.ui.btn_open_file.clicked.connect(self.get_cust_file)
-        self.ui.btn_upload_file.clicked.connect(self.upload_cust_data)
-        
-        # self.ui.btn_download.clicked.connect(self.dowload_Customer)
+        if file_path:
+            if self.current_upload_step == 0:
+                self.cust_file_path = file_path
+            else:
+                self.contract_file_path = file_path
+            self.ui.label_Cust_File.setText(file_path)
 
-
-    def get_cust_file(self):
-        get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-        if get_file:
-            self.ui.label_Cust_File.setText(get_file[0])
-            
-
-    def upload_cust_data(self, cust_file_xls):
-        cust_file_xls = self.ui.label_Cust_File.text()
-
-        if cust_file_xls == 'Выбери файл или нажми Upload, файл будет взят из основной папки' \
-            or cust_file_xls == 'База данных обновлена!'\
-            or cust_file_xls == '':
-            self.run_customer_func(All_data_file)
-            msg = QMessageBox()
-            msg.setText('База данных обновлена!')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #237508;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Information)
-            x = msg.exec_()
+    def upload_data(self):
+        """Загрузка данных"""
+        if self.current_upload_step == 0:
+            self._upload_customer_data()
         else:
-            self.run_customer_func(cust_file_xls)
-            msg = QMessageBox()
-            msg.setText('База данных обновлена!')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #237508;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Information)
-            x = msg.exec_()
-            
-        self.fill_in_tl_list()
-        self.fill_in_kam_list()
-        self.fill_in_cust_list()
+            self._upload_contract_data()
+
+    def _upload_customer_data(self):
+        """Загрузка данных Customer и Holding"""
+        file_path = self.cust_file_path or Customer_file
         
-        self.fill_in_dealer_tl_list()
-        self.fill_in_dealer_kam_list()
-        self.fill_in_dealer_list()
+        try:
+            if not os.path.exists(file_path):
+                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
+                
+            with db.session.begin():
+                self.run_customer_func(file_path, All_data_file)
+                self.show_message('Данные Customer и Holding загружены! Выберите файл для Contract')
+                self.current_upload_step = 1
+                self.ui.label_Cust_File.setText("Выберите файл для Contract")
+                self.refresh_all_comboboxes()
+                
+        except Exception as e:
+            db.session.rollback()
+            self._handle_upload_error(e, "клиентов")
+        finally:
+            if file_path == Customer_file:
+                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
+
+    def _upload_contract_data(self):
+        """Загрузка данных Contract"""
+        file_path = self.contract_file_path or Contract_file
         
-        self.ui.label_Cust_File.setText("Выбери файл или нажми Upload, файл будет взят из основной папки")
-    
-    
-    def run_customer_func(self, data_file_xls):
+        try:
+            if not os.path.exists(file_path):
+                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
+                
+            with db.session.begin():
+                self.run_contract_func(file_path)
+                self.show_message('Данные Contract загружены!')
+                self.current_upload_step = 0
+                self.cust_file_path = None
+                self.contract_file_path = None
+                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
+                self.refresh_all_comboboxes()
+                
+        except Exception as e:
+            db.session.rollback()
+            self._handle_upload_error(e, "договоров")
+        finally:
+            if file_path == Contract_file:
+                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
+
+    def _handle_upload_error(self, error, data_type):
+        """Обработка ошибок загрузки"""
+        if "transaction is already begun" in str(error):
+            msg = "Ошибка БД. Закройте программу и попробуйте снова."
+        elif "required columns" in str(error).lower():
+            msg = "Файл не содержит всех необходимых столбцов."
+        else:
+            msg = f"Ошибка загрузки {data_type}: {str(error)}"
+        self.show_error_message(msg)
+
+    def run_customer_func(self, data_file_xls, all_data_file):
+        """Основная функция обработки данных Customer и Holding"""
         data = self.read_customer_file(data_file_xls)
         self.save_Sector(data)
         self.save_Holding(data)
         self.save_Customer(data)
-        
-        data2 = self.read_HYUNDAI_file(data_file_xls)
+        data2 = self.read_HYUNDAI_file(all_data_file)
         self.save_HYUNDAI(data2)
 
+    def run_contract_func(self, contract_file_xls):
+        """Основная функция обработки данных Contract"""
+        data = self.read_contract_file(contract_file_xls)
+        self.save_Contract(data)
 
     def read_customer_file(self, cust_file_xls):
-        dict_types_cust = {'Контрагент.ИНН': pl.String}
-        df = pl.read_excel(cust_file_xls, sheet_name='Customers', engine='xlsx2csv', engine_options={"skip_hidden_rows": False, "ignore_formats": ["float", "date"]}, schema_overrides = dict_types_cust)
-        df = df.filter(pl.col('Контрагент.Код') != 'n/a')
-        df = df.rename({'Контрагент.Код': 'id',
-                                    'Контрагент': 'Customer_Name',
-                                    'Контрагент.ИНН': 'INN',
-                                    'ХОЛДИНГ': 'Holding',
-                                    'SECTOR': 'Sector',
-                                    'Менеджер': 'AM',
-                                    'Менеджер_prev': 'AM_prev',
-                                    'Статус клиента': 'Status',
-                                    'Прайс-лист': 'PriceList',
-                                    'Доставка': 'Delivery',
-                                    'Team Lead': 'TeamLead' })
-        df = df.with_columns(pl.col('AM_prev').fill_null("-"),)
-        cust_data = df.to_dicts()
-        
-        return cust_data
-
-
-    def save_Holding(self, data):
-        processed = []
-        holding_unique = []
-        for row in data:
-            if row['Holding'] not in processed:
-                holding = {'Holding': row['Holding'],
-                                    "AM_id": self.get_id_AM(row['AM']),
-                                    'AM_prev_id': self.get_id_AM_prev(row['AM_prev']),
-                                    'Sector_id': self.get_id_Sector(row['Sector']),
-                                    }
-                holding_unique.append(holding)
-                processed.append(holding['Holding'])
-
-        holding_for_upload = []
-        holding_for_update = []
-        for mylist in holding_unique:
-            holding_exists = Holding.query.filter(Holding.Holding == mylist['Holding']).count()
-            if holding_exists == 0:
-                new_holding = {'Holding': mylist['Holding'],
-                                            'AM_id': mylist['AM_id'],
-                                            'AM_prev_id': mylist["AM_prev_id"],
-                                            'Sector_id': mylist['Sector_id'],
-                                            }
-                holding_for_upload.append(new_holding)
-
-            elif holding_exists >0:
-                new_holding = {'id': self.get_id_Holding(mylist['Holding']), 
-                                            'Holding': mylist['Holding'],
-                                            'AM_id': mylist['AM_id'],
-                                            'AM_prev_id': mylist["AM_prev_id"],
-                                            'Sector_id': mylist['Sector_id'],
-                                            }
-                holding_for_update.append(new_holding)
-
-        db.bulk_insert_mappings(Holding, holding_for_upload)
-        db.bulk_update_mappings(Holding, holding_for_update)
-        
+        """Чтение данных клиентов из Excel"""
         try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-        return holding_unique
+            df = pd.read_excel(cust_file_xls, sheet_name=0, dtype={'ИНН': str})
+            
+            required_columns = ['Код', 'Наименование в программе', 'Холдинг']
+            if not all(col in df.columns for col in required_columns):
+                raise ValueError("Файл не содержит необходимых столбцов")
+            
+            column_map = {
+                'ИНН': 'INN', 'Код': 'id', 
+                'Наименование в программе': 'Customer_name',
+                'Сектор': 'Sector', 'Тип цен': 'Price_type',
+                'Холдинг': 'Holding'
+            }
+            
+            df = df.rename(columns=column_map)[list(column_map.values())]
+            return df[df['id'] != 'n/a'].to_dict('records')
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка чтения файла клиентов: {str(e)}")
+            return []
 
-
-    def get_id_Holding(self, holding):
-        db_data = Holding.query.filter(Holding.Holding == holding).first()
-        holding_id = db_data.id
-        return holding_id
-
+    def read_contract_file(self, contract_file_xls):
+        """Чтение данных договоров из Excel"""
+        try:
+            df = pd.read_excel(contract_file_xls, sheet_name=0, dtype={'Код контрагента': str})
+            
+            required_columns = ['Код', 'Вид договора', 'Наименование', 'Условие оплаты']
+            if not all(col in df.columns for col in required_columns):
+                raise ValueError("Файл не содержит необходимых столбцов")
+            
+            column_map = {
+                'Вид договора': 'Contract_Type', 'Код': 'id',
+                'Менеджер': 'Manager_name', 'Наименование': 'Contract',
+                'Тип цен': 'Price_Type', 'Условие оплаты': 'Payment_Condition',
+                'Код контрагента': 'Customer_id'
+            }
+            
+            df = df.rename(columns=column_map)[list(column_map.values())]
+            return df[df['id'] != 'n/a'].to_dict('records')
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка чтения файла договоров: {str(e)}")
+            return []
 
     def save_Sector(self, data):
-        processed = []
-        sector_unique = []
-        for row in data:
-            if row['Sector'] not in processed:
-                sector = {'Sector': row['Sector']}
-                sector_unique.append(sector)
-                processed.append(sector['Sector'])
+        """Сохранение секторов"""
+        if not data:
+            return
 
-        sector_for_upload = []
-        sector_for_update = []
-        for mylist in sector_unique:
-            sector_exists = Sector.query.filter(Sector.Sector == mylist['Sector']).count()
-            if sector_exists == 0:
-                new_sector = {'Sector': mylist['Sector']}
-                sector_for_upload.append(new_sector)
-            elif sector_exists > 0:
-                new_sector = {'id': self.get_id_Sector(mylist['Sector']), 'Sector': mylist['Sector']}
-                sector_for_update.append(new_sector)
-
-        db.bulk_insert_mappings(Sector, sector_for_upload)
-        db.bulk_update_mappings(Sector, sector_for_update)
+        sectors = pd.DataFrame(data)[['Sector']].drop_duplicates()
+        existing_sectors = {s[0] for s in db.session.query(Sector.Sector_name).all()}
+        
+        to_insert = [{'Sector_name': row['Sector']} for _, row in sectors.iterrows() 
+                    if row['Sector'] not in existing_sectors]
         
         try:
-            db.commit()
+            if to_insert:
+                db.session.bulk_insert_mappings(Sector, to_insert)
+                db.session.commit()
         except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-        return sector_unique
+            db.session.rollback()
+            self.show_error_message(f"Ошибка сохранения секторов: {str(e)}")
 
-
-    def get_id_Sector(self, sector):
-        db_data = Sector.query.filter(Sector.Sector == sector).first()
-        sector_id = db_data.id
-
-        return sector_id
-
-
-    def get_id_AM(self, AM_name):
-        db_data = Manager.query.filter(Manager.AM == AM_name).first()
-        if not db_data:
-            self.lbl_message.configure(text = f"Не найден {AM_name} в Базе", bootstyle="danger")
+    def save_Holding(self, data):
+        """Сохранение холдингов"""
+        if not data:
             return
-        else:
-            return db_data.id
-                  
 
-    def get_id_AM_prev(self, AM_name):
-        db_data = Manager_Prev.query.filter(Manager_Prev.AM_prev == AM_name).first()
-        am_prev_id = db_data.id
-
-        return am_prev_id
-
+        holdings = pd.DataFrame(data)[['Holding', 'Sector']].drop_duplicates()
+        existing_holdings = {h[0] for h in db.session.query(Holding.Holding_name).all()}
+        
+        to_insert = []
+        for _, row in holdings.iterrows():
+            if row['Holding'] not in existing_holdings:
+                to_insert.append({
+                    'Holding_name': row['Holding'],
+                    'Sector_id': self._get_id(Sector, 'Sector_name', row['Sector'])
+                })
+        
+        try:
+            if to_insert:
+                db.session.bulk_insert_mappings(Holding, to_insert)
+                db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            self.show_error_message(f"Ошибка сохранения холдингов: {str(e)}")
 
     def save_Customer(self, data):
-        processed = []
-        cust_unique = []
+        """Сохранение клиентов"""
+        if not data:
+            return
 
+        existing_codes = {c[0] for c in db.session.query(Cust_db.id).all()}
+        to_insert = []
+        to_update = []
+        
         for row in data:
-            if row['id'] not in processed:
-                cust = {'id': row['id'],
-                            'Customer_Name': row['Customer_Name'],
-                            'INN': str(row['INN']),
-                            'Holding': row['Holding'],
-                            'Status': row['Status'],
-                            'PriceList': row['PriceList'],
-                            'Delivery': row['Delivery'],
-                            }
-                cust_unique.append(cust)
-                processed.append(row['id'])
-
-        cust_for_upload = []
-        cust_for_update = []
-        for mylist in cust_unique:
-            cust_exists = Cust_db.query.filter(Cust_db.id == mylist['id']).count()
-            if cust_exists == 0 or cust_exists is None:
-                new_cust = {'id': mylist['id'],
-                                    'Customer_Name': mylist['Customer_Name'],
-                                    'INN': str(mylist['INN']),
-                                    'Holding_id': self.get_id_Holding(mylist['Holding']),
-                                    'Status': mylist['Status'],
-                                    'PriceList': mylist['PriceList'],
-                                    'Delivery': mylist['Delivery'], 
-                                    }
-                cust_for_upload.append(new_cust)
-            elif cust_exists > 0:
-                new_cust = {'id': mylist['id'],
-                                    'Customer_Name': mylist['Customer_Name'],
-                                    'INN': str(mylist['INN']),
-                                    'Holding_id': self.get_id_Holding(mylist['Holding']),
-                                    'Status': mylist['Status'],
-                                    'PriceList': mylist['PriceList'],
-                                    'Delivery': mylist['Delivery'], 
-                                    }
-                cust_for_update.append(new_cust)
-        db.bulk_insert_mappings(Cust_db, cust_for_upload)
-        db.bulk_update_mappings(Cust_db, cust_for_update)
+            customer = {
+                'id': row['id'],
+                'Customer_name': row['Customer_name'],
+                'INN': str(row['INN']),
+                'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
+                'Sector_id': self._get_id(Sector, 'Sector_name', row['Sector']),
+                'Price_type': row['Price_type']
+            }
+            
+            if row['id'] in existing_codes:
+                to_update.append(customer)
+            else:
+                to_insert.append(customer)
         
         try:
-            db.commit()
+            if to_insert:
+                db.session.bulk_insert_mappings(Cust_db, to_insert)
+            if to_update:
+                db.session.bulk_update_mappings(Cust_db, to_update)
+            db.session.commit()
         except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
+            db.session.rollback()
+            self.show_error_message(f"Ошибка сохранения клиентов: {str(e)}")
 
-        return cust_unique
+    def save_Contract(self, data):
+        """Сохранение договоров"""
+        if not data:
+            return
 
-
-    def read_HYUNDAI_file(self, cust_file_xls):
-        dict_types_cust = {'ИНН': pl.String}
-        df = pl.read_excel(cust_file_xls, sheet_name='HYUNDAI', engine='xlsx2csv', engine_options={"skip_hidden_rows": False, "ignore_formats": ["float", "date"]}, schema_overrides = dict_types_cust)
-        df = df.filter(pl.col('Код дилера HYUNDAI') != '-')
-        df = df.rename({'Код дилера HYUNDAI': 'HYUNDAI_id',
-                                    'Код в HYUNDAI': 'Hyu_code',
-                                    'Наим дилера HYUNDAI': 'Dealer_Name',
-                                    'Город': 'City',
-                                    'ИНН': 'INN', })
-        df = df.with_columns(pl.col('HYUNDAI_id').fill_null("-"),)
-        df = df.filter(pl.col('HYUNDAI_id') != '-')
-        HYUNDAI_data = df.to_dicts()
+        existing_codes = {c[0] for c in db.session.query(Contract.id).all()}
+        to_insert = []
+        to_update = []
         
-        return HYUNDAI_data
-    
-    
+        for row in data:
+            manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
+            if not manager_id:
+                continue
+                
+            contract = {
+                'id': row['id'],
+                'Contract': row['Contract'],
+                'Contract_Type': row['Contract_Type'],
+                'Price_Type': row['Price_Type'],
+                'Payment_Condition': row['Payment_Condition'],
+                'Customer_id': row['Customer_id'],
+                'Manager_id': manager_id
+            }
+            
+            if row['id'] in existing_codes:
+                to_update.append(contract)
+            else:
+                to_insert.append(contract)
+        
+        try:
+            if to_insert:
+                db.session.bulk_insert_mappings(Contract, to_insert)
+            if to_update:
+                db.session.bulk_update_mappings(Contract, to_update)
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            self.show_error_message(f"Ошибка сохранения договоров: {str(e)}")
+
     def save_HYUNDAI(self, data):
-        processed = []
-        hyundai_unique = []
+        """Сохранение дилеров Hyundai"""
+        if not data:
+            return
+
+        existing_codes = {d[0] for d in db.session.query(Hyundai_Dealer.Hyundai_code).all()}
+        to_insert = []
+        to_update = []
+        
         for row in data:
-            if row['HYUNDAI_id'] not in processed:
-                hyundai = {"HYUNDAI_id": row["HYUNDAI_id"],
-                                    "Hyu_code": row["Hyu_code"],
-                                    "Dealer_Name": row["Dealer_Name"],
-                                    "City": row["City"],
-                                    "INN": row["INN"],
-                                    "AM_id": self.get_id_AM(row['SALES'])
-                                    }
-                hyundai_unique.append(hyundai)
-                processed.append(hyundai['HYUNDAI_id'])
-
-        hyundai_for_upload = []
-        hyundai_for_update = []
-        for mylist in hyundai_unique:
-            hyundai_exists = HYUNDAI.query.filter(HYUNDAI.HYUNDAI_id == mylist['HYUNDAI_id']).count()
-            if hyundai_exists == 0:
-                new_hyundai = {"HYUNDAI_id": mylist["HYUNDAI_id"],
-                                            "Hyu_code": mylist["Hyu_code"],
-                                            "Dealer_Name": mylist["Dealer_Name"],
-                                            "City": mylist["City"],
-                                            "INN": mylist["INN"],
-                                            "AM_id": mylist["AM_id"]
-                                            }
-                hyundai_for_upload.append(new_hyundai)
-            elif hyundai_exists > 0:
-                new_hyundai = {'id': self.get_id_HYUNDAI(mylist['HYUNDAI_id']), 
-                                            "HYUNDAI_id": mylist["HYUNDAI_id"],
-                                            "Hyu_code": mylist["Hyu_code"],
-                                            "Dealer_Name": mylist["Dealer_Name"],
-                                            "City": mylist["City"],
-                                            "INN": mylist["INN"],
-                                            "AM_id": mylist["AM_id"]
-                                            }
-                hyundai_for_update.append(new_hyundai)
-
-        db.bulk_insert_mappings(HYUNDAI, hyundai_for_upload)
-        db.bulk_update_mappings(HYUNDAI, hyundai_for_update)
+            manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
+            if not manager_id:
+                continue
+                
+            hyundai = {
+                'Dealer_code': row['Dealer_code'] if row['Dealer_code'] != '-' else None,
+                'Hyundai_code': row['Hyundai_code'],
+                'Name': row['Name'],
+                'City': row['City'],
+                'INN': row['INN'],
+                'Manager_id': manager_id
+            }
+            
+            if row['Hyundai_code'] in existing_codes:
+                hyundai['id'] = db.session.query(Hyundai_Dealer.id).filter(
+                    Hyundai_Dealer.Hyundai_code == row['Hyundai_code']
+                ).scalar()
+                to_update.append(hyundai)
+            else:
+                to_insert.append(hyundai)
         
         try:
-            db.commit()
+            if to_insert:
+                db.session.bulk_insert_mappings(Hyundai_Dealer, to_insert)
+            if to_update:
+                db.session.bulk_update_mappings(Hyundai_Dealer, to_update)
+            db.session.commit()
         except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
+            db.session.rollback()
+            self.show_error_message(f"Ошибка сохранения Hyundai: {str(e)}")
 
-        return hyundai_unique
-    
-    
-    def get_id_HYUNDAI(self, HYUNDAI_id):
-        db_data = HYUNDAI.query.filter(HYUNDAI.HYUNDAI_id == HYUNDAI_id).first()
-        hyu_id = db_data.id
-
-        return hyu_id
-
+    @lru_cache(maxsize=32)
+    def _get_id(self, model, name_field, name):
+        """Получение ID по имени (с кэшированием)"""
+        if not name or name in ('-', ''):
+            return None
+            
+        item = db.session.query(model).filter(getattr(model, name_field) == name).first()
+        return item.id if item else None
 
     def get_Customers_from_db(self):
-        cust_reques = db.query(Cust_db,)
-        cust_data_db = pl.read_database(query=cust_reques.statement, connection=engine)
+        """Получение клиентов из базы"""
+        query = db.session.query(
+            Cust_db.id,
+            Cust_db.INN,
+            Cust_db.Customer_name,
+            Holding.Holding_name.label('Holding'),
+            Sector.Sector_name.label('Sector'),
+            Cust_db.Price_type,
+            Manager.Manager_name.label('AM'),
+            TeamLead.TeamLead_name.label('TeamLead')
+        ).join(Holding, Cust_db.Holding_id == Holding.id)\
+         .join(Sector, Cust_db.Sector_id == Sector.id)\
+         .outerjoin(Contract, Cust_db.id == Contract.Customer_id)\
+         .outerjoin(Manager, Contract.Manager_id == Manager.id)\
+         .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
         
-        if cust_data_db.is_empty() == False:
-            holding_request= db.query(Holding, Sector).join(Sector)
-            holding_data_db = pl.read_database(query=holding_request.statement, connection=engine)
-        
-            kam_request = db.query(Manager, TeamLead).join(TeamLead)
-            kam_data_db = pl.read_database(query=kam_request.statement, connection=engine)
-
-            cust_data_db = cust_data_db.join(holding_data_db, how="left", left_on="Holding_id", right_on="id")
-            cust_data_db = cust_data_db.join(kam_data_db, how="left", left_on="AM_id", right_on="id")
-            cust_data_db = cust_data_db[["id", "INN", "Customer_Name", "Holding", "Sector", "AM", "TeamLead", "PriceList", "Delivery"]]
-            cust_data_db = cust_data_db.sort("Customer_Name", descending=False)      
-        
-        else:
-            cust_data_db = pl.DataFrame()
-        
-        return cust_data_db
-
+        df = pd.read_sql(query.statement, db.session.bind)
+        return df.drop_duplicates().where(pd.notnull(df), None)
 
     def get_Hyundai_from_db(self):
-        hyundai_reques = db.query(HYUNDAI)
-        hyundai_data_db = pl.read_database(query=hyundai_reques.statement, connection=engine)
+        """Получение дилеров Hyundai из базы"""
+        query = db.session.query(
+            Hyundai_Dealer.Dealer_code.label('HYUNDAI_id'),
+            Hyundai_Dealer.Hyundai_code.label('Hyu_code'),
+            Hyundai_Dealer.Name.label('Dealer_Name'),
+            Hyundai_Dealer.INN,
+            Manager.Manager_name.label('AM'),
+            TeamLead.TeamLead_name.label('TeamLead')
+        ).join(Manager, Hyundai_Dealer.Manager_id == Manager.id)\
+         .join(TeamLead, Manager.TeamLead_id == TeamLead.id)
         
-        if hyundai_data_db.is_empty() == False:
-                kam_request = db.query(Manager, TeamLead).join(TeamLead)
-                kam_data_db = pl.read_database(query=kam_request.statement, connection=engine)
+        df = pd.read_sql(query.statement, db.session.bind)
+        return df.where(pd.notnull(df), None)
 
-                hyundai_data_db = hyundai_data_db.join(kam_data_db, how="left", left_on="AM_id", right_on="id")
-                hyundai_data_db = hyundai_data_db[["HYUNDAI_id", "Hyu_code", "Dealer_Name", "INN", "AM", "TeamLead", ]]
-                hyundai_data_db = hyundai_data_db.sort("Dealer_Name", descending=False)      
-        else:
-            hyundai_data_db = pl.DataFrame()
-        
-        return hyundai_data_db
-  
-    
     def find_Customer(self):
-        self.ui.table.setRowCount(0)
-        self.ui.table.setColumnCount(0)
+        """Поиск клиентов"""
+        self.table.clearContents()
+        self.table.setRowCount(0)
         
         cust_df = self.get_Customers_from_db()
-        
-        cust_id = self.ui.line_ID.text()
-        cust_inn = self.ui.line_INN.text()
-        Customer_Name = self.ui.line_CustName.currentText()
-        AM = self.ui.line_AM.currentText()
-        STL = self.ui.line_TL.currentText()
-
-        if cust_df.is_empty() == True:
-            msg = QMessageBox()
-            msg.setText('There is no Customer data in Database\n'
-                                'Close the program and open agan!\n'
-                                'Then update Database')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #ff0000;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
+        if cust_df.empty:
+            self.show_error_message('Нет данных о клиентах')
+            return
             
-        elif cust_id != '':
-            cust_df = cust_df.filter(pl.col("id") == cust_id).sort("Customer_Name", descending=[False])
+        cust_id = self.ui.line_ID.text().strip()
+        cust_inn = self.ui.line_INN.text().strip()
+        customer_name = self.ui.line_CustName.currentText()
+        am = self.ui.line_AM.currentText()
+        tl = self.ui.line_TL.currentText()
 
-        elif cust_inn != '':
-            cust_df = cust_df.filter(pl.col("INN") == cust_inn).sort("Customer_Name", descending=[False])
-            
-        elif Customer_Name != '-':
-            cust_df = cust_df.filter(pl.col("Customer_Name") == Customer_Name).sort("Customer_Name", descending=[False])
+        if cust_id:
+            cust_df = cust_df[cust_df['id'] == cust_id]
+        elif cust_inn:
+            cust_df = cust_df[cust_df['INN'] == cust_inn]
+        elif customer_name != '-':
+            cust_df = cust_df[cust_df['Customer_name'] == customer_name]
+        elif am != '-':
+            cust_df = cust_df[cust_df['AM'] == am]
+        elif tl != '-':
+            cust_df = cust_df[cust_df['TeamLead'] == tl]
 
-        elif AM != '-' :
-            cust_df = cust_df.filter(pl.col("AM") == AM).sort("Customer_Name", descending=[False])
-
-        elif STL != '-':
-            cust_df = cust_df.filter(pl.col("STL") == STL).sort("Customer_Name", descending=[False])
-        
-        else:
-            cust_df = cust_df.sort("Customer_Name", descending=[False])
-
-        cust_df = cust_df.to_pandas()
-        headers = cust_df.columns.values.tolist()
-        
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        
-        for i, row in cust_df.iterrows():
-            self.table.setRowCount(self.table.rowCount() + 1)
-            
-            for j in range(self.table.columnCount()):
-                self.table.setItem(i, j, QTableWidgetItem(str(cust_df.iloc[i, j])))
-        
+        self._display_data(cust_df.sort_values('Customer_name'))
 
     def find_Hyundai(self):
-        self.ui.table.setRowCount(0)
-        self.ui.table.setColumnCount(0)
+        """Поиск дилеров Hyundai"""
+        self.table.clearContents()
+        self.table.setRowCount(0)
         
         dealer_df = self.get_Hyundai_from_db()
-        
-        dealer_id = self.ui.line_ID_Hyundai.text()
-        dealer_code = self.ui.line_Hyu_code.text()
+        if dealer_df.empty:
+            self.show_error_message('Нет данных о дилерах')
+            return
+            
+        dealer_id = self.ui.line_ID_Hyundai.text().strip()
+        dealer_code = self.ui.line_Hyu_code.text().strip()
         dealer_name = self.ui.line_CustName_Hyundai.currentText()
-        AM = self.ui.line_AM_Hyundai.currentText()
-        TL = self.ui.line_TL_Hyundai.currentText()
+        am = self.ui.line_AM_Hyundai.currentText()
+        tl = self.ui.line_TL_Hyundai.currentText()
 
-        if dealer_df.is_empty() == True:
-            msg = QMessageBox()
-            msg.setText('There is no Customer data in Database\n'
-                                'Close the program and open agan!\n'
-                                'Then update Database')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #ff0000;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
-            
-        elif dealer_id != '':
-            dealer_df = dealer_df.filter(pl.col("HYUNDAI_id") == dealer_id).sort("Dealer_Name", descending=[False])
-
-        elif dealer_code != '':
-            dealer_df = dealer_df.filter(pl.col("Hyu_code") == dealer_code).sort("Dealer_Name", descending=[False])
-            
+        if dealer_id:
+            dealer_df = dealer_df[dealer_df['HYUNDAI_id'] == dealer_id]
+        elif dealer_code:
+            dealer_df = dealer_df[dealer_df['Hyu_code'] == dealer_code]
         elif dealer_name != '-':
-            dealer_df = dealer_df.filter(pl.col("Dealer_Name") == dealer_name).sort("Dealer_Name", descending=[False])
+            dealer_df = dealer_df[dealer_df['Dealer_Name'] == dealer_name]
+        elif am != '-':
+            dealer_df = dealer_df[dealer_df['AM'] == am]
+        elif tl != '-':
+            dealer_df = dealer_df[dealer_df['TeamLead'] == tl]
 
-        elif AM != '-' :
-            dealer_df = dealer_df.filter(pl.col("AM") == AM).sort("Dealer_Name", descending=[False])
+        self._display_data(dealer_df.sort_values('Dealer_Name'))
 
-        elif TL != '-':
-            dealer_df = dealer_df.filter(pl.col("TeamLead") == TL).sort("Dealer_Name", descending=[False])
-        
-        else:
-            dealer_df = dealer_df.sort("Dealer_Name", descending=[False])
-
-        dealer_df = dealer_df.to_pandas()
-        headers = dealer_df.columns.values.tolist()
-        
+    def _display_data(self, df):
+        """Отображение данных в таблице"""
+        if df.empty:
+            self.show_error_message('Ничего не найдено')
+            return
+            
+        headers = df.columns.tolist()
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(df))
         
-        for i, row in dealer_df.iterrows():
-            self.table.setRowCount(self.table.rowCount() + 1)
-            
-            for j in range(self.table.columnCount()):
-                self.table.setItem(i, j, QTableWidgetItem(str(dealer_df.iloc[i, j])))
-    
-    
-    def get_all_kam_from_db(self):
-        KAM_request = db.query(Manager, TeamLead).join(TeamLead)
-        KAM_data = pl.read_database(query=KAM_request.statement, connection=engine)
-        if KAM_data.is_empty() == False:
-            all_KAM_data = KAM_data[['AM', 'TeamLead', ]]
-            all_KAM_data = all_KAM_data.sort("AM", descending=[False])
-        else:
-            all_KAM_data = pl.DataFrame()
-            
-        return all_KAM_data
+        for i, row in df.iterrows():
+            for j, value in enumerate(row):
+                self.table.setItem(i, j, QTableWidgetItem(str(value)))
 
-    
+    def refresh_all_comboboxes(self):
+        """Обновление всех выпадающих списков"""
+        self.fill_in_tl_list()
+        self.fill_in_kam_list()
+        self.fill_in_cust_list()
+        self.fill_in_dealer_tl_list()
+        self.fill_in_dealer_kam_list()
+        self.fill_in_dealer_list()
+
+    def fill_in_tl_list(self):
+        """Заполнение списка тимлидов"""
+        team_leads = db.session.query(TeamLead.TeamLead_name).distinct().all()
+        self._fill_combobox(self.ui.line_TL, [tl[0] for tl in team_leads])
+        self._fill_combobox(self.ui.line_TL_Hyundai, [tl[0] for tl in team_leads])
+
+    def fill_in_kam_list(self):
+        """Заполнение списка менеджеров"""
+        tl = self.ui.line_TL.currentText()
+        query = db.session.query(Manager.Manager_name)
+        
+        if tl != '-':
+            query = query.join(TeamLead).filter(TeamLead.TeamLead_name == tl)
+            
+        kam_names = [kam[0] for kam in query.distinct().all()]
+        self._fill_combobox(self.ui.line_AM, kam_names)
+
     def fill_in_cust_list(self):
+        """Заполнение списка клиентов"""
         cust_df = self.get_Customers_from_db()
-        
-        self.ui.line_CustName.clear()
-        
+        if cust_df.empty:
+            self.ui.line_CustName.clear()
+            self.ui.line_CustName.addItem('-')
+            return
+            
         am = self.ui.line_AM.currentText()
         tl = self.ui.line_TL.currentText()
         
-        if cust_df.is_empty() == True:
-            self.ui.line_CustName.addItem('-')
-                
-        elif am != '-':
-            cust_name = cust_df[['AM', 'Customer_Name']]
-            cust_name = cust_name.filter(pl.col("AM") == am)
-            cust_name = cust_name.unique(subset="Customer_Name").sort("Customer_Name", descending=[False,])
-            cust_name_list = cust_name['Customer_Name'].to_list()
-            cust_name_list.insert(0, '-')
-            self.ui.line_CustName.addItems(cust_name_list)
-
-        elif tl !='-':
-            cust_name = cust_df[['TeamLead', 'Customer_Name']]
-            cust_name = cust_name.filter(pl.col("TeamLead") == tl)
-            cust_name = cust_name.unique(subset="Customer_Name").sort("Customer_Name", descending=[False,])
-            cust_name_list = cust_name['Customer_Name'].to_list()
-            cust_name_list.insert(0, '-')
-            self.ui.line_CustName.addItems(cust_name_list)
-            
+        if am != '-':
+            cust_names = cust_df[cust_df['AM'] == am]['Customer_name'].unique()
+        elif tl != '-':
+            cust_names = cust_df[cust_df['TeamLead'] == tl]['Customer_name'].unique()
         else:
-            cust_name = cust_df[['Customer_Name']]
-            cust_name = cust_name.unique(subset="Customer_Name").sort("Customer_Name", descending=[False,])
-            cust_name_list = cust_name['Customer_Name'].to_list()
-            cust_name_list.insert(0, '-')
-            self.ui.line_CustName.addItems(cust_name_list)
-
-
-    def fill_in_kam_list(self):
-        KAM_data = self.get_all_kam_from_db()
+            cust_names = cust_df['Customer_name'].unique()
         
-        self.ui.line_AM.clear()
+        self._fill_combobox(self.ui.line_CustName, sorted(cust_names))
 
-        if KAM_data.is_empty() == True:
-            self.ui.line_AM.addItem('-')
+    def fill_in_dealer_tl_list(self):
+        """Заполнение списка тимлидов для дилеров"""
+        query = db.session.query(TeamLead.TeamLead_name)\
+                 .join(Manager)\
+                 .join(Hyundai_Dealer)\
+                 .distinct()
+        team_leads = [tl[0] for tl in query.all()]
+        self._fill_combobox(self.ui.line_TL_Hyundai, team_leads)
 
-        else:
-            KAM_data = KAM_data[['AM']]
-            KAM_data = KAM_data.unique(subset="AM").sort("AM", descending=[False,])
-            KAM_list = KAM_data['AM'].to_list()
-            self.ui.line_AM.addItems(KAM_list)
-
+    def fill_in_dealer_kam_list(self):
+        """Заполнение списка менеджеров для дилеров"""
+        tl = self.ui.line_TL_Hyundai.currentText()
+        query = db.session.query(Manager.Manager_name)\
+                 .join(Hyundai_Dealer)\
+                 .join(TeamLead)
+        
+        if tl != '-':
+            query = query.filter(TeamLead.TeamLead_name == tl)
             
-    def fill_in_tl_list(self):
-        TL_data = self.get_all_kam_from_db()
-
-        self.ui.line_TL.clear()
-
-        if TL_data.is_empty() == True:
-            self.ui.line_TL.addItem('-')
-
-        else:
-            TL_data = TL_data[['TeamLead']]
-            TL_data = TL_data.unique(subset="TeamLead").sort("TeamLead", descending=[False,])
-            TL_list = TL_data['TeamLead'].to_list()
-            self.ui.line_TL.addItems(TL_list)
-
-
+        kam_names = [kam[0] for kam in query.distinct().all()]
+        self._fill_combobox(self.ui.line_AM_Hyundai, kam_names)
+        
     def fill_in_dealer_list(self):
+        """Заполнение списка дилеров"""
         dealer_df = self.get_Hyundai_from_db()
-        
-        self.ui.line_CustName_Hyundai.clear()
-        
+        if dealer_df.empty:
+            self.ui.line_CustName_Hyundai.clear()
+            self.ui.line_CustName_Hyundai.addItem('-')
+            return
+            
         am = self.ui.line_AM_Hyundai.currentText()
         tl = self.ui.line_TL_Hyundai.currentText()
         
-        if dealer_df.is_empty() == True:
-            self.ui.line_CustName_Hyundai.addItem('-')
-                
-        elif am != '-':
-            dealer_name = dealer_df[['AM', 'Dealer_Name']]
-            dealer_name = dealer_name.filter(pl.col("AM") == am)
-            dealer_name = dealer_name.unique(subset="Dealer_Name").sort("Dealer_Name", descending=[False,])
-            dealer_name_list = dealer_name['Dealer_Name'].to_list()
-            dealer_name_list.insert(0, '-')
-            self.ui.line_CustName_Hyundai.addItems(dealer_name_list)
-
-        elif tl !='-':
-            dealer_name = dealer_df[['TeamLead', 'Dealer_Name']]
-            dealer_name = dealer_name.filter(pl.col("TeamLead") == tl)
-            dealer_name = dealer_name.unique(subset="Dealer_Name").sort("Dealer_Name", descending=[False,])
-            dealer_name_list = dealer_name['Dealer_Name'].to_list()
-            dealer_name_list.insert(0, '-')
-            self.ui.line_CustName_Hyundai.addItems(dealer_name_list)
-            
+        if am != '-':
+            dealer_names = dealer_df[dealer_df['AM'] == am]['Dealer_Name'].unique()
+        elif tl != '-':
+            dealer_names = dealer_df[dealer_df['TeamLead'] == tl]['Dealer_Name'].unique()
         else:
-            dealer_name = dealer_df[['Dealer_Name']]
-            dealer_name = dealer_name.unique(subset="Dealer_Name").sort("Dealer_Name", descending=[False,])
-            dealer_name_list = dealer_name['Dealer_Name'].to_list()
-            dealer_name_list.insert(0, '-')
-            self.ui.line_CustName_Hyundai.addItems(dealer_name_list)
-
-
-    def fill_in_dealer_kam_list(self):
-        KAM_data = self.get_Hyundai_from_db()
+            dealer_names = dealer_df['Dealer_Name'].unique()
         
-        self.ui.line_AM_Hyundai.clear()
+        self._fill_combobox(self.ui.line_CustName_Hyundai, sorted(dealer_names))
 
-        if KAM_data.is_empty() == True:
-            self.ui.line_AM_Hyundai.addItem('-')
+    def _fill_combobox(self, combobox, items):
+        """Универсальное заполнение комбобокса"""
+        combobox.clear()
+        combobox.addItem('-')
+        if items:
+            combobox.addItems(sorted(items))
 
-        else:
-            KAM_data = KAM_data[['AM']]
-            KAM_data = KAM_data.unique(subset="AM").sort("AM", descending=[False,])
-            KAM_list = KAM_data['AM'].to_list()
-            KAM_list.insert(0, '-')
-            self.ui.line_AM_Hyundai.addItems(KAM_list)
-
-            
-    def fill_in_dealer_tl_list(self):
-        TL_data = self.get_Hyundai_from_db()
-        
-        self.ui.line_TL_Hyundai.clear()
-
-        if TL_data.is_empty() == True:
-            self.ui.line_TL_Hyundai.addItem('-')
-
-        else:
-            TL_data = TL_data[['TeamLead']]
-            TL_data = TL_data.unique(subset="TeamLead").sort("TeamLead", descending=[False,])
-            TL_list = TL_data['TeamLead'].to_list()
-            TL_list.insert(0, '-')
-            self.ui.line_TL_Hyundai.addItems(TL_list)
-
-
-    # def dowload_Customer(self):
-    #     savePath = QFileDialog.getSaveFileName(None, 'Blood Hound', 'Customers.xlsx', 'Excel Workbook (*.xlsx)')
-    #     col_count = self.ui.table.columnCount()
-    #     row_count = self.ui.table.rowCount()
-    #     headers = [str(self.ui.table.horizontalHeaderItem(i).text()) for i in range(col_count)]
-
-    #     df_list = []
-    #     for row in range(row_count):
-    #         df_list2 = []
-    #         for col in range(col_count):
-    #             table_item = self.ui.table.item(row,col)
-    #             df_list2.append('' if table_item is None else str(table_item.text()))
-    #         df_list.append(df_list2)
-
-    #     df = pd.DataFrame(df_list, columns=headers)
-    #     df.to_excel(savePath[0], index=False)
-
-    #     msg = QMessageBox()
-    #     msg.setText('Report was saved successfully')
-    #     msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                     "font: 12pt  \"Segoe UI\";"
-    #                     "color: #4b0082;\n"
-    #                     " ")
-    #     msg.setIcon(QMessageBox.Information)
-    #     x = msg.exec_()
-        
-        
-    def error_msg(self):
+    def show_message(self, text):
+        """Показать информационное сообщение"""
         msg = QMessageBox()
-        msg.setText('There is no Customer data in Database\n'
-                            'Close the program and open agan!\n'
-                            'Then update Database')
-        msg.setStyleSheet("background-color: #f8f8f2;\n"
-                        "font: 10pt  \"Tahoma\";"
-                        "color: #ff0000;\n"
-                        " ")
+        msg.setText(text)
+        msg.setStyleSheet("""
+            background-color: #f8f8f2;
+            font: 10pt "Tahoma";
+            color: #237508;
+        """)
+        msg.setIcon(QMessageBox.Information)
+        msg.exec_()
+
+    def show_error_message(self, text):
+        """Показать сообщение об ошибке"""
+        msg = QMessageBox()
+        msg.setText(text)
+        msg.setStyleSheet("""
+            background-color: #f8f8f2;
+            font: 10pt "Tahoma";
+            color: #ff0000;
+        """)
         msg.setIcon(QMessageBox.Critical)
-        x = msg.exec_()
-
-        
-
+        msg.exec_()

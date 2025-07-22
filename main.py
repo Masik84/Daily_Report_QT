@@ -1,3 +1,49 @@
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+
+os.environ["QT_QPA_PLATFORM"] = "windows"
+
+# Настройка логирования
+def setup_logging():
+    log_dir = "logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    # Основной логгер приложения
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    
+    # Форматтер
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Файловый обработчик с ротацией
+    file_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'app.log'),
+        maxBytes=1024*1024,  # 1 MB
+        backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.DEBUG)
+    
+    # Консольный обработчик
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
+    
+    # Добавляем обработчики
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    # SQLAlchemy логгер
+    sqlalchemy_logger = logging.getLogger('sqlalchemy.engine')
+    sqlalchemy_logger.setLevel(logging.WARNING)  # Можно изменить на INFO для подробных SQL-запросов
+
+# Вызываем настройку логирования в самом начале
+setup_logging()
+
 import os
 import pandas as pd
 from PySide6.QtWidgets import QApplication, QMainWindow, QApplication, QGraphicsDropShadowEffect, QSizeGrip
@@ -5,11 +51,10 @@ from PySide6.QtGui import QColor, QIcon
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from db import Base, engine
-from pages_functions.customer import Customer
-from pages_functions.managers import Managers
 from pages_functions.product import Product
-# from pages_functions.product_Tv import Product
-from pages_functions.plans import Plans
+from pages_functions.managers import Managers
+from pages_functions.customer import Customer
+# from pages_functions.plans import Plans
 
 from pages_functions.bonus_scheme import Bon_Scheme
 from pages_functions.cost import Costs
@@ -90,7 +135,7 @@ class MyWindow(QMainWindow):
             self.btn_managers: Managers(),
             self.btn_customer: Customer(),
             self.btn_product: Product(),
-            self.btn_plans: Plans(),
+            # self.btn_plans: Plans(),
             
             self.btn_order: Rep_Orders(),
             self.btn_delivery: Rep_Delivery(),
@@ -247,6 +292,7 @@ class MyWindow(QMainWindow):
         self.animation.setEndValue(widthExtended)
         self.animation.setEasingCurve(QEasingCurve.InOutQuart)
         self.animation.start()
+
 
 if __name__ == '__main__':
     import sys

@@ -1,202 +1,234 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Numeric, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import create_engine, Column, Integer, String, Numeric, ForeignKey, Date, Index, UniqueConstraint
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from db import Base, engine
 
 
-class TeamLead(Base):
-    __tablename__ = 'teamlead'
-
+class Manager(Base):
+    __tablename__ = 'managers'
+    
     id = Column(Integer, primary_key=True)
-    TeamLead = Column(String, unique=True, nullable=False)
-    email = Column(String)
+    Manager_name = Column(String)
+    Email = Column(String)
+    AM_1C_Name = Column(String)
+    Has_report = Column(String)  # 'да' или 'нет'
+    Report_link = Column(String)
+    
+    # Внешние ключи
+    STL_id = Column(Integer, ForeignKey('stls.id'))
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    
+    # Связи
+    STL = relationship("STL", back_populates="Managers")
+    TeamLead = relationship("TeamLead", back_populates="Managers")
+    Contracts = relationship("Contract", back_populates="Manager")
+    Hyundai_Dealers = relationship("Hyundai_Dealer", back_populates="Manager")
 
 
 class STL(Base):
-    __tablename__ = 'stl'
-
-    id = Column(Integer, primary_key=True)
-    STL = Column(String, index=True, unique=True, nullable=False)
-    email = Column(String, default=False)
-
-
-class Manager(Base):
-    __tablename__ = 'manager'
-
-    id = Column(Integer, primary_key=True)
-    AM = Column(String, index=True, unique=True, nullable=False)
-    email = Column(String, nullable=False)
-    Report = Column(String)
-
-    STL_id = Column(Integer, ForeignKey(STL.id), index=True)
-    TeamLead_id = Column(Integer, ForeignKey(TeamLead.id), index=True)
-
-    STL_Table = relationship('STL', backref="AM_Table")
-    TeamLead_Table = relationship('TeamLead', )
-
-
-class Manager_Prev(Base):
-    __tablename__ = 'manager_prev'
-
-    id = Column(Integer, primary_key=True)
-    AM_prev = Column(String, index=True, unique=True, nullable=False)
-    email = Column(String, nullable=False)
-    Report = Column(String)
-
-    STL_id = Column(Integer, ForeignKey(STL.id), index=True)
-    TeamLead_id = Column(Integer, ForeignKey(TeamLead.id), index=True)
-
-    STL_prev_Table = relationship('STL', backref="AM_prev_Table")
-    TeamLead_Table = relationship('TeamLead')
-
-
-class Sector(Base):
-    __tablename__ = 'sector'
-
-    id = Column(Integer, primary_key=True)
-    Sector = Column(String, index=True, unique=True, nullable=False)
-
-
-class Holding(Base):
-    __tablename__ = 'holding'
-
-    id = Column(Integer, primary_key=True)
-    Holding = Column(String, index=True, unique=True, nullable=False)
-    AM_id = Column(Integer, ForeignKey(Manager.id), index=True)
-    AM_prev_id = Column(Integer, ForeignKey(Manager_Prev.id), index=True)
-    Sector_id = Column(Integer, ForeignKey(Sector.id), index=True)
+    __tablename__ = 'stls'
     
-    AM_Table = relationship('Manager')
-    AM_prev_Table = relationship('Manager_Prev')
-    Sector_Table = relationship('Sector')
+    id = Column(Integer, primary_key=True)
+    STL_name = Column(String)
+    Email = Column(String)
+    Report_link = Column(String)
+    
+    Managers = relationship("Manager", back_populates="STL")
+
+
+class TeamLead(Base):
+    __tablename__ = 'team_leads'
+    
+    id = Column(Integer, primary_key=True)
+    TeamLead_name = Column(String)
+    Email = Column(String)
+    Has_report = Column(String)  # 'да' или 'нет'
+    Report_link = Column(String)
+    
+    Managers = relationship("Manager", back_populates="TeamLead")
 
 
 class Customer(Base):
-    __tablename__ = 'сustomer'
-
-    id = Column(Text, primary_key=True)
-    Customer_Name = Column(String)
+    __tablename__ = 'customers'
+    
+    id = Column(String, primary_key=True)  # КонтрагентКод (например "ОП-041205")
+    Customer_name = Column(String)
     INN = Column(String)
-    Holding_id = Column(Integer, ForeignKey(Holding.id), index=True)
-    Status = Column(String)
-    PriceList = Column(String)
-    Delivery = Column(String)
-
-    Holding_Table = relationship('Holding')
+    Price_type = Column(String)
+    
+    # Внешние ключи
+    Sector_id = Column(String, ForeignKey('sectors.Sector_name'))
+    Holding_id = Column(Integer, ForeignKey('holdings.id'))
+    
+    # Связи
+    Sector = relationship("Sector", back_populates="Customers")
+    Holding = relationship("Holding", back_populates="Customers")
+    Contracts = relationship("Contract", back_populates="Customer")
     
     
-class Cust_Plans(Base):
-    __tablename__ = 'cust_plans'
-
+class Holding(Base):
+    __tablename__ = 'holdings'
+    
     id = Column(Integer, primary_key=True)
-    merge = Column(String)
-    Year = Column(Integer)
-    Quarter = Column(Integer)
-    Month = Column(Integer)
-    Holding_id = Column(Integer, ForeignKey(Holding.id), index=True)
+    Holding_name = Column(String, unique=True, nullable=False)  # Название холдинга
     
-    Volume_target = Column(Numeric)
-    Margin_target = Column(Numeric)
+    Customers = relationship("Customer", back_populates="Holding")
+
+
+class Sector(Base):
+    __tablename__ = 'sectors'
     
-
-class Comp_Plans(Base):
-    __tablename__ = 'comp_plans'
-
     id = Column(Integer, primary_key=True)
-    merge = Column(String)
-    Year = Column(Integer)
-    Quarter = Column(Integer)
-    Month = Column(Integer)
-    Week_of_Year = Column(Integer)
-    TeamLead_id = Column(Integer, ForeignKey(TeamLead.id), index=True)
-    Prod_cat = Column(String)
+    Sector_name = Column(String, unique=True, nullable=False)
     
-    Volume_Target_total = Column(Numeric)
-    Revenue_Target_total = Column(Numeric)
-    Margin_Target_total = Column(Numeric)
+    Customers = relationship("Customer", back_populates="Sector")
+
+
+class Contract(Base):
+    __tablename__ = 'contracts'
     
-    TeamLead_Table = relationship('TeamLead')
+    id = Column(String, primary_key=True)  # ДоговорКод (например "ОП-002494")
+    Contract = Column(String)
+    Contract_Type = Column(String)  # "С покупателем"
+    Price_Type = Column(String)
+    Payment_Condition = Column(String)
+    
+    # Внешние ключи
+    Customer_id = Column(String, ForeignKey('customers.id'))  # Контрагент.Код
+    Manager_id = Column(Integer, ForeignKey('managers.id'))
+    
+    # Связи
+    Customer = relationship("Customer", back_populates="Contracts")
+    Manager = relationship("Manager", back_populates="Contracts")
+
+
+class Hyundai_Dealer(Base):
+    __tablename__ = 'hyundai_dealers'
+    
+    id = Column(Integer, primary_key=True)  # Внутренний ID (автоинкремент)
+    Dealer_code = Column(String, nullable=True, unique=True)  # "Код дилера HYUNDAI" (может быть NULL)
+    Hyundai_code = Column(String, unique=True, nullable=False)  # "Код в HYUNDAI" (обязателен)
+    Name = Column(String)  # "Наим дилера HYUNDAI"
+    City = Column(String)  # "Город"
+    INN = Column(String)  # "ИНН"
+    
+    # Связь с менеджером
+    Manager_id = Column(Integer, ForeignKey('managers.id'))
+    Manager = relationship("Manager", back_populates="Hyundai_Dealers")
     
 
+    # Уникальный индекс для случая, когда DealerCode есть
+    # Определение индексов (без предупреждений)
+    __table_args__ = (
+        Index('idx_hyundai_code_unique', Hyundai_code, unique=True),
+        Index('idx_dealer_code_unique', Dealer_code, unique=True),
+    )
+    
+    @hybrid_property
+    def HasDealerCode(self):
+        return self.Dealer_code is not None
+    
+
+    
 class Material(Base):
     __tablename__ = 'material'
 
-    id = Column(Text, primary_key=True, index=True, unique=True, nullable=False)
-    prod_art = Column(String, index=True)
-    prod_art_for_price = Column(String, index=True)
-    Material_Name = Column(String, nullable=False)
-    Product_Name = Column(String)
-    Type = Column(String)
-    Category = Column(String)
+    Code = Column(String, primary_key=True)
+    Article = Column(String)
+    Material_Name = Column(String, nullable=False, index=True)
+    Full_name = Column(String)
     Brand = Column(String)
     Family = Column(String)
+    Product_name = Column(String)
+    Product_type = Column(String)
     UoM = Column(String)
-    UoM_1C = Column(String)
-    Pack_type = Column(String)
-    Pack_for_name = Column(Numeric)
-    Pack = Column(Numeric)
-    Pack_qty = Column(Numeric)
-    ED_type = Column(String)
-    Ecofee_type = Column(String)
-    Density = Column(Numeric)
-    Net_Weight = Column(Numeric)
-    Pack_weight = Column(Numeric)
+    Report_UoM = Column(String)
+    Package_type = Column(String)
+    Items_per_Package = Column(Integer)
+    Items_per_Set = Column(Integer)
+    Package_Volume = Column(Numeric)
+    Net_weight = Column(Numeric)
     Gross_weight = Column(Numeric)
+    Density = Column(Numeric)
     TNVED = Column(String)
-    Cntr_of_origin = Column(String)
-    Stock_strategy = Column(String)
-    Status = Column(String)
-    Full_name = Column(String)
-    Material_Name_engl = Column(String)
-    Comment = Column(String)
-    ABC = Column(String)
+    Excise = Column(String)
+    
+    ABC = relationship("ABC_cat", back_populates="Material")
+
+
+class ABC_cat(Base):
+    __tablename__ = 'abc_cat'
+    
+    id = Column(Integer, primary_key=True)
+    Product_name = Column(String, ForeignKey('material.Material_Name'))  # Связь по названию
+    Start_date = Column(Date)
+    End_date = Column(Date)
+    ABC_category = Column(String)
+    
+    # Связь с материалом
+    Material = relationship("Material", back_populates="ABC")
 
 
 class Supplier(Base):
     __tablename__ = 'supplier'
     
-    id = Column(Text, primary_key=True)
+    id = Column(String, primary_key=True)
     Supplier_Name = Column(String)
     Imp_Loc = Column(String)
+    Customs = Column(String)
     
     
 class TaxFee(Base):
     __tablename__ = 'taxfee'
     
+    __table_args__ = (
+        UniqueConstraint('Year', 'Month', name='uq_year_month'),  # Уникальность по году и месяцу
+    )
+    
     id = Column(Integer, primary_key=True)
-    merge = Column(String)
-    Year = Column(Integer)
-    Month = Column(Integer)
-    ED = Column(Numeric)
-    Cust_docs = Column(Numeric)
-    Bank_fee = Column(Numeric)
-    Moving = Column(Numeric)
-    Storing = Column(Numeric)
-    Money = Column(Numeric)
-    Add_money = Column(Numeric)
+    Year = Column(Integer)                  # Год
+    Month = Column(Integer)                 # Месяц
+    Excise = Column(Numeric)                # Акциз
+    Customs_clearance = Column(Numeric)     # Тамож. оформление
+    Bank_commission = Column(Numeric)       # Комиссия банка
+    Transportation = Column(Numeric)        # Транспорт (перемещ), л
+    Storage = Column(Numeric)               # Хранение, л
+    Money_cost = Column(Numeric)            # Ст-ть Денег
+    Additional_money_percent = Column(Numeric)  # Доп% денег
+    
     
 class EcoFee_amount(Base):
     __tablename__ = 'ecofee_amount'
     
     id = Column(Integer, primary_key=True)
-    merge = Column(String)
+    merge = Column(String, unique=True)
     TNVED = Column(String)
     Year = Column(Integer)
-    Amount = Column(Numeric)
+    ECO_amount = Column(Numeric)
     
     
 class EcoFee_standard(Base):
     __tablename__ = 'ecofee_standard'
     
     id = Column(Integer, primary_key=True)
-    merge = Column(String)
+    merge = Column(String, unique=True)
     TNVED = Column(String)
     Year = Column(Integer)
-    Standard = Column(Numeric)
+    ECO_standard = Column(Numeric)
 
+
+class Customs_Rate(Base):
+    __tablename__ = 'customs_rate'
+    
+    id = Column(Integer, primary_key=True)
+    merge = Column(String, unique=True)
+    TNVED = Column(String)
+    Cust_rate = Column(Numeric(5, 2))
+    
 
 class DOCType(Base):
-    __tablename__ = 'doctype'
+    __tablename__ = 'doc_type'
     
     id = Column(Integer, primary_key=True)
     merge = Column(String)
@@ -205,16 +237,15 @@ class DOCType(Base):
     Doc_type = Column(String)
     
 
-class HYUNDAI(Base):
-    __tablename__ = 'hyundai'
-    
-    id = Column(Integer, primary_key=True)
-    HYUNDAI_id = Column(String)
-    Hyu_code = Column(String)
-    Dealer_Name = Column(String)
-    City = Column(String)
-    INN = Column(String)
-    AM_id = Column(Integer, ForeignKey(Manager.id), index=True)
-    
-    AM_Table = relationship('Manager')
-    
+
+
+
+
+
+
+
+
+
+
+
+

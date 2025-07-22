@@ -1,14 +1,14 @@
+import os
 import pandas as pd
-import polars as pl
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem, QWidget
-from sqlalchemy import select
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
+                              QTableWidgetItem, QWidget)
+from PySide6.QtCore import Qt
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from db import db, Base, engine
-
-from models import TeamLead, STL, Manager, Manager_Prev
+from db import db, engine
+from models import TeamLead, STL, Manager
 from wind.pages.managers_ui import Ui_Form
-
 from config import All_data_file
 
 
@@ -18,537 +18,507 @@ class Managers(QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        self.fill_in_kam_list()
-        self.fill_in_stl_list()
-        self.fill_in_tl_list()
-
-        self.ui.line_tl.currentTextChanged.connect(self.fill_in_kam_list)
+        self._setup_ui()
+        self._setup_connections()
         
+        self._initialize_comboboxes()
+
+
+    def _setup_ui(self):
+        """Универсальная настройка таблицы для всех классов"""
         self.table = self.ui.table
-        self.ui.table.resizeColumnsToContents()
+        
+        # Основные настройки таблицы
+        self.table.resizeColumnsToContents()
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)  # Чередование цветов строк
+        
+        # Настройки заголовков
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        
+        # Оптимизация производительности
+        self.table.setSortingEnabled(True)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
 
-        self.ui.btn_open_file_manager.setToolTip('выбери файл ! ALL DATA !.xlsx')
-        self.ui.btn_open_file_manager.clicked.connect(self.get_kam_file)
+
+    def _setup_connections(self):
+        """Настройка сигналов и слотов"""
+        self.ui.line_tl.currentTextChanged.connect(self.fill_in_kam_list)
+        self.ui.btn_open_file_manager.setToolTip('Выбери файл ! ALL DATA !.xlsx')
+        self.ui.btn_open_file_manager.clicked.connect(self.get_file)
         self.ui.btn_upload_file_manager.clicked.connect(self.upload_data)
-
-        self.ui.btn_find_KAM.clicked.connect(self.find_KAM)
-        self.ui.btn_find_STL.clicked.connect(self.find_STL)
-        self.ui.btn_find_TL.clicked.connect(self.find_TL)
-
-
-    def get_kam_file(self):
-        get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-        if get_file:
-            self.ui.label_manager_File.setText(get_file[0])
-            
-
-    def upload_data(self, kam_file_xls):
-        kam_file_xls = self.ui.label_manager_File.text()
-        if kam_file_xls == 'Выбери файл или нажми Upload, файл будет взят из основной папки' \
-            or kam_file_xls == 'База данных обновлена!'\
-            or kam_file_xls == '':
-            self.run_manager_func(All_data_file)
-            msg = QMessageBox()
-            msg.setText('База данных обновлена!')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #237508;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Information)
-            x = msg.exec_()
-        else:
-            self.run_manager_func(kam_file_xls)
-            msg = QMessageBox()
-            msg.setText('База данных обновлена!')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #237508;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Information)
-            x = msg.exec_()
-            
-        self.fill_in_kam_list()
-        self.fill_in_stl_list()
-        self.fill_in_tl_list()
-        
-        self.ui.label_manager_File.setText("Выбери файл или нажми Upload, файл будет взят из основной папки")
+        self.ui.btn_find_KAM.clicked.connect(lambda: self._find_data('KAM'))
+        self.ui.btn_find_STL.clicked.connect(lambda: self._find_data('STL'))
+        self.ui.btn_find_TL.clicked.connect(lambda: self._find_data('TL'))
 
 
-    def run_manager_func(self, data_file_xls):
-        TL = self.read_TeamLead(data_file_xls)
-        STL = self.read_STL_file(data_file_xls)
-        KAM = self.read_manager_file(data_file_xls)
-        
-        self.save_TeamLead(TL)
-        self.save_STL(STL)
-        self.save_AM(KAM)
-
-
-    def read_manager_file(self, data_file_xls):
-        df = pl.read_excel(data_file_xls, sheet_name='AM_emails', engine='xlsx2csv', engine_options={"skip_hidden_rows": False, "ignore_formats": ["float"]}, )
-        df = df.rename({'Team Lead': 'TeamLead', 'Отчет': 'Report'})
-        KAM_df = df.to_dicts()
-        
-        return KAM_df
-
-
-    def read_STL_file(sefl, data_file_xls):
-        df = pl.read_excel(data_file_xls, sheet_name='STL_emails', engine='xlsx2csv', engine_options={"skip_hidden_rows": False, "ignore_formats": ["float"]}, )
-        STL_df = df.to_dicts()
-        
-        return STL_df
-
-
-    def read_TeamLead(self, data_file_xls):
-        df = pl.read_excel(data_file_xls, sheet_name='TL_emails', engine='xlsx2csv', engine_options={"skip_hidden_rows": False, "ignore_formats": ["float"]}, )
-        df = df.rename({'Team Lead': 'TeamLead'})
-        TL_df = df.to_dicts()
-        
-        return TL_df
-
-
-    def save_STL(self, data):
-        processed = []
-        stl_unique = []
-        for row in data:
-            if row['STL'] not in processed:
-                stl = {'STL': row['STL'], 'email': row['email'],}
-                stl_unique.append(stl)
-                processed.append(stl['STL'])
-
-        stl_for_upload = []
-        stl_for_upload_new = []
-        for mylist in stl_unique:
-            stl_exists = STL.query.filter(STL.STL == mylist['STL']).count()
-            if stl_exists == 0:
-                new_stl = {'STL': mylist['STL'], 'email': mylist['email']}
-                stl_for_upload_new.append(new_stl)
-            elif stl_exists > 0:
-                new_stl = {'id': self.get_id_STL(mylist['STL']), 'STL': mylist['STL'], 'email': mylist['email']}
-                stl_for_upload.append(new_stl)
-
-        db.bulk_insert_mappings(STL, stl_for_upload_new)
-        db.bulk_update_mappings(STL, stl_for_upload)
+    def _initialize_comboboxes(self):
+        """Инициализация выпадающих списков при старте"""
         try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
+            # Проверяем наличие данных в БД
+            has_data = db.session.query(Manager).first() is not None
+            
+            if has_data:
+                # Заполняем списки
+                self._fill_combobox(self.ui.line_kam, 'Manager_name')
+                self._fill_combobox(self.ui.line_stl, 'STL_name')
+                self._fill_combobox(self.ui.line_tl, 'TeamLead_name')
+            else:
+                # Просто инициализируем пустые списки с "-"
+                for combobox in [self.ui.line_kam, self.ui.line_stl, self.ui.line_tl]:
+                    combobox.clear()
+                    combobox.addItem('-')
+                    
+        except Exception as e:
+            print(f"Ошибка инициализации списков: {e}")
+            # Гарантируем, что списки будут с "-" даже при ошибке
+            for combobox in [self.ui.line_kam, self.ui.line_stl, self.ui.line_tl]:
+                combobox.clear()
+                combobox.addItem('-')
 
-        return stl_unique
+
+    def get_file(self):
+        """Выбор файла через диалоговое окно"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, 
+            'Выберите файл', 
+            '', 
+            'Excel Files (*.xlsx *.xls)'
+        )
+        if file_path:
+            self.ui.label_manager_File.setText(file_path)
 
 
-    def get_id_STL(self, STL_name):
-        db_data = STL.query.filter(STL.STL == STL_name).first()
-        stl_id = db_data.id
-        return stl_id
-
-
-    def save_TeamLead(self, data):
-        processed = []
-        tl_unique = []
-        for row in data:
-            if row['TeamLead'] not in processed:
-                tl = {'TeamLead': row['TeamLead'], 'email': row['email'],}
-                tl_unique.append(tl)
-                processed.append(tl['TeamLead'])
-
-        tl_for_upload = []
-        tl_for_update = []
-        for mylist in tl_unique:
-            tl_exists = TeamLead.query.filter(TeamLead.TeamLead == mylist['TeamLead']).count()
-            if tl_exists == 0:
-                new_tl = {'TeamLead': mylist['TeamLead'], 'email': mylist['email']}
-                tl_for_upload.append(new_tl)
-            elif tl_exists > 0:
-                new_tl = {'id': self.get_id_TeamLead(mylist['TeamLead']), 'TeamLead': mylist['TeamLead'], 'email': mylist['email']}
-                tl_for_update.append(new_tl)
-
-        db.bulk_insert_mappings(TeamLead, tl_for_upload)
-        db.bulk_update_mappings(TeamLead, tl_for_update)
+    def upload_data(self):
+        """Загрузка данных в базу"""
+        file_path = self.ui.label_manager_File.text()
+        
+        # Используем файл по умолчанию, если не выбран конкретный
+        if not file_path or file_path in ('Выбери файл или нажми Upload, файл будет взят из основной папки', 
+                                        'База данных обновлена!'):
+            file_path = All_data_file
         
         try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-
-        return tl_unique
-
-
-    def get_id_TeamLead(elf, TeamLead_name):
-        db_data = TeamLead.query.filter(TeamLead.TeamLead == TeamLead_name).first()
-        tl_id = db_data.id
-
-        return tl_id
-
-
-    def save_AM(self, data):
-        processed = []
-        am_unique = []
-        for row in data:
-            if row['AM'] not in processed:
-                am = {'AM': row['AM'],
-                            'email': row['email'],
-                            'STL_id': self.get_id_STL(row['STL']),
-                            'TeamLead_id': self.get_id_TeamLead(row['TeamLead']),
-                            'Report': row['Report'],
-                            }
-                am_unique.append(am)
-                processed.append(am['AM'])
-
-        am_for_upload = []
-        am_prev_for_upload = []
-        am_for_update = []
-        am_prev_for_update = []
-        for mylist in am_unique:
-            am_exists = Manager.query.filter(Manager.AM == mylist['AM']).count()
-            if am_exists == 0:
-                new_am = {'AM': mylist['AM'],
-                                    'email': mylist['email'],
-                                    'STL_id': mylist['STL_id'],
-                                    'TeamLead_id': mylist['TeamLead_id'],
-                                    'Report': mylist['Report'],}
-                new_am_prev = {'AM_prev': mylist['AM'],
-                                            'email': mylist['email'],
-                                            'STL_id': mylist['STL_id'],
-                                            'TeamLead_id': mylist['TeamLead_id'],
-                                            'Report': mylist['Report'],}
-                am_for_upload.append(new_am)
-                am_prev_for_upload.append(new_am_prev)
-            elif am_exists > 0:
-                am_list = {'id' : self.get_id_AM(mylist['AM']),
-                                    'AM': mylist['AM'],
-                                    'email': mylist['email'],
-                                    'STL_id': mylist['STL_id'],
-                                    'TeamLead_id': mylist['TeamLead_id'],
-                                    'Report': mylist['Report'],}
-                am_prev_list = {'id' : self.get_id_AM_prev(mylist['AM']),
-                                        'AM_prev': mylist['AM'],
-                                        'email': mylist['email'],
-                                        'STL_id': mylist['STL_id'],
-                                        'TeamLead_id': mylist['TeamLead_id'],
-                                        'Report': mylist['Report'],}
-                am_for_update.append(am_list)
-                am_prev_for_update.append(am_prev_list)
-
-        db.bulk_insert_mappings(Manager, am_for_upload)
-        db.bulk_insert_mappings(Manager_Prev, am_prev_for_upload)
-        db.bulk_update_mappings(Manager, am_for_update)
-        db.bulk_update_mappings(Manager_Prev, am_prev_for_update)
-        
-        try:
-            db.commit()
-        except SQLAlchemyError as e:
-            print_error(mylist, "Ошибка целостности данных: {}", e)
-            db.rollback()
-            raise
-        except ValueError as e:
-            print_error(mylist, "Неправильный формат данных: {}", e)
-            db.rollback()
-            raise
-
-        return am_unique
-
-
-    def get_id_AM(self, AM_name):
-        db_data = Manager.query.filter(Manager.AM == AM_name).first()
-        am_id = db_data.id
-
-        return am_id
-
-
-    def get_id_AM_prev(self, AM_name):
-        db_data = Manager_Prev.query.filter(Manager_Prev.AM_prev == AM_name).first()
-        am_prev_id = db_data.id
-
-        return am_prev_id
-
-
-    def get_all_kam_from_db(self):
-        KAM_request = db.query(Manager, STL, TeamLead).join(STL).join(TeamLead)
-        KAM_data = pl.read_database(query=KAM_request.statement, connection=engine)
-        if KAM_data.is_empty() == False:
-            KAM_data = KAM_data.rename({"email_1": "email_STL", "email_2": "email_TL"})
-            all_KAM_data = KAM_data[['AM', 'email', 'Report', 'STL_id', 'STL', "email_STL", 'TeamLead_id', 'TeamLead', "email_TL", ]]
-            all_KAM_data = all_KAM_data.sort("AM", descending=[False])
-        else:
-            all_KAM_data = pl.DataFrame()
-            
-        return all_KAM_data
-
-            
-    def find_KAM(self):
-        self.ui.table.setRowCount(0)
-        self.ui.table.setColumnCount(0)
-        
-        KAM_df = self.get_all_kam_from_db()
-        
-        KAM_name = self.ui.line_kam.currentText()
-        STL_name = self.ui.line_stl.currentText()
-        TL_name = self.ui.line_tl.currentText()
-
-        if KAM_df.is_empty() == True:
-            msg = QMessageBox()
-            msg.setText('There is no Manager data in Database\n'
-                                'Close the program and open agan!\n'
-                                'Then update Database')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #ff0000;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
-
-        elif KAM_name != '-' and STL_name == '-' and TL_name == '-' :
-            KAM_df = KAM_df.filter(pl.col("AM") == KAM_name)
-            
-        elif KAM_name == '-' and STL_name != '-' and TL_name == '-' :
-            KAM_df = KAM_df.filter(pl.col("STL") == STL_name)
-            
-        elif KAM_name == '-' and STL_name == '-' and TL_name != '-' :
-            KAM_df = KAM_df.filter(pl.col("TeamLead") == TL_name)
-            
-        elif KAM_name != '-' and TL_name != '-' :
-            KAM_df = KAM_df.filter(pl.col("TeamLead") == TL_name)            
-        else:
-            KAM_df = KAM_df
-        
-        KAM_df = KAM_df[['AM', 'email', 'Report', 'STL', 'TeamLead', ]]
-        KAM_df = KAM_df.sort("AM", descending=[False])
-        
-        KAM_df = KAM_df.to_pandas()
-        headers = KAM_df.columns.values.tolist()
-        
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-
-        for i, row in KAM_df.iterrows():
-            self.table.setRowCount(self.table.rowCount() + 1)
-            
-            for j in range(self.table.columnCount()):
-                self.table.setItem(i, j, QTableWidgetItem(str(KAM_df.iloc[i, j])))
-
-
-    def find_STL(self):
-        self.ui.table.setRowCount(0)
-        self.ui.table.setColumnCount(0)
-        
-        STL_df = self.get_all_kam_from_db()
-
-        STL_name = self.ui.line_stl.currentText()
-        TL_name = self.ui.line_tl.currentText()
-
-        if STL_df.is_empty() == True:
-            msg = QMessageBox()
-            msg.setText('There is no STL data in Database\n'
-                                'Close the program and open agan!\n'
-                                'Then update Database')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #ff0000;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
-            
-        elif STL_name != '-' and TL_name == '-' :
-            STL_df = STL_df.filter(pl.col("STL") == STL_name)  
-            
-        elif TL_name != '-' :
-            STL_df = STL_df.filter(pl.col("TeamLead") == TL_name)
-              
-        else:
-            STL_df = STL_df
-        
-        STL_df = STL_df[['STL', "email_STL", 'TeamLead', ]]        
-        STL_df = STL_df.unique(subset=["STL"]).sort("STL", descending=[False])
-        
-        STL_df = STL_df.to_pandas()
-        headers = STL_df.columns.values.tolist()
-        
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        self.table.setColumnCount(len(STL_df.columns))
-        
-        for i, row in STL_df.iterrows():
-            self.table.setRowCount(self.table.rowCount() + 1)
-            
-            for j in range(self.table.columnCount()):
-                self.table.setItem(i, j, QTableWidgetItem(str(row[j])))
-
-
-    def find_TL(self):
-        self.ui.table.setRowCount(0)
-        self.ui.table.setColumnCount(0)
-        
-        TL_df = self.get_all_kam_from_db()
-        
-        KAM_name = self.ui.line_kam.currentText()
-        TL_name = self.ui.line_tl.currentText()
-
-        if TL_df.is_empty() == True:
-            msg = QMessageBox()
-            msg.setText('There is no TL data in Database\n'
-                                'Close the program and open agan!\n'
-                                'Then update Database')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Tahoma\";"
-                            "color: #ff0000;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
-            
-        elif KAM_name != '-' and TL_name == '-' :
-            TL_df = TL_df.filter(pl.col("AM") == KAM_name)  
-            
-        elif TL_name != '-' :
-            TL_df = TL_df.filter(pl.col("TeamLead") == TL_name)
+            # Проверка существования файла (новый код)
+            if not os.path.exists(file_path):
+                raise Exception(f"Файл {os.path.basename(file_path)} не найден. Проверьте наличие файла в папке.")
                 
+            # Удаляем явное создание транзакции
+            self._process_upload(file_path)
+            self._show_message('База данных обновлена!')
+            self._refresh_comboboxes()
+            
+        except Exception as e:
+            db.session.rollback()
+            
+            # Улучшенное сообщение об ошибке (новый код)
+            if "transaction is already begun" in str(e):
+                user_message = (
+                    "Ошибка при работе с базой данных.\n\n"
+                    "Пожалуйста:\n"
+                    "1. Закройте программу\n"
+                    "2. Откройте её снова\n"
+                    "3. Попробуйте повторить операцию\n\n"
+                    "Если ошибка повторяется, обратитесь в техническую поддержку."
+                )
+            else:
+                user_message = (
+                    f"Ошибка при загрузке данных: {str(e)}\n\n"
+                    "Рекомендуемые действия:\n"
+                    "1. Проверьте, что файл не открыт в другой программе\n"
+                    "2. Проверьте правильность формата файла\n"
+                    "3. Попробуйте снова"
+                )
+                
+            self._show_message(user_message, is_error=True)
+            
+        finally:
+            self.ui.label_manager_File.setText("Выбери файл или нажми Upload, файл будет взят из основной папки")
+
+
+    def _process_upload(self, file_path):
+        """Обработка и сохранение данных из файла"""
+        # Чтение данных из Excel
+        tl_data = self._read_excel_sheet(file_path, 'TL_emails')
+        stl_data = self._read_excel_sheet(file_path, 'STL_emails')
+        
+        # Чтение данных менеджеров
+        am_data = self._read_excel_sheet(file_path, 'AM_emails')
+        
+        # Сначала сохраняем STL и TeamLead, чтобы были их ID
+        self._save_stls(stl_data)
+        self._save_team_leads(tl_data)
+        
+        # Затем сохраняем менеджеров
+        self._save_managers(am_data)
+
+
+    def _read_excel_sheet(self, file_path, sheet_name, rename_cols=None, fillna_cols=None, fillna_value=None):
+        """Чтение листа Excel с переименованием колонок и заменой пустых значений"""
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        
+        # Специфичные переименования для каждого листа
+        if sheet_name == 'AM_emails':
+            renames = {
+                'AM': 'Manager_name',
+                'Team Lead': 'TeamLead_name',
+                'STL': 'STL_name',
+                'Отчет': 'Has_report',
+                'AM_1C name': 'AM_1C_Name',
+                'Ссылка на отчет': 'Report_link'
+            }
+        elif sheet_name == 'STL_emails':
+            renames = {
+                'STL': 'STL_name',
+                'Ссылка на отчет': 'Report_link'
+            }
+        elif sheet_name == 'TL_emails':
+            renames = {
+                'Team Lead': 'TeamLead_name',
+                'Отчет': 'Has_report',
+                'Ссылка на отчет': 'Report_link'
+            }
         else:
-            TL_df = TL_df
+            renames = {}
         
-        TL_df = TL_df[["AM", 'TeamLead', "email_TL",  ]]
-        TL_df = TL_df.unique(subset=["TeamLead"]).sort("TeamLead", descending=[False])
+        # Применяем переименования
+        df = df.rename(columns=renames)
         
-        TL_df = TL_df.to_pandas()
-        headers = TL_df.columns.values.tolist()
+        # Дополнительные переименования, если указаны
+        if rename_cols:
+            df = df.rename(columns=rename_cols)
+        
+        # Замена пустых значений
+        if fillna_cols and fillna_value is not None:
+            existing_cols = [col for col in fillna_cols if col in df.columns]
+            df[existing_cols] = df[existing_cols].fillna(fillna_value)
+        
+        return df.where(pd.notnull(df), None).to_dict('records')
+
+
+    def _save_team_leads(self, data):
+        """Сохранение TeamLead"""
+        self._save_data(
+            model=TeamLead,
+            data=data,
+            name_field='TeamLead_name',  # Используем точное имя поля из модели
+            extra_fields={
+                'Email': 'email',
+                'Has_report': 'Has_report',
+                'Report_link': 'Ссылка на отчет'
+            }
+        )
+
+
+    def _save_stls(self, data):
+        """Сохранение STL"""
+        self._save_data(
+            model=STL,
+            data=data,
+            name_field='STL_name',  # Используем точное имя поля из модели
+            extra_fields={
+                'Email': 'email',
+                'Report_link': 'Ссылка на отчет'
+            }
+        )
+
+
+    def _save_managers(self, data):
+        """Сохранение менеджеров с обработкой пустых значений"""
+        if not data:
+            return
+
+        unique_data = []
+        processed_names = set()
+        
+        for row in data:
+            manager_name = row.get('Manager_name')
+            if not manager_name or manager_name in ('-', 'no') or manager_name in processed_names:
+                continue
+                
+            # Обработка email
+            email = row.get('email', '-')
+            if email == '-':
+                email = None
+                
+            # Получаем ID STL (если указан)
+            stl_name = row.get('STL_name', '-')
+            stl_id = None
+            if stl_name and stl_name != '-':
+                stl = db.query(STL).filter(STL.STL_name == stl_name).first()
+                stl_id = stl.id if stl else None
+                
+            # Получаем ID TeamLead (если указан)
+            teamlead_name = row.get('TeamLead_name', '-')
+            teamlead_id = None
+            if teamlead_name and teamlead_name != '-':
+                teamlead = db.query(TeamLead).filter(TeamLead.TeamLead_name == teamlead_name).first()
+                teamlead_id = teamlead.id if teamlead else None
+                
+            # Формируем запись для сохранения
+            item = {
+                'Manager_name': manager_name,
+                'Email': email,
+                'STL_id': stl_id,
+                'TeamLead_id': teamlead_id,
+                'Has_report': row.get('Has_report', 'нет') if row.get('Has_report', '-') != '-' else None,
+                'AM_1C_Name': row.get('AM_1C_Name', '') if row.get('AM_1C_Name', '-') != '-' else None,
+                'Report_link': row.get('Report_link', '') if row.get('Report_link', '-') != '-' else None
+            }
+            
+            unique_data.append(item)
+            processed_names.add(manager_name)
+
+        # Сохраняем данные
+        try:
+            if unique_data:
+                # Сначала обновляем существующие записи
+                existing_names = {m[0] for m in db.query(Manager.Manager_name).all()}
+                
+                to_insert = []
+                to_update = []
+                
+                for item in unique_data:
+                    if item['Manager_name'] in existing_names:
+                        # Получаем ID существующего менеджера
+                        manager = db.query(Manager).filter(Manager.Manager_name == item['Manager_name']).first()
+                        if manager:
+                            item['id'] = manager.id
+                            to_update.append(item)
+                    else:
+                        to_insert.append(item)
+                
+                if to_insert:
+                    db.session.bulk_insert_mappings(Manager, to_insert)
+                if to_update:
+                    db.session.bulk_update_mappings(Manager, to_update)
+                
+                db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            raise Exception(f"Ошибка при сохранении менеджеров: {str(e)}")
+        finally:
+            db.session.close()
+
+
+    def _save_data(self, model, data, name_field, extra_fields=None):
+        """
+        Общий метод для сохранения данных
+        :param model: SQLAlchemy модель
+        :param data: список словарей с данными
+        :param name_field: поле с именем (используется как есть, без добавления суффиксов)
+        :param extra_fields: дополнительные поля {поле_в_модели: поле_в_данных}
+        """
+        if not data:
+            return
+
+        extra_fields = extra_fields or {}
+        
+        # Получаем существующие имена из базы
+        name_column = getattr(model, name_field)  # Получаем столбец модели
+        existing_names = {name[0] for name in db.query(name_column).all()}
+        
+        to_insert = []
+        to_update = []
+        
+        for row in data:
+            name = row[name_field]
+            if not name or name in ('-', 'no'):
+                continue
+                
+            item = {
+                name_field: name,  # Используем имя поля как есть
+                **{k: row.get(v, '') for k, v in extra_fields.items()}
+            }
+            
+            if name in existing_names:
+                # Получаем ID существующей записи
+                item['id'] = db.query(model.id).filter(name_column == name).scalar()
+                to_update.append(item)
+            else:
+                to_insert.append(item)
+
+        try:
+            if to_insert:
+                db.session.bulk_insert_mappings(model, to_insert)
+            if to_update:
+                db.session.bulk_update_mappings(model, to_update)
+            db.session.commit()
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            raise Exception(f"Не удалось сохранить данные в базу: {str(e)}")
+        finally:
+            db.session.close()
+
+
+    def _get_id(self, model, name_field, name):
+        """Получение ID по имени"""
+        if not name or name in ('-', 'no'):
+            return None
+            
+        item = db.query(model).filter(getattr(model, name_field) == name).first()
+        return item.id if item else None
+
+
+    def _refresh_comboboxes(self):
+        """Обновление всех выпадающих списков"""
+        try:
+            self.fill_in_kam_list()
+            self.fill_in_stl_list()
+            self.fill_in_tl_list()
+        except Exception as e:
+            print(f"Ошибка обновления списков: {e}")
+            self._show_message("Ошибка обновления списков. Попробуйте снова.", is_error=True)
+
+
+    def get_all_managers_data(self):
+        """Получение всех данных менеджеров из базы"""
+        query = select(
+            Manager.id,
+            Manager.Manager_name,
+            Manager.Email,
+            Manager.Has_report,
+            Manager.Report_link,
+            Manager.AM_1C_Name,
+            STL.id.label('STL_id'),
+            STL.STL_name,
+            STL.Email.label('email_STL'),
+            TeamLead.id.label('TeamLead_id'),
+            TeamLead.TeamLead_name,
+            TeamLead.Email.label('email_TL')
+        ).join(STL, Manager.STL_id == STL.id)\
+         .join(TeamLead, Manager.TeamLead_id == TeamLead.id)
+        
+        return pd.read_sql(query, engine)
+
+
+    def _find_data(self, data_type):
+        """Поиск данных по типу (KAM, STL, TL)"""
+        self.table.clearContents()
+        self.table.setRowCount(0)
+        self.table.setColumnCount(0)
+        
+        try:
+            df = self.get_all_managers_data()
+            if df.empty:
+                raise ValueError('Нет данных в базе')
+            
+            df = self._filter_data(df, data_type)
+            self._display_data(df, data_type)
+            
+        except Exception as e:
+            self._show_message(
+                f'Ошибка при поиске данных: {str(e)}\n'
+                'Закройте программу и откройте снова!\n'
+                'Затем обновите базу данных',
+                is_error=True
+            )
+
+
+    def _filter_data(self, df, data_type):
+        """Фильтрация данных в зависимости от типа"""
+        kam = self.ui.line_kam.currentText()
+        stl = self.ui.line_stl.currentText()
+        tl = self.ui.line_tl.currentText()
+        
+        if data_type == 'KAM':
+            if kam != '-':
+                df = df[df['Manager_name'] == kam]
+            elif stl != '-':
+                df = df[df['STL_name'] == stl]
+            elif tl != '-':
+                df = df[df['TeamLead_name'] == tl]
+            return df[['Manager_name', 'Email', 'Has_report', 'STL_name', 'TeamLead_name']]
+        
+        elif data_type == 'STL':
+            if stl != '-':
+                df = df[df['STL_name'] == stl]
+            elif tl != '-':
+                df = df[df['TeamLead_name'] == tl]
+            return df[['STL_name', "email_STL", 'TeamLead_name']].drop_duplicates(subset=["STL_name"])
+        
+        else:  # TL
+            if tl != '-':
+                df = df[df['TeamLead_name'] == tl]
+            return df[["Manager_name", 'TeamLead_name', "email_TL"]].drop_duplicates(subset=["TeamLead_name"])
+
+
+    def _display_data(self, df, data_type):
+        """Отображение данных в таблице"""
+        sort_column = {
+            'KAM': 'Manager_name',
+            'STL': 'STL_name',
+            'TL': 'TeamLead_name'
+        }.get(data_type, 'Manager_name')
+        
+        df = df.sort_values(sort_column)
+        headers = df.columns.tolist()
         
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
-        self.table.setColumnCount(len(TL_df.columns))
+        self.table.setRowCount(len(df))
         
-        for i, row in TL_df.iterrows():
-            self.table.setRowCount(self.table.rowCount() + 1)
-            
-            for j in range(self.table.columnCount()):
-                self.table.setItem(i, j, QTableWidgetItem(str(row[j])))
+        for i, row in df.iterrows():
+            for j, value in enumerate(row):
+                self.table.setItem(i, j, QTableWidgetItem(str(value)))
 
-    
+
+    def _fill_combobox(self, combobox, column):
+        """Универсальное заполнение комбобокса"""
+        combobox.clear()
+        combobox.addItem('-')
+        
+        try:
+            # Проверяем соединение с БД
+            db.session.execute(text('SELECT 1')).scalar()
+            
+            if column == 'Manager_name':
+                items = db.session.query(Manager.Manager_name).distinct().all()
+            elif column == 'STL_name':
+                items = db.session.query(STL.STL_name).distinct().all()
+            elif column == 'TeamLead_name':
+                items = db.session.query(TeamLead.TeamLead_name).distinct().all()
+            else:
+                return
+                
+            # Фильтруем и сортируем результаты
+            valid_items = sorted([item[0] for item in items if item[0]])
+            if valid_items:
+                combobox.addItems(valid_items)
+                
+        except Exception as e:
+            print(f"Ошибка при заполнении комбобокса {column}: {e}")
+            # В случае ошибки хотя бы оставляем "-" в списке
+
+
+
     def fill_in_kam_list(self):
-        KAM_data = self.get_all_kam_from_db()
-        
-        self.ui.line_kam.clear()
-
-        if KAM_data.is_empty() == True:
-            self.ui.line_kam.addItem('-')
-
-        else:
-            KAM_data = KAM_data[['AM']]
-            KAM_data = KAM_data.unique(subset="AM").sort("AM", descending=[False,])
-            KAM_list = KAM_data['AM'].to_list()
-            # KAM_list.insert(0, '-')
-            self.ui.line_kam.addItems(KAM_list)
-            
-            
+        self._fill_combobox(self.ui.line_kam, 'Manager_name')
+                
     def fill_in_stl_list(self):
-        STL_data = self.get_all_kam_from_db()
-
-        self.ui.line_stl.clear()
-
-        if STL_data.is_empty() == True:
-            self.ui.line_tl.addItem('-')
-
-        else:
-            STL_data = STL_data[['STL']]
-            STL_data = STL_data.unique(subset="STL").sort("STL", descending=[False,])
-            STL_list = STL_data['STL'].to_list()
-            # STL_list.insert(0, '-')
-            self.ui.line_stl.addItems(STL_list)
-            
-            
+        self._fill_combobox(self.ui.line_stl, 'STL_name')
+                
     def fill_in_tl_list(self):
-        TL_data = self.get_all_kam_from_db()
-        
-        self.ui.line_tl.clear()
-
-        if TL_data.is_empty() == True:
-            self.ui.line_tl.addItem('-')
-
-        else:
-            TL_data = TL_data[['TeamLead']]
-            TL_data = TL_data.unique(subset="TeamLead").sort("TeamLead", descending=[False,])
-            TL_list = TL_data['TeamLead'].to_list()
-            # TL_list.insert(0, '-')
-            self.ui.line_tl.addItems(TL_list)
+        self._fill_combobox(self.ui.line_tl, 'TeamLead_name')
 
 
-    # def fill_in_mnth_list(self):
-    #     mnth_request = db.execute(select(Delivery_Tarif.year, Delivery_Tarif.mnth)).all()
-    #     mnth_data = pd.DataFrame(mnth_request)
-
-    #     self.ui.line_Mnth.clear()
-    #     year = self.ui.line_Year.currentText()
-
-    #     if mnth_data.empty == True:
-    #         self.ui.line_Mnth.addItem('-')
-            
-    #     elif year != '-' or year != '':
-    #         mnth_N = mnth_data[['year', 'mnth']]
-    #         mnth_N['year'] = mnth_N['year'].astype(str)
-    #         mnth_N = mnth_N[(mnth_N['year'] == year)]
-    #         mnth_N = mnth_N.drop_duplicates(subset=['mnth'])
-    #         mnth_N = mnth_N.sort_values(by=['mnth'])
-    #         mnth_N['mnth'] = mnth_N['mnth'].astype(str)
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('0','00')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('1','01')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('2','02')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('3','03')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('4','04')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('5','05')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('6','06')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('7','07')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('8','08')
-    #         mnth_N['mnth'] = mnth_N['mnth'].replace('9','09')
-    #         # mnth_N['mnth'] = mnth_N.apply(self.check_Mnth, axis=1)
-    #         mnth_N['mnth'].astype(str)
-    #         mnth_N_list = mnth_N['mnth'].tolist()
-    #         mnth_N_list.insert(0, '-')
-    #         self.ui.line_Mnth.addItems(mnth_N_list)
-
-    #     else:
-    #         mnth_N = mnth_data[['mnth']]
-    #         mnth_N = mnth_N.drop_duplicates()
-    #         mnth_N = mnth_N.sort_values(by=['mnth'])
-    #         mnth_N['mnth'] = mnth_N['mnth'].astype(str)
-    #         mnth_N['mnth'] = mnth_N.apply(self.check_Mnth, axis=1)
-    #         mnth_N_list = mnth_N['mnth'].tolist()
-    #         mnth_N_list.insert(0, '-')
-    #         self.ui.line_Mnth.addItems(mnth_N_list)
-
-
-    # def dowload_Tarif(self):
-    #     savePath = QFileDialog.getSaveFileName(None, 'Blood Hound', 'Tarif_date.xlsx', 'Excel Workbook (*.xlsx)')
-    #     col_count = self.ui.table.columnCount()
-    #     row_count = self.ui.table.rowCount()
-    #     headers = [str(self.ui.table.horizontalHeaderItem(i).text()) for i in range(col_count)]
-
-    #     df_list = []
-    #     for row in range(row_count):
-    #         df_list2 = []
-    #         for col in range(col_count):
-    #             table_item = self.ui.table.item(row,col)
-    #             df_list2.append('' if table_item is None else str(table_item.text()))
-    #         df_list.append(df_list2)
-
-    #     df = pd.DataFrame(df_list, columns=headers)
-    #     df.to_excel(savePath[0], index=False)
-
-    #     msg = QMessageBox()
-    #     msg.setText('Database Updated')
-    #     msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                     "font: 12pt  \"Segoe UI\";"
-    #                     "color: #4b0082;\n"
-    #                     " ")
-    #     msg.setIcon(QMessageBox.Information)
-    #     x = msg.exec_()
-
+    def _show_message(self, text, is_error=False):
+        """Показать сообщение пользователю"""
+        msg = QMessageBox()
+        msg.setText(text)
+        style = """
+            background-color: #f8f8f2;
+            font: 10pt "Tahoma";
+            color: #ff0000;
+        """ if is_error else """
+            background-color: #f8f8f2;
+            font: 10pt "Tahoma";
+            color: #237508;
+        """
+        msg.setStyleSheet(style)
+        msg.setIcon(QMessageBox.Critical if is_error else QMessageBox.Information)
+        msg.exec_()

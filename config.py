@@ -14,9 +14,19 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"
+Material_file = MAIN_FOLDER + "Выгрузки\\Реестр номенклатур XLSX.xlsx"
+Customer_file = MAIN_FOLDER + "Выгрузки\\Реестр контрагентов XLSX.xlsx"
+Contract_file = MAIN_FOLDER + "Выгрузки\\Реестр договоров XLSX.xlsx"
+
+
 Collection_file = MAIN_FOLDER + "! Сборщик отчета !.xlsx"
 Complectation_file = MAIN_FOLDER + "! Комплектации !.xlsx" 
 new_Complectation_file = MAIN_FOLDER + "ERRORs_Compectations_new.xlsx"
+
+
+
+
+
 
 Macro_File_Path = MAIN_FOLDER + "macro_for_report.xlsm"
 
