@@ -9,14 +9,14 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:///Report_db.db'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 path = os.getcwd()
-MAIN_FOLDER = 'WorkFiles\\'
+MAIN_FOLDER = 'C:\\работа\\My_Work_Phoenix\\Daily_Report\\'
 ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"
-Material_file = MAIN_FOLDER + "Выгрузки\\Реестр номенклатур XLSX.xlsx"
-Customer_file = MAIN_FOLDER + "Выгрузки\\Реестр контрагентов XLSX.xlsx"
-Contract_file = MAIN_FOLDER + "Выгрузки\\Реестр договоров XLSX.xlsx"
+Material_file = MAIN_FOLDER + "Выгрузки_new\\Реестр номенклатур XLSX.xlsx"
+Customer_file = MAIN_FOLDER + "Выгрузки_new\\Реестр контрагентов XLSX.xlsx"
+Contract_file = MAIN_FOLDER + "Выгрузки_new\\Реестр договоров XLSX.xlsx"
 
 
 Collection_file = MAIN_FOLDER + "! Сборщик отчета !.xlsx"

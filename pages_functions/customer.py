@@ -193,6 +193,53 @@ class Customer(QWidget):
             self.show_error_message(f"Ошибка чтения файла договоров: {str(e)}")
             return []
 
+    def read_HYUNDAI_file(self, file_path):
+        """Чтение данных дилеров Hyundai из Excel с правильным маппингом колонок"""
+        try:
+            df = pd.read_excel(file_path, sheet_name='HYUNDAI', dtype={
+                'ИНН': str,
+                'Код дилера HYUNDAI': str,
+                'Код в HYUNDAI': str
+            })
+            
+            # Проверка обязательных колонок
+            required_columns = [
+                'Код дилера HYUNDAI',
+                'Наим дилера HYUNDAI', 
+                'Код в HYUNDAI',
+                'Город',
+                'ИНН',
+                'SALES'  # Это колонка с менеджером
+            ]
+            
+            if not all(col in df.columns for col in required_columns):
+                missing = set(required_columns) - set(df.columns)
+                raise ValueError(f"Отсутствуют обязательные колонки: {missing}")
+            
+            # Точное соответствие колонок Excel и модели
+            column_map = {
+                'Код дилера HYUNDAI': 'Dealer_code',
+                'Наим дилера HYUNDAI': 'Name',
+                'Код в HYUNDAI': 'Hyundai_code',
+                'Город': 'City',
+                'ИНН': 'INN',
+                'SALES': 'Manager_name'  # Колонка с именем менеджера
+            }
+            
+            # Преобразование и очистка данных
+            df = df.rename(columns=column_map)
+            df = df[list(column_map.values())]  # Только нужные колонки
+            
+            # Обработка пустых значений
+            df['Dealer_code'] = df['Dealer_code'].replace(['', ' ', '-'], None)
+            df['INN'] = df['INN'].str.strip()
+            
+            return df.to_dict('records')
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка чтения файла Hyundai: {str(e)}")
+            return []
+
     def save_Sector(self, data):
         """Сохранение секторов с обновлением существующих"""
         if not data:
@@ -589,7 +636,7 @@ class Customer(QWidget):
             combobox.addItems(sorted(items))
 
     def show_message(self, text):
-        """Показать информационное сообщение (с возможностью копирования текста)"""
+        """Показать информационное сообщение с кнопкой копирования"""
         msg = QMessageBox()
         msg.setText(text)
         msg.setStyleSheet("""
@@ -603,18 +650,23 @@ class Customer(QWidget):
         """)
         msg.setIcon(QMessageBox.Information)
         
-        # Получаем clipboard без создания экземпляра QApplication
         clipboard = QApplication.clipboard()
         
-        # Добавляем кнопку "Копировать"
-        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        # Добавляем кнопку "Copy msg" (не закрывает окно)
+        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
         copy_button.clicked.connect(lambda: clipboard.setText(text))
         
-        msg.addButton(QMessageBox.Ok)
+        # Основная кнопка OK
+        ok_button = msg.addButton(QMessageBox.Ok)
+        ok_button.setDefault(True)
+        
+        # Отключаем закрытие окна при нажатии на "Copy msg"
+        copy_button.clicked.connect(lambda: None)
+        
         msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке (с возможностью копирования текста)"""
+        """Показать сообщение об ошибке с кнопкой копирования"""
         msg = QMessageBox()
         msg.setText(text)
         msg.setStyleSheet("""
@@ -630,13 +682,17 @@ class Customer(QWidget):
         
         clipboard = QApplication.clipboard()
         
-        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        # Добавляем кнопку "Copy msg" (не закрывает окно)
+        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
         copy_button.clicked.connect(lambda: clipboard.setText(text))
         
-        msg.addButton(QMessageBox.Ok)
+        # Основная кнопка OK
+        ok_button = msg.addButton(QMessageBox.Ok)
+        ok_button.setDefault(True)
+        
+        # Отключаем закрытие окна при нажатии на "Copy msg"
+        copy_button.clicked.connect(lambda: None)
+        
         msg.exec_()
-
-
-
 
 
