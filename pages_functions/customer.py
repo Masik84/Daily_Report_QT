@@ -614,45 +614,61 @@ class Customer(QWidget):
 
     def fill_in_dealer_tl_list(self):
         """Заполнение списка тимлидов для дилеров"""
-        query = db.query(TeamLead.TeamLead_name) \
-                 .join(Manager) \
-                 .join(Hyundai_Dealer) \
-                 .distinct()
-        team_leads = [tl[0] for tl in query.all()]
-        self._fill_combobox(self.ui.line_TL_Hyundai, team_leads)
+        try:
+            # Получаем уникальных тимлидов, связанных с дилерами через менеджеров
+            query = db.query(TeamLead.TeamLead_name).distinct() \
+                    .join(Manager, Manager.TeamLead_id == TeamLead.id) \
+                    .join(Hyundai_Dealer, Hyundai_Dealer.Manager_id == Manager.id)
+            
+            team_leads = [tl[0] for tl in query.all() if tl[0]]  # Фильтруем None
+            self._fill_combobox(self.ui.line_TL_Hyundai, team_leads)
+        except Exception as e:
+            print(f"Ошибка при заполнении списка тимлидов для дилеров: {str(e)}")
+            self._fill_combobox(self.ui.line_TL_Hyundai, [])
 
     def fill_in_dealer_kam_list(self):
         """Заполнение списка менеджеров для дилеров"""
-        tl = self.ui.line_TL_Hyundai.currentText()
-        query = db.query(Manager.Manager_name) \
-                 .join(Hyundai_Dealer) \
-                 .join(TeamLead)
-
-        if tl != '-':
-            query = query.filter(TeamLead.TeamLead_name == tl)
-
-        kam_names = [kam[0] for kam in query.distinct().all()]
-        self._fill_combobox(self.ui.line_AM_Hyundai, kam_names)
+        try:
+            tl = self.ui.line_TL_Hyundai.currentText()
+            query = db.query(Manager.Manager_name).distinct() \
+                    .join(Hyundai_Dealer, Hyundai_Dealer.Manager_id == Manager.id)
+            
+            if tl != '-':
+                query = query.join(TeamLead).filter(TeamLead.TeamLead_name == tl)
+            
+            kam_names = [kam[0] for kam in query.all() if kam[0]]  # Фильтруем None
+            self._fill_combobox(self.ui.line_AM_Hyundai, kam_names)
+        except Exception as e:
+            print(f"Ошибка при заполнении списка менеджеров для дилеров: {str(e)}")
+            self._fill_combobox(self.ui.line_AM_Hyundai, [])
 
     def fill_in_dealer_list(self):
         """Заполнение списка дилеров"""
-        dealer_df = self.get_Hyundai_from_db()
-        if dealer_df.empty:
-            self.ui.line_CustName_Hyundai.clear()
-            self.ui.line_CustName_Hyundai.addItem('-')
-            return
+        try:
+            dealer_df = self.get_Hyundai_from_db()
+            if dealer_df.empty:
+                self.ui.line_CustName_Hyundai.clear()
+                self.ui.line_CustName_Hyundai.addItem('-')
+                return
 
-        am = self.ui.line_AM_Hyundai.currentText()
-        tl = self.ui.line_TL_Hyundai.currentText()
+            am = self.ui.line_AM_Hyundai.currentText()
+            tl = self.ui.line_TL_Hyundai.currentText()
 
-        if am != '-':
-            dealer_names = dealer_df[dealer_df['AM'] == am]['Dealer_Name'].unique()
-        elif tl != '-':
-            dealer_names = dealer_df[dealer_df['TeamLead'] == tl]['Dealer_Name'].unique()
-        else:
-            dealer_names = dealer_df['Dealer_Name'].unique()
+            # Фильтрация данных
+            if am != '-':
+                dealer_names = dealer_df[dealer_df['AM'] == am]['Dealer_Name'].dropna().unique()
+            elif tl != '-':
+                dealer_names = dealer_df[dealer_df['TeamLead'] == tl]['Dealer_Name'].dropna().unique()
+            else:
+                dealer_names = dealer_df['Dealer_Name'].dropna().unique()
 
-        self._fill_combobox(self.ui.line_CustName_Hyundai, sorted(dealer_names))
+            # Преобразование в список и фильтрация None
+            dealer_names = [name for name in dealer_names if name and str(name).strip() != '']
+            
+            self._fill_combobox(self.ui.line_CustName_Hyundai, sorted(dealer_names))
+        except Exception as e:
+            print(f"Ошибка при заполнении списка дилеров: {str(e)}")
+            self._fill_combobox(self.ui.line_CustName_Hyundai, [])
 
     def _fill_combobox(self, combobox, items):
         """Универсальное заполнение комбобокса"""

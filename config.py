@@ -4,13 +4,16 @@ import os
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-SQLALCHEMY_DATABASE_URI = 'sqlite:///Report_db.db'
+# SQLALCHEMY_DATABASE_URI = 'sqlite:///Report_db.db'
+SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:qwerty@localhost:5432/report_db'
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 path = os.getcwd()
 MAIN_FOLDER = 'C:\\работа\\My_Work_Phoenix\\Daily_Report\\'
 ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
+
+
 
 
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"

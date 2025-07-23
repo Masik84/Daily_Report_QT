@@ -55,7 +55,7 @@ from db import Base, engine
 from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
-# from pages_functions.plans import Plans
+from pages_functions.plans import Plans
 
 from pages_functions.bonus_scheme import Bon_Scheme
 from pages_functions.cost import Costs
@@ -136,7 +136,7 @@ class MyWindow(QMainWindow):
             self.btn_managers: Managers(),
             self.btn_customer: Customer(),
             self.btn_product: Product(),
-            # self.btn_plans: Plans(),
+            self.btn_plans: Plans(),
             
             self.btn_order: Rep_Orders(),
             self.btn_delivery: Rep_Delivery(),

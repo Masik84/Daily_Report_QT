@@ -24,6 +24,7 @@ class Manager(Base):
     team_lead = relationship("TeamLead", back_populates="managers")
     contracts = relationship("Contract", back_populates="manager")
     hyundai_dealers = relationship("Hyundai_Dealer", back_populates="manager")
+    customer_plans = relationship("CustomerPlan", back_populates="manager")
     
 
 class STL(Base):
@@ -35,6 +36,7 @@ class STL(Base):
     Report_link = Column(String)
     
     managers = relationship("Manager", back_populates="stl")
+    customer_plans = relationship("CustomerPlan", back_populates="stl")
 
 
 class TeamLead(Base):
@@ -47,6 +49,8 @@ class TeamLead(Base):
     Report_link = Column(String)
     
     managers = relationship("Manager", back_populates="team_lead")
+    company_plans = relationship("CompanyPlan", back_populates="team_lead")
+    customer_plans = relationship("CustomerPlan", back_populates="team_lead")
 
 
 class Customer(Base):
@@ -57,7 +61,6 @@ class Customer(Base):
     INN = Column(String)
     Price_type = Column(String)
     
-    # Внешние ключи
     Sector_id = Column(Integer, ForeignKey('sectors.id', name='fk_customer_sector'))
     Holding_id = Column(Integer, ForeignKey('holdings.id', name='fk_customer_holding'))
     
@@ -74,6 +77,7 @@ class Holding(Base):
     Holding_name = Column(String, unique=True, nullable=False)  # Название холдинга
     
     customers = relationship("Customer", back_populates="holding")
+    customer_plans = relationship("CustomerPlan", back_populates="holding")
 
 
 class Sector(Base):
@@ -126,7 +130,6 @@ class Hyundai_Dealer(Base):
     def HasDealerCode(self):
         return self.Dealer_code is not None
     
-
     
 class Material(Base):
     __tablename__ = 'material'
@@ -163,8 +166,9 @@ class ABC_cat(Base):
     End_date = Column(Date)
     ABC_category = Column(String)
     
-    # Связь с материалом
+    # Связи
     material = relationship("Material", back_populates="abc_categories")
+    company_plans = relationship("CompanyPlan", back_populates="abc_category")
 
 
 class Supplier(Base):
@@ -234,15 +238,78 @@ class DOCType(Base):
     Doc_type = Column(String)
     
 
+class Calendar(Base):
+    __tablename__ = 'calendar'
+    
+    id = Column(Integer, primary_key=True)
+    Day = Column(Date, nullable=False, unique=True)
+    Year = Column(Integer)
+    Quarter = Column(Integer)
+    Month = Column(Integer)
+    Week_of_Year = Column(Integer)
+    Week_of_Month = Column(Integer)
+    NETWORKDAYS = Column(Integer)
+    
+    company_plans = relationship("CompanyPlan", back_populates="calendar")
+    customer_plans = relationship("CustomerPlan", back_populates="calendar")
+    
+    __table_args__ = (
+        Index('idx_calendar_day', 'Day'),
+        Index('idx_calendar_year_month', 'Year', 'Month'),
+    )
 
 
+class CompanyPlan(Base):
+    __tablename__ = 'company_plans'
+    
+    id = Column(Integer, primary_key=True)
+    Work_Days = Column(Integer)
+    ABC = Column(String)
+    Month_vol = Column(Numeric)
+    Month_Revenue = Column(Numeric)
+    Month_Margin = Column(Numeric)
+    Volume_Target_total = Column(Numeric)
+    Revenue_Target_total = Column(Numeric)
+    Margin_Target_total = Column(Numeric)
+    Status = Column(String, default='План')
+    
+    # Связи
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    ABC_category_id = Column(Integer, ForeignKey('abc_cat.id'))
+    calendar_id = Column(Integer, ForeignKey('calendar.id'), nullable=False)
+    
+    team_lead = relationship("TeamLead", back_populates="company_plans")
+    abc_category = relationship("ABC_cat", back_populates="company_plans")
+    calendar = relationship("Calendar", back_populates="company_plans")
+    
+    __table_args__ = (
+        Index('idx_company_plan_abc', 'ABC'),
+    )
 
 
-
-
-
-
-
-
-
-
+class CustomerPlan(Base):
+    __tablename__ = 'customer_plans'
+    
+    id = Column(Integer, primary_key=True)
+    Volume_Target_cust = Column(Numeric)
+    Revenue_Target_cust = Column(Numeric)
+    Margin_C3_Target_cust = Column(Numeric)
+    Margin_C4_Target_cust = Column(Numeric)
+    Status = Column(String, default='План')
+    
+    # Связи
+    Holding_id = Column(Integer, ForeignKey('holdings.id'))
+    Manager_id = Column(Integer, ForeignKey('managers.id'))
+    STL_id = Column(Integer, ForeignKey('stls.id'))
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    calendar_id = Column(Integer, ForeignKey('calendar.id'), nullable=False)
+    
+    holding = relationship("Holding", back_populates="customer_plans")
+    manager = relationship("Manager", back_populates="customer_plans")
+    stl = relationship("STL", back_populates="customer_plans")
+    team_lead = relationship("TeamLead", back_populates="customer_plans")
+    calendar = relationship("Calendar", back_populates="customer_plans")
+    
+    
+    
+    

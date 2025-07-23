@@ -65,7 +65,9 @@ class Managers(QWidget):
 
     def upload_data(self):
         """Загрузка данных в базу"""
-        file_path = self.ui.label_manager_File.text() or All_data_file
+        file_path = self.ui.label_manager_File.text()
+        if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
+            file_path = All_data_file
 
         try:
             if not os.path.exists(file_path):
@@ -83,7 +85,8 @@ class Managers(QWidget):
                 db.close()
 
         except Exception as e:
-            self._handle_upload_error(e)
+            self._handle_upload_error(e, "продуктов")
+
 
     def _handle_upload_error(self, error):
         """Обработка ошибок загрузки"""

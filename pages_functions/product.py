@@ -1,6 +1,7 @@
 import os
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import func
+import datetime
 from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
                               QTableWidgetItem, QWidget, QApplication, QPushButton)
@@ -8,8 +9,8 @@ from PySide6.QtCore import Qt
 from functools import lru_cache
 
 from wind.pages.products_ui import Ui_Form
-from config import Material_file
-from models import Material
+from config import Material_file, All_data_file
+from models import Material, ABC_cat
 from db import db
 
 
@@ -44,6 +45,7 @@ class Product(QWidget):
         self.ui.btn_open_file.clicked.connect(self.get_file)
         self.ui.btn_upload_file.clicked.connect(self.upload_data)
         self.ui.btn_find.clicked.connect(self.find_Product)
+        self.ui.btn_upd_ABCD.clicked.connect(self.update_ABC_cat)
         
 
     def get_file(self):
@@ -54,7 +56,9 @@ class Product(QWidget):
 
     def upload_data(self):
         """Загрузка данных в базу"""
-        file_path = self.ui.label_Prod_File.text() or Material_file
+        file_path = self.ui.label_Prod_File.text()
+        if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
+            file_path = Material_file
         
         try:
             if not os.path.exists(file_path):
@@ -90,7 +94,7 @@ class Product(QWidget):
         self.save_Material(data)
 
     def read_product_file(self, file_path):
-        """Чтение данных из Excel"""
+        """Чтение данных из Excel с фильтрацией и обработкой значений"""
         try:
             dtype_prod = {"Артикул": str, "ТН ВЭД": str}
             df = pd.read_excel(file_path, sheet_name=0, dtype=dtype_prod)
@@ -99,6 +103,17 @@ class Product(QWidget):
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
             
+            # 1. Фильтрация по "Вид номенклатуры"
+            if 'Вид номенклатуры' in df.columns:
+                valid_types = ['Товары', 'Услуги', 'Нефтепродукты', 'Продукция']
+                df = df[df['Вид номенклатуры'].isin(valid_types)]
+            
+            # 2. Фильтрация по "Номенклатурная группа"
+            if 'Номенклатурная группа' in df.columns:
+                valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
+                df = df[df['Номенклатурная группа'].isin(valid_groups)]
+            
+            # 3. Переименование колонок
             column_map = {
                 'Код': 'Code', 'Артикул': 'Article', 'Наименование': 'Material_Name',
                 'Полное наименование': 'Full_name', 'Brand': 'Brand', 'Family': 'Family',
@@ -108,12 +123,24 @@ class Product(QWidget):
                 'Упаковка(Литраж)': 'Package_Volume', 'Нетто': 'Net_weight', 'Брутто': 'Gross_weight',
                 'Плотность': 'Density', 'ТН ВЭД': 'TNVED', 'Акциз': 'Excise'
             }
-            
             df = df.rename(columns=column_map)
-            df['Items_per_Set'] = pd.to_numeric(df['Items_per_Set'], errors='coerce').fillna(0).astype(int)
             
-            numeric_cols = ['Items_per_Package', 'Package_Volume', 'Net_weight', 'Gross_weight', 'Density']
-            df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+            # 4. Обработка числовых и текстовых значений
+            numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 
+                        'Net_weight', 'Gross_weight', 'Density']
+            text_cols = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family',
+                    'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
+                    'Package_type', 'TNVED', 'Excise']
+            
+            # Замена пустот в числовых колонках на 0
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            # Замена пустот в текстовых колонках на "-"
+            for col in text_cols:
+                if col in df.columns:
+                    df[col] = df[col].fillna('-')
             
             return df[df['Code'].notna()].replace({pd.NA: None}).to_dict('records')
             
@@ -170,6 +197,82 @@ class Product(QWidget):
         finally:
             db.close()
 
+    def update_ABC_cat(self):
+        """Обновление категорий ABCD из файла All_data_file (лист 'ABC')"""
+        try:
+            # Используем стандартный файл из конфига, как в Product
+            file_path = All_data_file
+            
+            if not os.path.exists(file_path):
+                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
+
+            df = pd.read_excel(file_path, sheet_name="ABC")
+
+            required_columns = [
+                'Продукт + упаковка', 
+                'Дата изм', 
+                'Дата оконч', 
+                'Категория ABCD'
+            ]
+            if not all(col in df.columns for col in required_columns):
+                raise ValueError(
+                    "Файл не содержит всех необходимых столбцов. "
+                    "Требуемые колонки: " + ", ".join(required_columns)
+                )
+            
+            # Переименование колонок для соответствия модели
+            df = df.rename(columns={
+                'Продукт + упаковка': 'Material_Name',
+                'Дата изм': 'Start_date',
+                'Дата оконч': 'End_date',
+                'Категория ABCD': 'ABC_category'
+            })
+            
+            # Преобразование дат
+            df['Start_date'] = pd.to_datetime(df['Start_date'], dayfirst=True).dt.date
+            df['End_date'] = pd.to_datetime(df['End_date'], dayfirst=True).dt.date
+            
+            # Получаем текущие материалы из базы
+            materials = {m.Material_Name: m.Code for m in db.query(Material).all()}
+            
+            # Подготовка данных для вставки
+            to_insert = []
+            today = datetime.date.today()
+            
+            for _, row in df.iterrows():
+                material_name = row['Material_Name']
+                if material_name not in materials:
+                    continue  # Пропускаем если материал не найден
+                    
+                # Проверяем есть ли уже такая запись (уникальность по материалу и датам)
+                exists = db.query(ABC_cat).filter(
+                    ABC_cat.material_code == materials[material_name],
+                    ABC_cat.Start_date == row['Start_date'],
+                    ABC_cat.End_date == row['End_date']
+                ).first()
+                
+                if not exists and row['ABC_category'] != '-':
+                    to_insert.append({
+                        'material_code': materials[material_name],
+                        'Start_date': row['Start_date'],
+                        'End_date': row['End_date'],
+                        'ABC_category': row['ABC_category']
+                    })
+            
+            # Массовая вставка новых записей
+            if to_insert:
+                db.bulk_insert_mappings(ABC_cat, to_insert)
+                db.commit()
+                self.show_message(f'Успешно добавлено {len(to_insert)} записей ABC категорий!')
+            else:
+                self.show_message('Нет новых данных для добавления')
+                
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f'Ошибка обновления ABC категорий: {str(e)}')
+        finally:
+            db.close()
+
     @lru_cache(maxsize=32)
     def _get_unique_values(self, column, filter_column=None, filter_value=None):
         """Получение уникальных значений с фильтрацией"""
@@ -217,7 +320,21 @@ class Product(QWidget):
             combobox.addItems(sorted(items))
 
     def get_Products_from_db(self):
-        """Получение продуктов из базы"""
+
+        today = datetime.date.today()
+        
+        # Создаем подзапрос для получения последней действующей ABC категории
+        subq = db.query(
+            ABC_cat.material_code,
+            ABC_cat.ABC_category,
+            func.max(ABC_cat.Start_date).label('max_date')
+        ).filter(
+            ABC_cat.End_date >= today
+        ).group_by(
+            ABC_cat.material_code,
+            ABC_cat.ABC_category
+        ).subquery()
+        
         query = db.query(
             Material.Code,
             Material.Article,
@@ -237,9 +354,12 @@ class Product(QWidget):
             Material.Gross_weight,
             Material.Density,
             Material.TNVED,
-            Material.Excise
+            Material.Excise,
+            subq.c.ABC_category.label('ABC_category')
+        ).outerjoin(
+            subq, Material.Code == subq.c.material_code
         )
-
+        
         df = pd.read_sql(query.statement, db.bind)
         return df.where(pd.notnull(df), None)
 
@@ -367,3 +487,5 @@ class Product(QWidget):
         copy_button.clicked.connect(lambda: None)
 
         msg.exec_()
+        
+        
