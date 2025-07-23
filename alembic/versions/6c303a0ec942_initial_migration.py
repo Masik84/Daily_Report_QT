@@ -1,8 +1,8 @@
 """Initial migration
 
-Revision ID: 48f67ea93d47
+Revision ID: 6c303a0ec942
 Revises: 
-Create Date: 2025-07-22 10:42:50.455236
+Create Date: 2025-07-23 10:11:58.228625
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '48f67ea93d47'
+revision: str = '6c303a0ec942'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -25,8 +25,8 @@ def upgrade() -> None:
     sa.Column('merge', sa.String(), nullable=True),
     sa.Column('TNVED', sa.String(), nullable=True),
     sa.Column('Cust_rate', sa.Numeric(precision=5, scale=2), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('merge')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_customs_rate')),
+    sa.UniqueConstraint('merge', name=op.f('uq_customs_rate_merge'))
     )
     op.create_table('doc_type',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -34,7 +34,7 @@ def upgrade() -> None:
     sa.Column('Document', sa.String(), nullable=True),
     sa.Column('Transaction', sa.String(), nullable=True),
     sa.Column('Doc_type', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_doc_type'))
     )
     op.create_table('ecofee_amount',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -42,8 +42,8 @@ def upgrade() -> None:
     sa.Column('TNVED', sa.String(), nullable=True),
     sa.Column('Year', sa.Integer(), nullable=True),
     sa.Column('ECO_amount', sa.Numeric(), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('merge')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_ecofee_amount')),
+    sa.UniqueConstraint('merge', name=op.f('uq_ecofee_amount_merge'))
     )
     op.create_table('ecofee_standard',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -51,14 +51,14 @@ def upgrade() -> None:
     sa.Column('TNVED', sa.String(), nullable=True),
     sa.Column('Year', sa.Integer(), nullable=True),
     sa.Column('ECO_standard', sa.Numeric(), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('merge')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_ecofee_standard')),
+    sa.UniqueConstraint('merge', name=op.f('uq_ecofee_standard_merge'))
     )
     op.create_table('holdings',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('Holding_name', sa.String(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('Holding_name')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_holdings')),
+    sa.UniqueConstraint('Holding_name', name=op.f('uq_holdings_Holding_name'))
     )
     op.create_table('material',
     sa.Column('Code', sa.String(), nullable=False),
@@ -80,30 +80,28 @@ def upgrade() -> None:
     sa.Column('Density', sa.Numeric(), nullable=True),
     sa.Column('TNVED', sa.String(), nullable=True),
     sa.Column('Excise', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('Code')
+    sa.PrimaryKeyConstraint('Code', name=op.f('pk_material'))
     )
-    with op.batch_alter_table('material', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_material_Material_Name'), ['Material_Name'], unique=False)
-
+    op.create_index(op.f('ix_material_Material_Name'), 'material', ['Material_Name'], unique=False)
     op.create_table('sectors',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('Sector_name', sa.String(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('Sector_name')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_sectors')),
+    sa.UniqueConstraint('Sector_name', name=op.f('uq_sectors_Sector_name'))
     )
     op.create_table('stls',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('STL_name', sa.String(), nullable=True),
     sa.Column('Email', sa.String(), nullable=True),
     sa.Column('Report_link', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_stls'))
     )
     op.create_table('supplier',
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('Supplier_Name', sa.String(), nullable=True),
     sa.Column('Imp_Loc', sa.String(), nullable=True),
     sa.Column('Customs', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_supplier'))
     )
     op.create_table('taxfee',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -116,7 +114,7 @@ def upgrade() -> None:
     sa.Column('Storage', sa.Numeric(), nullable=True),
     sa.Column('Money_cost', sa.Numeric(), nullable=True),
     sa.Column('Additional_money_percent', sa.Numeric(), nullable=True),
-    sa.PrimaryKeyConstraint('id'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_taxfee')),
     sa.UniqueConstraint('Year', 'Month', name='uq_year_month')
     )
     op.create_table('team_leads',
@@ -125,27 +123,27 @@ def upgrade() -> None:
     sa.Column('Email', sa.String(), nullable=True),
     sa.Column('Has_report', sa.String(), nullable=True),
     sa.Column('Report_link', sa.String(), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_team_leads'))
     )
     op.create_table('abc_cat',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('Product_name', sa.String(), nullable=True),
+    sa.Column('material_code', sa.String(), nullable=True),
     sa.Column('Start_date', sa.Date(), nullable=True),
     sa.Column('End_date', sa.Date(), nullable=True),
     sa.Column('ABC_category', sa.String(), nullable=True),
-    sa.ForeignKeyConstraint(['Product_name'], ['material.Material_Name'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['material_code'], ['material.Code'], name='fk_abc_material'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_abc_cat'))
     )
     op.create_table('customers',
     sa.Column('id', sa.String(), nullable=False),
     sa.Column('Customer_name', sa.String(), nullable=True),
     sa.Column('INN', sa.String(), nullable=True),
     sa.Column('Price_type', sa.String(), nullable=True),
-    sa.Column('Sector_id', sa.String(), nullable=True),
-    sa.Column('Holding_Id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['Holding_Id'], ['holdings.id'], ),
-    sa.ForeignKeyConstraint(['Sector_id'], ['sectors.Sector_name'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.Column('Sector_id', sa.Integer(), nullable=True),
+    sa.Column('Holding_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['Holding_id'], ['holdings.id'], name='fk_customer_holding'),
+    sa.ForeignKeyConstraint(['Sector_id'], ['sectors.id'], name='fk_customer_sector'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_customers'))
     )
     op.create_table('managers',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -156,9 +154,9 @@ def upgrade() -> None:
     sa.Column('Report_link', sa.String(), nullable=True),
     sa.Column('STL_id', sa.Integer(), nullable=True),
     sa.Column('TeamLead_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['STL_id'], ['stls.id'], ),
-    sa.ForeignKeyConstraint(['TeamLead_id'], ['team_leads.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['STL_id'], ['stls.id'], name='fk_manager_stl'),
+    sa.ForeignKeyConstraint(['TeamLead_id'], ['team_leads.id'], name='fk_manager_teamlead'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_managers'))
     )
     op.create_table('contracts',
     sa.Column('id', sa.String(), nullable=False),
@@ -168,36 +166,32 @@ def upgrade() -> None:
     sa.Column('Payment_Condition', sa.String(), nullable=True),
     sa.Column('Customer_id', sa.String(), nullable=True),
     sa.Column('Manager_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['Customer_id'], ['customers.id'], ),
-    sa.ForeignKeyConstraint(['Manager_id'], ['managers.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['Customer_id'], ['customers.id'], name='fk_contract_customer'),
+    sa.ForeignKeyConstraint(['Manager_id'], ['managers.id'], name='fk_contract_manager'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_contracts'))
     )
     op.create_table('hyundai_dealers',
-    sa.Column('Id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('Dealer_code', sa.String(), nullable=True),
     sa.Column('Hyundai_code', sa.String(), nullable=False),
     sa.Column('Name', sa.String(), nullable=True),
     sa.Column('City', sa.String(), nullable=True),
     sa.Column('INN', sa.String(), nullable=True),
-    sa.Column('Manager_id', sa.String(), nullable=True),
-    sa.ForeignKeyConstraint(['Manager_id'], ['managers.id'], ),
-    sa.PrimaryKeyConstraint('Id'),
-    sa.UniqueConstraint('Dealer_code'),
-    sa.UniqueConstraint('Hyundai_code')
+    sa.Column('Manager_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['Manager_id'], ['managers.id'], name='fk_dealer_manager'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_hyundai_dealers')),
+    sa.UniqueConstraint('Dealer_code', name=op.f('uq_hyundai_dealers_Dealer_code')),
+    sa.UniqueConstraint('Hyundai_code', name=op.f('uq_hyundai_dealers_Hyundai_code'))
     )
-    with op.batch_alter_table('hyundai_dealers', schema=None) as batch_op:
-        batch_op.create_index('idx_dealer_code_unique', ['Dealer_code'], unique=True)
-        batch_op.create_index('idx_hyundai_code_unique', ['Hyundai_code'], unique=True)
-
+    op.create_index('idx_dealer_code_unique', 'hyundai_dealers', ['Dealer_code'], unique=True)
+    op.create_index('idx_hyundai_code_unique', 'hyundai_dealers', ['Hyundai_code'], unique=True)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    with op.batch_alter_table('hyundai_dealers', schema=None) as batch_op:
-        batch_op.drop_index('idx_hyundai_code_unique')
-        batch_op.drop_index('idx_dealer_code_unique')
-
+    op.drop_index('idx_hyundai_code_unique', table_name='hyundai_dealers')
+    op.drop_index('idx_dealer_code_unique', table_name='hyundai_dealers')
     op.drop_table('hyundai_dealers')
     op.drop_table('contracts')
     op.drop_table('managers')
@@ -208,9 +202,7 @@ def downgrade() -> None:
     op.drop_table('supplier')
     op.drop_table('stls')
     op.drop_table('sectors')
-    with op.batch_alter_table('material', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_material_Material_Name'))
-
+    op.drop_index(op.f('ix_material_Material_Name'), table_name='material')
     op.drop_table('material')
     op.drop_table('holdings')
     op.drop_table('ecofee_standard')

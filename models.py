@@ -16,15 +16,15 @@ class Manager(Base):
     Report_link = Column(String)
     
     # Внешние ключи
-    STL_id = Column(Integer, ForeignKey('stls.id'))
-    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    STL_id = Column(Integer, ForeignKey('stls.id', name='fk_manager_stl'))
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id', name='fk_manager_teamlead'))
     
     # Связи
-    STL = relationship("STL", back_populates="Managers")
-    TeamLead = relationship("TeamLead", back_populates="Managers")
-    Contracts = relationship("Contract", back_populates="Manager")
-    Hyundai_Dealers = relationship("Hyundai_Dealer", back_populates="Manager")
-
+    stl = relationship("STL", back_populates="managers")
+    team_lead = relationship("TeamLead", back_populates="managers")
+    contracts = relationship("Contract", back_populates="manager")
+    hyundai_dealers = relationship("Hyundai_Dealer", back_populates="manager")
+    
 
 class STL(Base):
     __tablename__ = 'stls'
@@ -34,7 +34,7 @@ class STL(Base):
     Email = Column(String)
     Report_link = Column(String)
     
-    Managers = relationship("Manager", back_populates="STL")
+    managers = relationship("Manager", back_populates="stl")
 
 
 class TeamLead(Base):
@@ -46,7 +46,7 @@ class TeamLead(Base):
     Has_report = Column(String)  # 'да' или 'нет'
     Report_link = Column(String)
     
-    Managers = relationship("Manager", back_populates="TeamLead")
+    managers = relationship("Manager", back_populates="team_lead")
 
 
 class Customer(Base):
@@ -58,13 +58,13 @@ class Customer(Base):
     Price_type = Column(String)
     
     # Внешние ключи
-    Sector_id = Column(String, ForeignKey('sectors.Sector_name'))
-    Holding_id = Column(Integer, ForeignKey('holdings.id'))
+    Sector_id = Column(Integer, ForeignKey('sectors.id', name='fk_customer_sector'))
+    Holding_id = Column(Integer, ForeignKey('holdings.id', name='fk_customer_holding'))
     
     # Связи
-    Sector = relationship("Sector", back_populates="Customers")
-    Holding = relationship("Holding", back_populates="Customers")
-    Contracts = relationship("Contract", back_populates="Customer")
+    sector = relationship("Sector", back_populates="customers")
+    holding = relationship("Holding", back_populates="customers")
+    contracts = relationship("Contract", back_populates="customer")
     
     
 class Holding(Base):
@@ -73,7 +73,7 @@ class Holding(Base):
     id = Column(Integer, primary_key=True)
     Holding_name = Column(String, unique=True, nullable=False)  # Название холдинга
     
-    Customers = relationship("Customer", back_populates="Holding")
+    customers = relationship("Customer", back_populates="holding")
 
 
 class Sector(Base):
@@ -82,7 +82,7 @@ class Sector(Base):
     id = Column(Integer, primary_key=True)
     Sector_name = Column(String, unique=True, nullable=False)
     
-    Customers = relationship("Customer", back_populates="Sector")
+    customers = relationship("Customer", back_populates="sector")
 
 
 class Contract(Base):
@@ -95,12 +95,12 @@ class Contract(Base):
     Payment_Condition = Column(String)
     
     # Внешние ключи
-    Customer_id = Column(String, ForeignKey('customers.id'))  # Контрагент.Код
-    Manager_id = Column(Integer, ForeignKey('managers.id'))
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_contract_customer'))
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_contract_manager'))
     
     # Связи
-    Customer = relationship("Customer", back_populates="Contracts")
-    Manager = relationship("Manager", back_populates="Contracts")
+    customer = relationship("Customer", back_populates="contracts")
+    manager = relationship("Manager", back_populates="contracts")
 
 
 class Hyundai_Dealer(Base):
@@ -114,15 +114,12 @@ class Hyundai_Dealer(Base):
     INN = Column(String)  # "ИНН"
     
     # Связь с менеджером
-    Manager_id = Column(Integer, ForeignKey('managers.id'))
-    Manager = relationship("Manager", back_populates="Hyundai_Dealers")
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_dealer_manager'))
+    manager = relationship("Manager", back_populates="hyundai_dealers")
     
-
-    # Уникальный индекс для случая, когда DealerCode есть
-    # Определение индексов (без предупреждений)
     __table_args__ = (
-        Index('idx_hyundai_code_unique', Hyundai_code, unique=True),
-        Index('idx_dealer_code_unique', Dealer_code, unique=True),
+        Index('idx_hyundai_code_unique', 'Hyundai_code', unique=True),
+        Index('idx_dealer_code_unique', 'Dealer_code', unique=True),
     )
     
     @hybrid_property
@@ -154,20 +151,20 @@ class Material(Base):
     TNVED = Column(String)
     Excise = Column(String)
     
-    ABC = relationship("ABC_cat", back_populates="Material")
+    abc_categories = relationship("ABC_cat", back_populates="material")
 
 
 class ABC_cat(Base):
     __tablename__ = 'abc_cat'
     
     id = Column(Integer, primary_key=True)
-    Product_name = Column(String, ForeignKey('material.Material_Name'))  # Связь по названию
+    material_code = Column(String, ForeignKey('material.Code', name='fk_abc_material'))
     Start_date = Column(Date)
     End_date = Column(Date)
     ABC_category = Column(String)
     
     # Связь с материалом
-    Material = relationship("Material", back_populates="ABC")
+    material = relationship("Material", back_populates="abc_categories")
 
 
 class Supplier(Base):

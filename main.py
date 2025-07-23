@@ -39,6 +39,7 @@ def setup_logging():
     
     # SQLAlchemy логгер
     sqlalchemy_logger = logging.getLogger('sqlalchemy.engine')
+    sqlalchemy_logger.setLevel(logging.INFO)
     sqlalchemy_logger.setLevel(logging.WARNING)  # Можно изменить на INFO для подробных SQL-запросов
 
 # Вызываем настройку логирования в самом начале
@@ -296,7 +297,9 @@ class MyWindow(QMainWindow):
 
 if __name__ == '__main__':
     import sys
-    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
+    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+    os.environ["QT_QPA_PLATFORM"] = "windows"
+    # Uncomment the following line if the above doesn't work
     # QApplication.setAttribute(Qt.AA_DisableHighDpiScaling)
 
     app = QApplication(sys.argv)

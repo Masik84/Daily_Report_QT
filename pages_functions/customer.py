@@ -1,9 +1,11 @@
 import os
 import pandas as pd
+import numpy as np
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, 
                               QTableWidgetItem, QWidget)
+
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -80,19 +82,18 @@ class Customer(QWidget):
             if not os.path.exists(file_path):
                 raise Exception(f"Файл {os.path.basename(file_path)} не найден")
                 
-            with db.session.begin():
+            try:
                 self.run_customer_func(file_path, All_data_file)
-                self.show_message('Данные Customer и Holding загружены! Выберите файл для Contract')
-                self.current_upload_step = 1
-                self.ui.label_Cust_File.setText("Выберите файл для Contract")
-                self.refresh_all_comboboxes()
+                db.commit()
+                self.show_message('Данные загружены!')
+            except Exception as e:
+                db.rollback()
+                raise
+            finally:
+                db.close()
                 
         except Exception as e:
-            db.session.rollback()
             self._handle_upload_error(e, "клиентов")
-        finally:
-            if file_path == Customer_file:
-                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
 
     def _upload_contract_data(self):
         """Загрузка данных Contract"""
@@ -102,21 +103,23 @@ class Customer(QWidget):
             if not os.path.exists(file_path):
                 raise Exception(f"Файл {os.path.basename(file_path)} не найден")
                 
-            with db.session.begin():
+            try:
                 self.run_contract_func(file_path)
+                db.commit()
                 self.show_message('Данные Contract загружены!')
                 self.current_upload_step = 0
                 self.cust_file_path = None
                 self.contract_file_path = None
                 self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
                 self.refresh_all_comboboxes()
+            except Exception as e:
+                db.rollback()
+                raise
+            finally:
+                db.close()
                 
         except Exception as e:
-            db.session.rollback()
             self._handle_upload_error(e, "договоров")
-        finally:
-            if file_path == Contract_file:
-                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
 
     def _handle_upload_error(self, error, data_type):
         """Обработка ошибок загрузки"""
@@ -159,6 +162,8 @@ class Customer(QWidget):
             }
             
             df = df.rename(columns=column_map)[list(column_map.values())]
+            df['Sector'] = df['Sector'].fillna("-")
+            df["Holding"] = np.where(pd.isna(df["Holding"]) , df['Customer_name'],  df["Holding"])
             return df[df['id'] != 'n/a'].to_dict('records')
             
         except Exception as e:
@@ -189,60 +194,80 @@ class Customer(QWidget):
             return []
 
     def save_Sector(self, data):
-        """Сохранение секторов"""
+        """Сохранение секторов с обновлением существующих"""
         if not data:
             return
 
         sectors = pd.DataFrame(data)[['Sector']].drop_duplicates()
-        existing_sectors = {s[0] for s in db.session.query(Sector.Sector_name).all()}
         
-        to_insert = [{'Sector_name': row['Sector']} for _, row in sectors.iterrows() 
-                    if row['Sector'] not in existing_sectors]
-        
-        try:
-            if to_insert:
-                db.session.bulk_insert_mappings(Sector, to_insert)
-                db.session.commit()
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            self.show_error_message(f"Ошибка сохранения секторов: {str(e)}")
-
-    def save_Holding(self, data):
-        """Сохранение холдингов"""
-        if not data:
-            return
-
-        holdings = pd.DataFrame(data)[['Holding', 'Sector']].drop_duplicates()
-        existing_holdings = {h[0] for h in db.session.query(Holding.Holding_name).all()}
+        # Получаем существующие сектора
+        existing_sectors = {s.Sector_name: s.id for s in db.query(Sector).all()}
         
         to_insert = []
-        for _, row in holdings.iterrows():
-            if row['Holding'] not in existing_holdings:
+        to_update = []
+        
+        for _, row in sectors.iterrows():
+            sector_name = row['Sector']
+            if sector_name in existing_sectors:
+                to_update.append({
+                    'id': existing_sectors[sector_name],
+                    'Sector_name': sector_name
+                })
+            else:
                 to_insert.append({
-                    'Holding_name': row['Holding'],
-                    'Sector_id': self._get_id(Sector, 'Sector_name', row['Sector'])
+                    'Sector_name': sector_name
                 })
         
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(Holding, to_insert)
-                db.session.commit()
+                db.bulk_insert_mappings(Sector, to_insert)
+            if to_update:
+                db.bulk_update_mappings(Sector, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
-            self.show_error_message(f"Ошибка сохранения холдингов: {str(e)}")
+            db.rollback()
+            raise Exception(f"Ошибка сохранения секторов: {str(e)}")
+        finally:
+            db.close()
 
-    def save_Customer(self, data):
-        """Сохранение клиентов"""
+    def save_Holding(self, data):
+        """Сохранение холдингов (проверяет только уникальность названия)"""
         if not data:
             return
 
-        existing_codes = {c[0] for c in db.session.query(Cust_db.id).all()}
+        # Получаем все существующие холдинги (только названия)
+        existing_holdings = {h[0] for h in db.query(Holding.Holding_name).all()}
+        
+        # Уникальные названия холдингов из входных данных
+        holdings_names = {row['Holding'] for row in data if 'Holding' in row}
+        
+        # Фильтруем только новые холдинги
+        new_holdings = [{'Holding_name': name} for name in holdings_names 
+                    if name not in existing_holdings]
+        
+        try:
+            if new_holdings:
+                db.bulk_insert_mappings(Holding, new_holdings)
+                db.commit()
+        except SQLAlchemyError as e:
+            db.rollback()
+            raise Exception(f"Ошибка сохранения холдингов: {str(e)}")
+        finally:
+            db.close()
+
+    def save_Customer(self, data):
+        """Сохранение клиентов с обновлением существующих"""
+        if not data:
+            return
+
+        existing_customers = {c.id: c for c in db.query(Cust_db).all()}
         to_insert = []
         to_update = []
         
         for row in data:
-            customer = {
-                'id': row['id'],
+            customer_id = row['id']
+            customer_data = {
+                'id': customer_id,
                 'Customer_name': row['Customer_name'],
                 'INN': str(row['INN']),
                 'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
@@ -250,37 +275,40 @@ class Customer(QWidget):
                 'Price_type': row['Price_type']
             }
             
-            if row['id'] in existing_codes:
-                to_update.append(customer)
+            if customer_id in existing_customers:
+                to_update.append(customer_data)
             else:
-                to_insert.append(customer)
+                to_insert.append(customer_data)
         
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(Cust_db, to_insert)
+                db.bulk_insert_mappings(Cust_db, to_insert)
             if to_update:
-                db.session.bulk_update_mappings(Cust_db, to_update)
-            db.session.commit()
+                db.bulk_update_mappings(Cust_db, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
-            self.show_error_message(f"Ошибка сохранения клиентов: {str(e)}")
+            db.rollback()
+            raise Exception(f"Ошибка сохранения клиентов: {str(e)}")
+        finally:
+            db.close()
 
     def save_Contract(self, data):
-        """Сохранение договоров"""
+        """Сохранение договоров с обновлением существующих"""
         if not data:
             return
 
-        existing_codes = {c[0] for c in db.session.query(Contract.id).all()}
+        existing_contracts = {c.id: c for c in db.query(Contract).all()}
         to_insert = []
         to_update = []
         
         for row in data:
+            contract_id = row['id']
             manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
             if not manager_id:
                 continue
                 
-            contract = {
-                'id': row['id'],
+            contract_data = {
+                'id': contract_id,
                 'Contract': row['Contract'],
                 'Contract_Type': row['Contract_Type'],
                 'Price_Type': row['Price_Type'],
@@ -289,61 +317,64 @@ class Customer(QWidget):
                 'Manager_id': manager_id
             }
             
-            if row['id'] in existing_codes:
-                to_update.append(contract)
+            if contract_id in existing_contracts:
+                to_update.append(contract_data)
             else:
-                to_insert.append(contract)
+                to_insert.append(contract_data)
         
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(Contract, to_insert)
+                db.bulk_insert_mappings(Contract, to_insert)
             if to_update:
-                db.session.bulk_update_mappings(Contract, to_update)
-            db.session.commit()
+                db.bulk_update_mappings(Contract, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
+            db.rollback()
             self.show_error_message(f"Ошибка сохранения договоров: {str(e)}")
+        finally:
+            db.close()
 
     def save_HYUNDAI(self, data):
-        """Сохранение дилеров Hyundai"""
+        """Сохранение дилеров Hyundai с обновлением существующих"""
         if not data:
             return
 
-        existing_codes = {d[0] for d in db.session.query(Hyundai_Dealer.Hyundai_code).all()}
+        existing_dealers = {d.Hyundai_code: d.id for d in db.query(Hyundai_Dealer).all()}
         to_insert = []
         to_update = []
         
         for row in data:
+            hyundai_code = row['Hyundai_code']
             manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
             if not manager_id:
                 continue
                 
-            hyundai = {
+            dealer_data = {
                 'Dealer_code': row['Dealer_code'] if row['Dealer_code'] != '-' else None,
-                'Hyundai_code': row['Hyundai_code'],
+                'Hyundai_code': hyundai_code,
                 'Name': row['Name'],
                 'City': row['City'],
                 'INN': row['INN'],
                 'Manager_id': manager_id
             }
             
-            if row['Hyundai_code'] in existing_codes:
-                hyundai['id'] = db.session.query(Hyundai_Dealer.id).filter(
-                    Hyundai_Dealer.Hyundai_code == row['Hyundai_code']
-                ).scalar()
-                to_update.append(hyundai)
+            if hyundai_code in existing_dealers:
+                dealer_data['id'] = existing_dealers[hyundai_code]
+                to_update.append(dealer_data)
             else:
-                to_insert.append(hyundai)
+                to_insert.append(dealer_data)
         
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(Hyundai_Dealer, to_insert)
+                db.bulk_insert_mappings(Hyundai_Dealer, to_insert)
             if to_update:
-                db.session.bulk_update_mappings(Hyundai_Dealer, to_update)
-            db.session.commit()
+                db.bulk_update_mappings(Hyundai_Dealer, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
+            db.rollback()
             self.show_error_message(f"Ошибка сохранения Hyundai: {str(e)}")
+        finally:
+            db.close()
 
     @lru_cache(maxsize=32)
     def _get_id(self, model, name_field, name):
@@ -351,12 +382,12 @@ class Customer(QWidget):
         if not name or name in ('-', ''):
             return None
             
-        item = db.session.query(model).filter(getattr(model, name_field) == name).first()
+        item = db.query(model).filter(getattr(model, name_field) == name).first()
         return item.id if item else None
 
     def get_Customers_from_db(self):
         """Получение клиентов из базы"""
-        query = db.session.query(
+        query = db.query(
             Cust_db.id,
             Cust_db.INN,
             Cust_db.Customer_name,
@@ -371,12 +402,12 @@ class Customer(QWidget):
          .outerjoin(Manager, Contract.Manager_id == Manager.id)\
          .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
         
-        df = pd.read_sql(query.statement, db.session.bind)
+        df = pd.read_sql(query.statement, db.bind)
         return df.drop_duplicates().where(pd.notnull(df), None)
 
     def get_Hyundai_from_db(self):
         """Получение дилеров Hyundai из базы"""
-        query = db.session.query(
+        query = db.query(
             Hyundai_Dealer.Dealer_code.label('HYUNDAI_id'),
             Hyundai_Dealer.Hyundai_code.label('Hyu_code'),
             Hyundai_Dealer.Name.label('Dealer_Name'),
@@ -386,7 +417,7 @@ class Customer(QWidget):
         ).join(Manager, Hyundai_Dealer.Manager_id == Manager.id)\
          .join(TeamLead, Manager.TeamLead_id == TeamLead.id)
         
-        df = pd.read_sql(query.statement, db.session.bind)
+        df = pd.read_sql(query.statement, db.bind)
         return df.where(pd.notnull(df), None)
 
     def find_Customer(self):
@@ -473,14 +504,14 @@ class Customer(QWidget):
 
     def fill_in_tl_list(self):
         """Заполнение списка тимлидов"""
-        team_leads = db.session.query(TeamLead.TeamLead_name).distinct().all()
+        team_leads = db.query(TeamLead.TeamLead_name).distinct().all()
         self._fill_combobox(self.ui.line_TL, [tl[0] for tl in team_leads])
         self._fill_combobox(self.ui.line_TL_Hyundai, [tl[0] for tl in team_leads])
 
     def fill_in_kam_list(self):
         """Заполнение списка менеджеров"""
         tl = self.ui.line_TL.currentText()
-        query = db.session.query(Manager.Manager_name)
+        query = db.query(Manager.Manager_name)
         
         if tl != '-':
             query = query.join(TeamLead).filter(TeamLead.TeamLead_name == tl)
@@ -510,7 +541,7 @@ class Customer(QWidget):
 
     def fill_in_dealer_tl_list(self):
         """Заполнение списка тимлидов для дилеров"""
-        query = db.session.query(TeamLead.TeamLead_name)\
+        query = db.query(TeamLead.TeamLead_name)\
                  .join(Manager)\
                  .join(Hyundai_Dealer)\
                  .distinct()
@@ -520,7 +551,7 @@ class Customer(QWidget):
     def fill_in_dealer_kam_list(self):
         """Заполнение списка менеджеров для дилеров"""
         tl = self.ui.line_TL_Hyundai.currentText()
-        query = db.session.query(Manager.Manager_name)\
+        query = db.query(Manager.Manager_name)\
                  .join(Hyundai_Dealer)\
                  .join(TeamLead)
         
@@ -558,25 +589,54 @@ class Customer(QWidget):
             combobox.addItems(sorted(items))
 
     def show_message(self, text):
-        """Показать информационное сообщение"""
+        """Показать информационное сообщение (с возможностью копирования текста)"""
         msg = QMessageBox()
         msg.setText(text)
         msg.setStyleSheet("""
-            background-color: #f8f8f2;
-            font: 10pt "Tahoma";
-            color: #237508;
+            QMessageBox {
+                background-color: #f8f8f2;
+                font: 10pt "Tahoma";
+            }
+            QMessageBox QLabel {
+                color: #237508;
+            }
         """)
         msg.setIcon(QMessageBox.Information)
+        
+        # Получаем clipboard без создания экземпляра QApplication
+        clipboard = QApplication.clipboard()
+        
+        # Добавляем кнопку "Копировать"
+        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        
+        msg.addButton(QMessageBox.Ok)
         msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке"""
+        """Показать сообщение об ошибке (с возможностью копирования текста)"""
         msg = QMessageBox()
         msg.setText(text)
         msg.setStyleSheet("""
-            background-color: #f8f8f2;
-            font: 10pt "Tahoma";
-            color: #ff0000;
+            QMessageBox {
+                background-color: #f8f8f2;
+                font: 10pt "Tahoma";
+            }
+            QMessageBox QLabel {
+                color: #ff0000;
+            }
         """)
         msg.setIcon(QMessageBox.Critical)
+        
+        clipboard = QApplication.clipboard()
+        
+        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        
+        msg.addButton(QMessageBox.Ok)
         msg.exec_()
+
+
+
+
+

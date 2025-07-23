@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
-                              QTableWidgetItem, QWidget)
+                              QTableWidgetItem, QWidget, QSizePolicy)
 from PySide6.QtCore import Qt
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -20,29 +20,99 @@ class Managers(QWidget):
         
         self._setup_ui()
         self._setup_connections()
-        
         self._initialize_comboboxes()
+
+    def test_table(self):
+        """Тестовая функция для проверки таблицы"""
+        try:
+            print("[TEST] Запуск теста таблицы")
+            
+            # Получаем ссылку на таблицу
+            table = self.ui.table
+            
+            table.setVisible(True)
+            table.show()
+            
+            # Полная очистка и сброс
+            table.clear()
+            table.setRowCount(3)
+            table.setColumnCount(3)
+            
+            # Простые стили для теста
+            table.setStyleSheet("""
+                QTableWidget {
+                    background-color: white;
+                    color: black;
+                    font: 12px;
+                    gridline-color: black;
+                }
+                QHeaderView::section {
+                    background-color: lightgray;
+                    padding: 5px;
+                    border: 1px solid gray;
+                }
+            """)
+            
+            # Тестовые данные
+            test_data = [
+                ["Тест 1", "test1@example.com", "Да"],
+                ["Тест 2", "test2@example.com", "Нет"],
+                ["Тест 3", "test3@example.com", "Да"]
+            ]
+            
+            # Заполнение таблицы
+            for i, row in enumerate(test_data):
+                for j, value in enumerate(row):
+                    item = QTableWidgetItem(value)
+                    table.setItem(i, j, item)
+            
+            # Заголовки
+            table.setHorizontalHeaderLabels(["Имя", "Email", "Статус"])
+            
+            # Настройки отображения
+            table.horizontalHeader().setVisible(True)
+            table.verticalHeader().setVisible(True)
+            table.setAlternatingRowColors(True)
+            
+            # Автоподбор размеров
+            table.resizeColumnsToContents()
+            table.resizeRowsToContents()
+            
+            # Принудительное обновление (правильный способ)
+            table.viewport().update()
+            
+            # Проверка видимости
+            table.setVisible(True)
+            table.raise_()
+            
+            # Отладочная информация
+            print(f"[TEST] Таблица видима: {table.isVisible()}")
+            print(f"[TEST] Размер таблицы: {table.size()}")
+            print(f"[TEST] Кол-во строк: {table.rowCount()}, кол-во колонок: {table.columnCount()}")
+            print("[TEST] Тестовые данные должны быть видны")
+            
+        except Exception as e:
+            print(f"[TEST ERROR] {str(e)}")
+            # Попробуем показать сообщение об ошибке
+            self._show_message(f"Ошибка теста таблицы: {str(e)}", is_error=True)
 
 
     def _setup_ui(self):
-        """Универсальная настройка таблицы для всех классов"""
+        """Настройка интерфейса"""
         self.table = self.ui.table
-        
-        # Основные настройки таблицы
         self.table.resizeColumnsToContents()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)  # Чередование цветов строк
-        
-        # Настройки заголовков
+        self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
-        
-        # Оптимизация производительности
         self.table.setSortingEnabled(True)
         self.table.setWordWrap(False)
         self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        
+        # Принудительное обновление
+        self.table.viewport().update()
 
 
     def _setup_connections(self):
@@ -60,7 +130,7 @@ class Managers(QWidget):
         """Инициализация выпадающих списков при старте"""
         try:
             # Проверяем наличие данных в БД
-            has_data = db.session.query(Manager).first() is not None
+            has_data = db.query(Manager).first() is not None
             
             if has_data:
                 # Заполняем списки
@@ -113,7 +183,7 @@ class Managers(QWidget):
             self._refresh_comboboxes()
             
         except Exception as e:
-            db.session.rollback()
+            db.rollback()
             
             # Улучшенное сообщение об ошибке (новый код)
             if "transaction is already begun" in str(e):
@@ -293,16 +363,16 @@ class Managers(QWidget):
                         to_insert.append(item)
                 
                 if to_insert:
-                    db.session.bulk_insert_mappings(Manager, to_insert)
+                    db.bulk_insert_mappings(Manager, to_insert)
                 if to_update:
-                    db.session.bulk_update_mappings(Manager, to_update)
+                    db.bulk_update_mappings(Manager, to_update)
                 
-                db.session.commit()
+                db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
+            db.rollback()
             raise Exception(f"Ошибка при сохранении менеджеров: {str(e)}")
         finally:
-            db.session.close()
+            db.close()
 
 
     def _save_data(self, model, data, name_field, extra_fields=None):
@@ -344,15 +414,15 @@ class Managers(QWidget):
 
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(model, to_insert)
+                db.bulk_insert_mappings(model, to_insert)
             if to_update:
-                db.session.bulk_update_mappings(model, to_update)
-            db.session.commit()
+                db.bulk_update_mappings(model, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
+            db.rollback()
             raise Exception(f"Не удалось сохранить данные в базу: {str(e)}")
         finally:
-            db.session.close()
+            db.close()
 
 
     def _get_id(self, model, name_field, name):
@@ -390,8 +460,9 @@ class Managers(QWidget):
             TeamLead.id.label('TeamLead_id'),
             TeamLead.TeamLead_name,
             TeamLead.Email.label('email_TL')
-        ).join(STL, Manager.STL_id == STL.id)\
-         .join(TeamLead, Manager.TeamLead_id == TeamLead.id)
+        ).select_from(Manager)\
+        .outerjoin(STL, Manager.STL_id == STL.id)\
+        .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
         
         return pd.read_sql(query, engine)
 
@@ -404,17 +475,20 @@ class Managers(QWidget):
         
         try:
             df = self.get_all_managers_data()
+            
             if df.empty:
                 raise ValueError('Нет данных в базе')
             
             df = self._filter_data(df, data_type)
-            self._display_data(df, data_type)
+            
+            # Убрали data_type из вызова
+            self._display_data(df)
             
         except Exception as e:
             self._show_message(
                 f'Ошибка при поиске данных: {str(e)}\n'
                 'Закройте программу и откройте снова!\n'
-                'Затем обновите базу данных',
+                'Затем обновите базу данные',
                 is_error=True
             )
 
@@ -447,24 +521,29 @@ class Managers(QWidget):
             return df[["Manager_name", 'TeamLead_name', "email_TL"]].drop_duplicates(subset=["TeamLead_name"])
 
 
-    def _display_data(self, df, data_type):
+    def _display_data(self, df):
         """Отображение данных в таблице"""
-        sort_column = {
-            'KAM': 'Manager_name',
-            'STL': 'STL_name',
-            'TL': 'TeamLead_name'
-        }.get(data_type, 'Manager_name')
-        
-        df = df.sort_values(sort_column)
-        headers = df.columns.tolist()
-        
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
+        if df.empty:
+            print("[DEBUG] Нет данных для отображения!")
+            self._show_message("Нет данных для отображения", is_error=True)
+            return
+
+        # Очистка и настройка таблицы
+        self.table.clear()
+        self.table.setColumnCount(len(df.columns))
+        self.table.setHorizontalHeaderLabels(df.columns.tolist())
         self.table.setRowCount(len(df))
-        
+
+        # Заполнение таблицы
         for i, row in df.iterrows():
             for j, value in enumerate(row):
-                self.table.setItem(i, j, QTableWidgetItem(str(value)))
+                display_value = str(value) if pd.notna(value) else ""
+                item = QTableWidgetItem(display_value)
+                self.table.setItem(i, j, item)
+
+        # Принудительное обновление
+        self.table.resizeColumnsToContents()
+        self.table.viewport().update()
 
 
     def _fill_combobox(self, combobox, column):
@@ -474,14 +553,14 @@ class Managers(QWidget):
         
         try:
             # Проверяем соединение с БД
-            db.session.execute(text('SELECT 1')).scalar()
+            db.execute(text('SELECT 1')).scalar()
             
             if column == 'Manager_name':
-                items = db.session.query(Manager.Manager_name).distinct().all()
+                items = db.query(Manager.Manager_name).distinct().all()
             elif column == 'STL_name':
-                items = db.session.query(STL.STL_name).distinct().all()
+                items = db.query(STL.STL_name).distinct().all()
             elif column == 'TeamLead_name':
-                items = db.session.query(TeamLead.TeamLead_name).distinct().all()
+                items = db.query(TeamLead.TeamLead_name).distinct().all()
             else:
                 return
                 

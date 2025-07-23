@@ -61,7 +61,7 @@ class Product(QWidget):
             self.refresh_all_comboboxes()
             
         except Exception as e:
-            db.session.rollback()
+            db.rollback()
             self._handle_upload_error(e)
         finally:
             self.ui.label_Prod_File.setText("Выбери файл или нажми Upload")
@@ -118,7 +118,7 @@ class Product(QWidget):
         if not data:
             return
 
-        existing_codes = {code[0] for code in db.session.query(Material.Code).all()}
+        existing_codes = {code[0] for code in db.query(Material.Code).all()}
         to_insert = []
         to_update = []
         
@@ -152,18 +152,20 @@ class Product(QWidget):
         
         try:
             if to_insert:
-                db.session.bulk_insert_mappings(Material, to_insert)
+                db.bulk_insert_mappings(Material, to_insert)
             if to_update:
-                db.session.bulk_update_mappings(Material, to_update)
-            db.session.commit()
+                db.bulk_update_mappings(Material, to_update)
+            db.commit()
         except SQLAlchemyError as e:
-            db.session.rollback()
+            db.rollback()
             self.show_error_message(f"Ошибка сохранения данных: {str(e)}")
+        finally:
+            db.close()
 
     @lru_cache(maxsize=32)
     def _get_unique_values(self, column, filter_column=None, filter_value=None):
         """Получение уникальных значений с фильтрацией"""
-        query = db.session.query(column)
+        query = db.query(column)  # Было db.session.query(column)
         if filter_column is not None and filter_value not in (None, '-', ''):
             query = query.filter(filter_column == filter_value)
         return sorted(v[0] for v in query.distinct().all() if v[0])
@@ -209,11 +211,11 @@ class Product(QWidget):
     def get_all_Products_from_db(self, columns=None):
         """Получение всех продуктов из базы"""
         if columns:
-            query = db.session.query(*[getattr(Material, col) for col in columns])
+            query = db.query(*[getattr(Material, col) for col in columns])
         else:
-            query = db.session.query(Material)
+            query = db.query(Material)
         
-        df = pd.read_sql(query.statement, db.session.bind)
+        df = pd.read_sql(query.statement, db.bind)
         return df.where(pd.notnull(df), None)
 
     def find_Product(self):
@@ -227,7 +229,7 @@ class Product(QWidget):
         product_family = self.ui.line_Prod_Fam.currentText()
         brand = self.ui.line_Brand.currentText()
 
-        query = db.session.query(Material)
+        query = db.query(Material)
         
         if code:
             query = query.filter(Material.Code == code)
@@ -246,7 +248,7 @@ class Product(QWidget):
         elif product_name != '-':
             query = query.filter(Material.Product_name == product_name)
 
-        df = pd.read_sql(query.statement, db.session.bind).replace({pd.NA: None})
+        df = pd.read_sql(query.statement, db.bind).replace({pd.NA: None})
         
         if df.empty:
             self.show_error_message('Ничего не найдено')
