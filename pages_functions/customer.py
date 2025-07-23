@@ -1,11 +1,11 @@
+
 import os
 import pandas as pd
 import numpy as np
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, 
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, QPushButton,
                               QTableWidgetItem, QWidget)
-
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -20,16 +20,17 @@ class Customer(QWidget):
         super(Customer, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        
+
         self._setup_ui()
         self._setup_connections()
 
         self.current_upload_step = 0  # 0 - ожидание Customer, 1 - ожидание Contract
         self.cust_file_path = None
         self.contract_file_path = None
-        
+
         self.refresh_all_comboboxes()
-        
+
+
     def _setup_ui(self):
         """Настройка интерфейса"""
         self.table = self.ui.table
@@ -59,7 +60,7 @@ class Customer(QWidget):
         """Выбор файла через диалоговое окно"""
         title = 'Выберите файл для Customer и Holding' if self.current_upload_step == 0 else 'Выберите файл для Contract'
         file_path, _ = QFileDialog.getOpenFileName(self, title)
-        
+
         if file_path:
             if self.current_upload_step == 0:
                 self.cust_file_path = file_path
@@ -77,11 +78,11 @@ class Customer(QWidget):
     def _upload_customer_data(self):
         """Загрузка данных Customer и Holding"""
         file_path = self.cust_file_path or Customer_file
-        
+
         try:
             if not os.path.exists(file_path):
                 raise Exception(f"Файл {os.path.basename(file_path)} не найден")
-                
+
             try:
                 self.run_customer_func(file_path, All_data_file)
                 db.commit()
@@ -91,18 +92,18 @@ class Customer(QWidget):
                 raise
             finally:
                 db.close()
-                
+
         except Exception as e:
             self._handle_upload_error(e, "клиентов")
 
     def _upload_contract_data(self):
         """Загрузка данных Contract"""
         file_path = self.contract_file_path or Contract_file
-        
+
         try:
             if not os.path.exists(file_path):
                 raise Exception(f"Файл {os.path.basename(file_path)} не найден")
-                
+
             try:
                 self.run_contract_func(file_path)
                 db.commit()
@@ -117,7 +118,7 @@ class Customer(QWidget):
                 raise
             finally:
                 db.close()
-                
+
         except Exception as e:
             self._handle_upload_error(e, "договоров")
 
@@ -149,23 +150,23 @@ class Customer(QWidget):
         """Чтение данных клиентов из Excel"""
         try:
             df = pd.read_excel(cust_file_xls, sheet_name=0, dtype={'ИНН': str})
-            
+
             required_columns = ['Код', 'Наименование в программе', 'Холдинг']
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
-            
+
             column_map = {
-                'ИНН': 'INN', 'Код': 'id', 
+                'ИНН': 'INN', 'Код': 'id',
                 'Наименование в программе': 'Customer_name',
                 'Сектор': 'Sector', 'Тип цен': 'Price_type',
                 'Холдинг': 'Holding'
             }
-            
+
             df = df.rename(columns=column_map)[list(column_map.values())]
             df['Sector'] = df['Sector'].fillna("-")
-            df["Holding"] = np.where(pd.isna(df["Holding"]) , df['Customer_name'],  df["Holding"])
+            df["Holding"] = np.where(pd.isna(df["Holding"]), df['Customer_name'], df["Holding"])
             return df[df['id'] != 'n/a'].to_dict('records')
-            
+
         except Exception as e:
             self.show_error_message(f"Ошибка чтения файла клиентов: {str(e)}")
             return []
@@ -174,21 +175,21 @@ class Customer(QWidget):
         """Чтение данных договоров из Excel"""
         try:
             df = pd.read_excel(contract_file_xls, sheet_name=0, dtype={'Код контрагента': str})
-            
+
             required_columns = ['Код', 'Вид договора', 'Наименование', 'Условие оплаты']
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
-            
+
             column_map = {
                 'Вид договора': 'Contract_Type', 'Код': 'id',
                 'Менеджер': 'Manager_name', 'Наименование': 'Contract',
                 'Тип цен': 'Price_Type', 'Условие оплаты': 'Payment_Condition',
                 'Код контрагента': 'Customer_id'
             }
-            
+
             df = df.rename(columns=column_map)[list(column_map.values())]
             return df[df['id'] != 'n/a'].to_dict('records')
-            
+
         except Exception as e:
             self.show_error_message(f"Ошибка чтения файла договоров: {str(e)}")
             return []
@@ -201,21 +202,21 @@ class Customer(QWidget):
                 'Код дилера HYUNDAI': str,
                 'Код в HYUNDAI': str
             })
-            
+
             # Проверка обязательных колонок
             required_columns = [
                 'Код дилера HYUNDAI',
-                'Наим дилера HYUNDAI', 
+                'Наим дилера HYUNDAI',
                 'Код в HYUNDAI',
                 'Город',
                 'ИНН',
                 'SALES'  # Это колонка с менеджером
             ]
-            
+
             if not all(col in df.columns for col in required_columns):
                 missing = set(required_columns) - set(df.columns)
                 raise ValueError(f"Отсутствуют обязательные колонки: {missing}")
-            
+
             # Точное соответствие колонок Excel и модели
             column_map = {
                 'Код дилера HYUNDAI': 'Dealer_code',
@@ -225,17 +226,17 @@ class Customer(QWidget):
                 'ИНН': 'INN',
                 'SALES': 'Manager_name'  # Колонка с именем менеджера
             }
-            
+
             # Преобразование и очистка данных
             df = df.rename(columns=column_map)
             df = df[list(column_map.values())]  # Только нужные колонки
-            
+
             # Обработка пустых значений
             df['Dealer_code'] = df['Dealer_code'].replace(['', ' ', '-'], None)
             df['INN'] = df['INN'].str.strip()
-            
+
             return df.to_dict('records')
-            
+
         except Exception as e:
             self.show_error_message(f"Ошибка чтения файла Hyundai: {str(e)}")
             return []
@@ -246,13 +247,13 @@ class Customer(QWidget):
             return
 
         sectors = pd.DataFrame(data)[['Sector']].drop_duplicates()
-        
+
         # Получаем существующие сектора
         existing_sectors = {s.Sector_name: s.id for s in db.query(Sector).all()}
-        
+
         to_insert = []
         to_update = []
-        
+
         for _, row in sectors.iterrows():
             sector_name = row['Sector']
             if sector_name in existing_sectors:
@@ -264,7 +265,7 @@ class Customer(QWidget):
                 to_insert.append({
                     'Sector_name': sector_name
                 })
-        
+
         try:
             if to_insert:
                 db.bulk_insert_mappings(Sector, to_insert)
@@ -284,14 +285,14 @@ class Customer(QWidget):
 
         # Получаем все существующие холдинги (только названия)
         existing_holdings = {h[0] for h in db.query(Holding.Holding_name).all()}
-        
+
         # Уникальные названия холдингов из входных данных
         holdings_names = {row['Holding'] for row in data if 'Holding' in row}
-        
+
         # Фильтруем только новые холдинги
-        new_holdings = [{'Holding_name': name} for name in holdings_names 
-                    if name not in existing_holdings]
-        
+        new_holdings = [{'Holding_name': name} for name in holdings_names
+                        if name not in existing_holdings]
+
         try:
             if new_holdings:
                 db.bulk_insert_mappings(Holding, new_holdings)
@@ -310,7 +311,7 @@ class Customer(QWidget):
         existing_customers = {c.id: c for c in db.query(Cust_db).all()}
         to_insert = []
         to_update = []
-        
+
         for row in data:
             customer_id = row['id']
             customer_data = {
@@ -321,12 +322,12 @@ class Customer(QWidget):
                 'Sector_id': self._get_id(Sector, 'Sector_name', row['Sector']),
                 'Price_type': row['Price_type']
             }
-            
+
             if customer_id in existing_customers:
                 to_update.append(customer_data)
             else:
                 to_insert.append(customer_data)
-        
+
         try:
             if to_insert:
                 db.bulk_insert_mappings(Cust_db, to_insert)
@@ -347,13 +348,13 @@ class Customer(QWidget):
         existing_contracts = {c.id: c for c in db.query(Contract).all()}
         to_insert = []
         to_update = []
-        
+
         for row in data:
             contract_id = row['id']
             manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
             if not manager_id:
                 continue
-                
+
             contract_data = {
                 'id': contract_id,
                 'Contract': row['Contract'],
@@ -363,12 +364,12 @@ class Customer(QWidget):
                 'Customer_id': row['Customer_id'],
                 'Manager_id': manager_id
             }
-            
+
             if contract_id in existing_contracts:
                 to_update.append(contract_data)
             else:
                 to_insert.append(contract_data)
-        
+
         try:
             if to_insert:
                 db.bulk_insert_mappings(Contract, to_insert)
@@ -389,13 +390,13 @@ class Customer(QWidget):
         existing_dealers = {d.Hyundai_code: d.id for d in db.query(Hyundai_Dealer).all()}
         to_insert = []
         to_update = []
-        
+
         for row in data:
             hyundai_code = row['Hyundai_code']
             manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
             if not manager_id:
                 continue
-                
+
             dealer_data = {
                 'Dealer_code': row['Dealer_code'] if row['Dealer_code'] != '-' else None,
                 'Hyundai_code': hyundai_code,
@@ -404,13 +405,13 @@ class Customer(QWidget):
                 'INN': row['INN'],
                 'Manager_id': manager_id
             }
-            
+
             if hyundai_code in existing_dealers:
                 dealer_data['id'] = existing_dealers[hyundai_code]
                 to_update.append(dealer_data)
             else:
                 to_insert.append(dealer_data)
-        
+
         try:
             if to_insert:
                 db.bulk_insert_mappings(Hyundai_Dealer, to_insert)
@@ -428,7 +429,7 @@ class Customer(QWidget):
         """Получение ID по имени (с кэшированием)"""
         if not name or name in ('-', ''):
             return None
-            
+
         item = db.query(model).filter(getattr(model, name_field) == name).first()
         return item.id if item else None
 
@@ -443,14 +444,16 @@ class Customer(QWidget):
             Cust_db.Price_type,
             Manager.Manager_name.label('AM'),
             TeamLead.TeamLead_name.label('TeamLead')
-        ).join(Holding, Cust_db.Holding_id == Holding.id)\
-         .join(Sector, Cust_db.Sector_id == Sector.id)\
-         .outerjoin(Contract, Cust_db.id == Contract.Customer_id)\
-         .outerjoin(Manager, Contract.Manager_id == Manager.id)\
-         .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
-        
+        ).join(Holding, Cust_db.Holding_id == Holding.id) \
+        .join(Sector, Cust_db.Sector_id == Sector.id) \
+        .outerjoin(Contract, Cust_db.id == Contract.Customer_id) \
+        .outerjoin(Manager, Contract.Manager_id == Manager.id) \
+        .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
+
         df = pd.read_sql(query.statement, db.bind)
-        return df.drop_duplicates().where(pd.notnull(df), None)
+        df = df.drop_duplicates().where(pd.notnull(df), None)
+
+        return df
 
     def get_Hyundai_from_db(self):
         """Получение дилеров Hyundai из базы"""
@@ -461,28 +464,31 @@ class Customer(QWidget):
             Hyundai_Dealer.INN,
             Manager.Manager_name.label('AM'),
             TeamLead.TeamLead_name.label('TeamLead')
-        ).join(Manager, Hyundai_Dealer.Manager_id == Manager.id)\
+        ).join(Manager, Hyundai_Dealer.Manager_id == Manager.id) \
          .join(TeamLead, Manager.TeamLead_id == TeamLead.id)
-        
+
         df = pd.read_sql(query.statement, db.bind)
-        return df.where(pd.notnull(df), None)
+        df = df.drop_duplicates().where(pd.notnull(df), None)
+
+        return df
 
     def find_Customer(self):
         """Поиск клиентов"""
         self.table.clearContents()
         self.table.setRowCount(0)
-        
+
         cust_df = self.get_Customers_from_db()
         if cust_df.empty:
             self.show_error_message('Нет данных о клиентах')
             return
-            
+
         cust_id = self.ui.line_ID.text().strip()
         cust_inn = self.ui.line_INN.text().strip()
         customer_name = self.ui.line_CustName.currentText()
         am = self.ui.line_AM.currentText()
         tl = self.ui.line_TL.currentText()
 
+        # Фильтрация DataFrame
         if cust_id:
             cust_df = cust_df[cust_df['id'] == cust_id]
         elif cust_inn:
@@ -494,18 +500,20 @@ class Customer(QWidget):
         elif tl != '-':
             cust_df = cust_df[cust_df['TeamLead'] == tl]
 
+
+
         self._display_data(cust_df.sort_values('Customer_name'))
 
     def find_Hyundai(self):
         """Поиск дилеров Hyundai"""
         self.table.clearContents()
         self.table.setRowCount(0)
-        
+
         dealer_df = self.get_Hyundai_from_db()
         if dealer_df.empty:
             self.show_error_message('Нет данных о дилерах')
             return
-            
+
         dealer_id = self.ui.line_ID_Hyundai.text().strip()
         dealer_code = self.ui.line_Hyu_code.text().strip()
         dealer_name = self.ui.line_CustName_Hyundai.currentText()
@@ -526,19 +534,37 @@ class Customer(QWidget):
         self._display_data(dealer_df.sort_values('Dealer_Name'))
 
     def _display_data(self, df):
-        """Отображение данных в таблице"""
+        """Метод отображения данных"""
+
+        # Полная очистка таблицы
+        self.table.clear()  # Use clear() - cleans all
+        self.table.setColumnCount(len(df.columns))  # Set column count
+
         if df.empty:
             self.show_error_message('Ничего не найдено')
             return
-            
+
+        # Подготовка данных
+        df = df.fillna('')
         headers = df.columns.tolist()
-        self.table.setColumnCount(len(headers))
+
+        # Установка заголовков столбцов
         self.table.setHorizontalHeaderLabels(headers)
-        self.table.setRowCount(len(df))
-        
-        for i, row in df.iterrows():
-            for j, value in enumerate(row):
-                self.table.setItem(i, j, QTableWidgetItem(str(value)))
+        self.table.setRowCount(len(df))  # Set row count AFTER clear
+
+        # Заполнение данных с проверкой
+        for i in range(len(df)):  # Iterate using range
+            for j, col in enumerate(headers):  # Iterate over columns
+                value = df.iloc[i][col]  # Access cell value by row and column name
+                value_str = str(value)  # Convert value to string
+
+                item = QTableWidgetItem(value_str)
+
+                # Critical settings:
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)  # Disable editing
+                item.setTextAlignment(Qt.AlignCenter)  # Center text
+
+                self.table.setItem(i, j, item)  # Set item to the cell
 
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""
@@ -559,10 +585,10 @@ class Customer(QWidget):
         """Заполнение списка менеджеров"""
         tl = self.ui.line_TL.currentText()
         query = db.query(Manager.Manager_name)
-        
+
         if tl != '-':
             query = query.join(TeamLead).filter(TeamLead.TeamLead_name == tl)
-            
+
         kam_names = [kam[0] for kam in query.distinct().all()]
         self._fill_combobox(self.ui.line_AM, kam_names)
 
@@ -573,24 +599,24 @@ class Customer(QWidget):
             self.ui.line_CustName.clear()
             self.ui.line_CustName.addItem('-')
             return
-            
+
         am = self.ui.line_AM.currentText()
         tl = self.ui.line_TL.currentText()
-        
+
         if am != '-':
             cust_names = cust_df[cust_df['AM'] == am]['Customer_name'].unique()
         elif tl != '-':
             cust_names = cust_df[cust_df['TeamLead'] == tl]['Customer_name'].unique()
         else:
             cust_names = cust_df['Customer_name'].unique()
-        
+
         self._fill_combobox(self.ui.line_CustName, sorted(cust_names))
 
     def fill_in_dealer_tl_list(self):
         """Заполнение списка тимлидов для дилеров"""
-        query = db.query(TeamLead.TeamLead_name)\
-                 .join(Manager)\
-                 .join(Hyundai_Dealer)\
+        query = db.query(TeamLead.TeamLead_name) \
+                 .join(Manager) \
+                 .join(Hyundai_Dealer) \
                  .distinct()
         team_leads = [tl[0] for tl in query.all()]
         self._fill_combobox(self.ui.line_TL_Hyundai, team_leads)
@@ -598,16 +624,16 @@ class Customer(QWidget):
     def fill_in_dealer_kam_list(self):
         """Заполнение списка менеджеров для дилеров"""
         tl = self.ui.line_TL_Hyundai.currentText()
-        query = db.query(Manager.Manager_name)\
-                 .join(Hyundai_Dealer)\
+        query = db.query(Manager.Manager_name) \
+                 .join(Hyundai_Dealer) \
                  .join(TeamLead)
-        
+
         if tl != '-':
             query = query.filter(TeamLead.TeamLead_name == tl)
-            
+
         kam_names = [kam[0] for kam in query.distinct().all()]
         self._fill_combobox(self.ui.line_AM_Hyundai, kam_names)
-        
+
     def fill_in_dealer_list(self):
         """Заполнение списка дилеров"""
         dealer_df = self.get_Hyundai_from_db()
@@ -615,17 +641,17 @@ class Customer(QWidget):
             self.ui.line_CustName_Hyundai.clear()
             self.ui.line_CustName_Hyundai.addItem('-')
             return
-            
+
         am = self.ui.line_AM_Hyundai.currentText()
         tl = self.ui.line_TL_Hyundai.currentText()
-        
+
         if am != '-':
             dealer_names = dealer_df[dealer_df['AM'] == am]['Dealer_Name'].unique()
         elif tl != '-':
             dealer_names = dealer_df[dealer_df['TeamLead'] == tl]['Dealer_Name'].unique()
         else:
             dealer_names = dealer_df['Dealer_Name'].unique()
-        
+
         self._fill_combobox(self.ui.line_CustName_Hyundai, sorted(dealer_names))
 
     def _fill_combobox(self, combobox, items):
@@ -649,20 +675,20 @@ class Customer(QWidget):
             }
         """)
         msg.setIcon(QMessageBox.Information)
-        
+
         clipboard = QApplication.clipboard()
-        
+
         # Добавляем кнопку "Copy msg" (не закрывает окно)
         copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
         copy_button.clicked.connect(lambda: clipboard.setText(text))
-        
+
         # Основная кнопка OK
         ok_button = msg.addButton(QMessageBox.Ok)
         ok_button.setDefault(True)
-        
+
         # Отключаем закрытие окна при нажатии на "Copy msg"
         copy_button.clicked.connect(lambda: None)
-        
+
         msg.exec_()
 
     def show_error_message(self, text):
@@ -679,20 +705,18 @@ class Customer(QWidget):
             }
         """)
         msg.setIcon(QMessageBox.Critical)
-        
+
         clipboard = QApplication.clipboard()
-        
+
         # Добавляем кнопку "Copy msg" (не закрывает окно)
         copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
         copy_button.clicked.connect(lambda: clipboard.setText(text))
-        
+
         # Основная кнопка OK
         ok_button = msg.addButton(QMessageBox.Ok)
         ok_button.setDefault(True)
-        
+
         # Отключаем закрытие окна при нажатии на "Copy msg"
         copy_button.clicked.connect(lambda: None)
-        
+
         msg.exec_()
-
-

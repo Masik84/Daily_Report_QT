@@ -301,6 +301,7 @@ if __name__ == '__main__':
     os.environ["QT_QPA_PLATFORM"] = "windows"
     # Uncomment the following line if the above doesn't work
     # QApplication.setAttribute(Qt.AA_DisableHighDpiScaling)
+    
 
     app = QApplication(sys.argv)
     Base.metadata.create_all(bind=engine)
