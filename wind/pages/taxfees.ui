@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>930</width>
-    <height>650</height>
+    <width>1074</width>
+    <height>710</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -20,101 +20,154 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">#frame_sum_pl {
-	border-width: 1;
-	border-radius: 3;
-	border-style: solid;
-	border-color: #bd93f9;
+   <string notr="true">QWidget{
+	background-color: #f8f8f2;
 }
 
+#Title_label.QLabel {
+color: #262626;
+font: 22pt &quot;Tahoma&quot;;
+}
+
+QLabel {
+color: #262626;
+font: 10pt &quot;Tahoma&quot;;
+}
+
+QPushButton {
+	border: 2px solid #f09d54;
+	border-radius: 5px;
+	background-color: #f8f8f2;
+	color: #964b09;
+	font: 10pt &quot;Tahoma&quot;;
+}
+
+QPushButton:hover {
+	background-color: #f28223;
+	color: #ffffff;
+}
+
+QPushButton:pressed {
+	background-color: #f28223;
+	border: 2px solid #f28223;
+	color: #ffffff;
+}
+
+
 QTableWidget {	
-	background-color: transparent;
+	background-color: #f8f8f2;
 	padding: 10px;
 	border-radius: 5px;
-	gridline-color: #9faeda;
+	gridline-color: #f8994a;
     outline: none;
+	color: #262626;
 }
 QTableWidget::item{
-	border-color: #9faeda;
+	border-color: #f8994a;
 	padding-left: 5px;
 	padding-right: 5px;
-	gridline-color: #9faeda;
+	gridline-color: #f8994a;
+	color: #262626;
 }
 QTableWidget::item:selected{
-	background-color: rgb(189, 147, 249);
-    color: #f8f8f2;
+	background-color: #f6c294;
+    color: #262626;
 }
 QHeaderView::section{
-	background-color: #6272a4;
+	background-color: #f8f8f2;
 	max-width: 30px;
 	border: none;
 	border-style: none;
 }
 QTableWidget::horizontalHeader {	
-	background-color: #6272a4;
+	background-color: #f8994a;
 }
-QHeaderView::section:horizontal
-{
-    border: 1px solid #6272a4;
-	background-color: #6272a4;
+QHeaderView::section:horizontal {
+    border: 1px solid #f8994a;
+	background-color: #ffd4af;
 	padding: 3px;
 	border-top-left-radius: 7px;
     border-top-right-radius: 7px;
-    color: #f8f8f2;
+    color: #262626;
 }
-QHeaderView::section:vertical
-{
-    border: 1px solid #6272a4;
+QHeaderView::section:vertical {
+    border: 1px solid #f8994a;
+	color: #262626;
 }
 
 QLineEdit {
-	background-color: #6272a4;
+	background-color: #f8f8f2;
 	border-radius: 5px;
-	border: 2px solid #6272a4;
+	border: 2px solid #f09d54;
 	padding-left: 10px;
 	selection-color: rgb(255, 255, 255);
-	selection-background-color: rgb(255, 121, 198);
-    color: #f8f8f2;
+	selection-background-color: #f28223;
+    color: #262626;
 }
 QLineEdit:hover {
-	border: 2px solid rgb(64, 71, 88);
+	border: 2px solid #f28223;
 }
 QLineEdit:focus {
-	border: 2px solid #ff79c6;
+	border: 2px solid #f28223;
 }
 
 QComboBox {
-	background-color: #6272a4;
+	background-color: #f8f8f2;
 	border-radius: 5px;
-	border: 2px solid #6272a4;
+	border: 2px solid #f09d54;
 	padding-left: 10px;
-	selection-color: rgb(255, 255, 255);
-	selection-background-color: rgb(255, 121, 198);
-    color: #f8f8f2;
-	font: 9pt &quot;Segoe UI&quot;;
+	selection-color: #f28223;
+	selection-background-color: #f28223;
+    color: #262626;
+	font: 10pt &quot;Tahoma&quot;;
 }
 QComboBox:hover {
-	border: 2px solid rgb(64, 71, 88);
+	border: 2px solid #f28223;
+	
 }
 QComboBox:focus {
-	border: 2px solid #ff79c6;
+	border: 2px solid #f28223;
+}
+
+QComboBox QAbstractItemView::item {
+	color: #262626;
+}
+QComboBox QAbstractItemView::item::selected {
+	background-color: #f09d54;
+	color: #ffffff;
+}
+
+QComboBox::down-arrow {
+	
+	image: url(:/icon/icon/chevron-down — копия — копия.svg);
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #f8994a;
+    border-left-style: solid; /* just a single line */
+    border-top-right-radius: 3px; /* same radius as the QComboBox */
+    border-bottom-right-radius: 3px;
+	color: #262626;
 }
 
 QScrollBar:horizontal {
     border: none;
-    background: #6272a4;
+    background: #f8994a;
     height: 8px;
     margin: 0px 21px 0 21px;
 	border-radius: 0px;
 }
 QScrollBar::handle:horizontal {
-    background: rgb(189, 147, 249);
+    background: #f6c294;
     min-width: 25px;
 	border-radius: 4px
 }
 QScrollBar::add-line:horizontal {
     border: none;
-    background: #6272a4;
+    background: #f8994a;
     width: 20px;
 	border-top-right-radius: 4px;
     border-bottom-right-radius: 4px;
@@ -123,7 +176,7 @@ QScrollBar::add-line:horizontal {
 }
 QScrollBar::sub-line:horizontal {
     border: none;
-    background: #6272a4;
+    background: #f8994a;
     width: 20px;
 	border-top-left-radius: 4px;
     border-bottom-left-radius: 4px;
@@ -140,19 +193,19 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
 }
  QScrollBar:vertical {
 	border: none;
-    background-color: #6272a4;
+    background-color: #f8994a;
     width: 8px;
     margin: 21px 0 21px 0;
 	border-radius: 0px;
  }
  QScrollBar::handle:vertical {	
-	background: rgb(189, 147, 249);
+	background: #f6c294;
     min-height: 25px;
 	border-radius: 4px
  }
  QScrollBar::add-line:vertical {
      border: none;
-    background: #6272a4;
+    background: #f8994a;
      height: 20px;
 	border-bottom-left-radius: 4px;
     border-bottom-right-radius: 4px;
@@ -161,7 +214,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
  }
  QScrollBar::sub-line:vertical {
 	border: none;
-    background: #6272a4;
+    background: #f8994a;
      height: 20px;
 	border-top-left-radius: 4px;
     border-top-right-radius: 4px;
@@ -193,7 +246,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
     <widget class="QWidget" name="widget" native="true">
      <layout class="QVBoxLayout" name="verticalLayout">
       <property name="spacing">
-       <number>6</number>
+       <number>0</number>
       </property>
       <property name="leftMargin">
        <number>0</number>
@@ -205,30 +258,32 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
        <number>0</number>
       </property>
       <property name="bottomMargin">
-       <number>0</number>
+       <number>9</number>
       </property>
-      <item alignment="Qt::AlignHCenter">
-       <widget class="QLabel" name="label">
+      <item>
+       <widget class="QLabel" name="Title_label">
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>50</height>
+          <height>40</height>
          </size>
         </property>
         <property name="font">
          <font>
-          <pointsize>18</pointsize>
-          <bold>true</bold>
+          <family>Tahoma</family>
+          <pointsize>22</pointsize>
+          <italic>false</italic>
+          <bold>false</bold>
          </font>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="text">
-         <string>Бонусные Планы</string>
+         <string>Налоги и Сборы</string>
         </property>
         <property name="alignment">
-         <set>Qt::AlignCenter</set>
+         <set>Qt::AlignmentFlag::AlignCenter</set>
         </property>
        </widget>
       </item>
@@ -237,16 +292,16 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>110</height>
+          <height>130</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>110</height>
+          <height>16777215</height>
          </size>
         </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
          <property name="spacing">
           <number>0</number>
          </property>
@@ -256,26 +311,113 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <property name="topMargin">
           <number>0</number>
          </property>
-         <property name="bottomMargin">
+         <property name="rightMargin">
           <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>5</number>
          </property>
          <item>
           <widget class="QFrame" name="frame">
            <property name="minimumSize">
             <size>
-             <width>100</width>
+             <width>80</width>
              <height>0</height>
             </size>
            </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
            <property name="frameShape">
-            <enum>QFrame::StyledPanel</enum>
+            <enum>QFrame::Shape::StyledPanel</enum>
            </property>
            <property name="frameShadow">
-            <enum>QFrame::Raised</enum>
+            <enum>QFrame::Shadow::Raised</enum>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_2">
             <property name="spacing">
              <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>9</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="font">
+               <font>
+                <family>Tahoma</family>
+                <pointsize>10</pointsize>
+                <italic>false</italic>
+                <bold>false</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>Тип данных</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="font">
+               <font>
+                <family>Tahoma</family>
+                <pointsize>10</pointsize>
+                <italic>false</italic>
+                <bold>false</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>Год</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_5">
+              <property name="font">
+               <font>
+                <family>Tahoma</family>
+                <pointsize>10</pointsize>
+                <italic>false</italic>
+                <bold>false</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>Месяц</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="frame_2">
+           <property name="minimumSize">
+            <size>
+             <width>250</width>
+             <height>120</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>300</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_3">
+            <property name="spacing">
+             <number>12</number>
             </property>
             <property name="leftMargin">
              <number>0</number>
@@ -290,54 +432,42 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
              <number>0</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_6">
-              <property name="font">
-               <font>
-                <pointsize>9</pointsize>
-               </font>
+             <widget class="QComboBox" name="line_taxfee_type">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>25</height>
+               </size>
               </property>
-              <property name="text">
-               <string>Год</string>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>25</height>
+               </size>
               </property>
+              <property name="iconSize">
+               <size>
+                <width>16</width>
+                <height>16</height>
+               </size>
+              </property>
+              <item>
+               <property name="text">
+                <string>-</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Тарифы</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Эко Сбор</string>
+               </property>
+              </item>
              </widget>
             </item>
-            <item>
-             <widget class="QLabel" name="label_3">
-              <property name="text">
-               <string>Квартал</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="label_4">
-              <property name="font">
-               <font>
-                <pointsize>9</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>КССС клиента</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_2">
-           <property name="minimumSize">
-            <size>
-             <width>300</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>300</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_3">
             <item>
              <widget class="QComboBox" name="line_Year">
               <property name="minimumSize">
@@ -355,23 +485,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="line_Qtr">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="line_KSSS">
+             <widget class="QComboBox" name="line_Mnth">
               <property name="minimumSize">
                <size>
                 <width>0</width>
@@ -392,10 +506,10 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <item>
           <spacer name="horizontalSpacer">
            <property name="orientation">
-            <enum>Qt::Horizontal</enum>
+            <enum>Qt::Orientation::Horizontal</enum>
            </property>
            <property name="sizeType">
-            <enum>QSizePolicy::Fixed</enum>
+            <enum>QSizePolicy::Policy::Fixed</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -409,7 +523,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
           <widget class="QFrame" name="frame_3">
            <property name="minimumSize">
             <size>
-             <width>93</width>
+             <width>100</width>
              <height>0</height>
             </size>
            </property>
@@ -424,13 +538,13 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
              <number>0</number>
             </property>
             <property name="leftMargin">
-             <number>0</number>
+             <number>1</number>
             </property>
             <property name="topMargin">
              <number>0</number>
             </property>
             <property name="rightMargin">
-             <number>0</number>
+             <number>1</number>
             </property>
             <property name="bottomMargin">
              <number>0</number>
@@ -439,7 +553,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
              <widget class="QPushButton" name="btn_find">
               <property name="minimumSize">
                <size>
-                <width>92</width>
+                <width>97</width>
                 <height>30</height>
                </size>
               </property>
@@ -453,31 +567,8 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
                <string>Search</string>
               </property>
               <property name="icon">
-               <iconset resource="../../static/resource.qrc">
-                <normaloff>:/icon/icon/search.svg</normaloff>:/icon/icon/search.svg</iconset>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btn_download">
-              <property name="minimumSize">
-               <size>
-                <width>92</width>
-                <height>30</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>92</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>Download</string>
-              </property>
-              <property name="icon">
-               <iconset resource="../../static/resource.qrc">
-                <normaloff>:/icon/icon/download.svg</normaloff>:/icon/icon/download.svg</iconset>
+               <iconset resource="../resource.qrc">
+                <normaloff>:/icon/icon/search — копия — копия.svg</normaloff>:/icon/icon/search — копия — копия.svg</iconset>
               </property>
              </widget>
             </item>
@@ -487,53 +578,28 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <item>
           <spacer name="horizontalSpacer_3">
            <property name="orientation">
-            <enum>Qt::Horizontal</enum>
+            <enum>Qt::Orientation::Horizontal</enum>
            </property>
            <property name="sizeType">
-            <enum>QSizePolicy::Fixed</enum>
+            <enum>QSizePolicy::Policy::Fixed</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>90</width>
+             <width>50</width>
              <height>20</height>
             </size>
            </property>
           </spacer>
          </item>
          <item>
-          <widget class="QFrame" name="frame_sum_pl">
-           <property name="minimumSize">
-            <size>
-             <width>220</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">#label_2 {
-	color: #6272a4;
-	font: 900;
-	text-decoration: underline;
-}
-
-#label_sum_pl {
-	color: rgb(255, 67, 111);
-	font: 900;
-	text-decoration: underline;
-}</string>
-           </property>
+          <widget class="QFrame" name="frame_6">
            <property name="frameShape">
-            <enum>QFrame::StyledPanel</enum>
+            <enum>QFrame::Shape::StyledPanel</enum>
            </property>
            <property name="frameShadow">
-            <enum>QFrame::Raised</enum>
+            <enum>QFrame::Shadow::Raised</enum>
            </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
+           <layout class="QHBoxLayout" name="horizontalLayout_2">
             <property name="spacing">
              <number>0</number>
             </property>
@@ -549,56 +615,46 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
             <property name="bottomMargin">
              <number>0</number>
             </property>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="frame_5">
+           <property name="minimumSize">
+            <size>
+             <width>250</width>
+             <height>120</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>300</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Shadow::Raised</enum>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
             <item>
-             <widget class="QLabel" name="label_2">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>35</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>35</height>
-               </size>
-              </property>
-              <property name="font">
-               <font>
-                <family>Segoe UI</family>
-                <pointsize>11</pointsize>
-                <italic>false</italic>
-                <bold>true</bold>
-                <underline>true</underline>
-               </font>
-              </property>
-              <property name="styleSheet">
-               <string notr="true"/>
-              </property>
+             <widget class="QLabel" name="label">
               <property name="text">
-               <string>сумма Планов</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+               <string>ТН ВЭД</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QLabel" name="label_sum_pl">
+             <widget class="QLineEdit" name="lineEdit_TNVED">
               <property name="font">
                <font>
-                <family>Segoe UI</family>
-                <pointsize>12</pointsize>
-                <italic>false</italic>
-                <bold>true</bold>
-                <underline>true</underline>
+                <pointsize>10</pointsize>
                </font>
               </property>
               <property name="text">
-               <string/>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
+               <string>-</string>
               </property>
              </widget>
             </item>
@@ -608,7 +664,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <item>
           <spacer name="horizontalSpacer_2">
            <property name="orientation">
-            <enum>Qt::Horizontal</enum>
+            <enum>Qt::Orientation::Horizontal</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -625,26 +681,33 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
        <widget class="QTableWidget" name="table">
         <property name="font">
          <font>
-          <pointsize>8</pointsize>
+          <family>Tahoma</family>
+          <pointsize>10</pointsize>
          </font>
         </property>
         <property name="verticalScrollBarPolicy">
-         <enum>Qt::ScrollBarAlwaysOn</enum>
+         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
         </property>
         <property name="horizontalScrollBarPolicy">
-         <enum>Qt::ScrollBarAlwaysOn</enum>
+         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOn</enum>
         </property>
         <property name="sizeAdjustPolicy">
-         <enum>QAbstractScrollArea::AdjustToContents</enum>
+         <enum>QAbstractScrollArea::SizeAdjustPolicy::AdjustToContents</enum>
+        </property>
+        <property name="autoScrollMargin">
+         <number>10</number>
         </property>
         <property name="selectionMode">
-         <enum>QAbstractItemView::SingleSelection</enum>
+         <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
+        </property>
+        <property name="textElideMode">
+         <enum>Qt::TextElideMode::ElideMiddle</enum>
         </property>
         <property name="sortingEnabled">
          <bool>true</bool>
         </property>
         <property name="wordWrap">
-         <bool>false</bool>
+         <bool>true</bool>
         </property>
         <property name="columnCount">
          <number>0</number>
@@ -653,7 +716,7 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <bool>true</bool>
         </attribute>
         <attribute name="horizontalHeaderMinimumSectionSize">
-         <number>25</number>
+         <number>55</number>
         </attribute>
         <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
          <bool>true</bool>
@@ -665,13 +728,13 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
          <bool>false</bool>
         </attribute>
         <attribute name="verticalHeaderCascadingSectionResizes">
-         <bool>false</bool>
+         <bool>true</bool>
         </attribute>
         <attribute name="verticalHeaderMinimumSectionSize">
-         <number>0</number>
+         <number>25</number>
         </attribute>
         <attribute name="verticalHeaderDefaultSectionSize">
-         <number>10</number>
+         <number>25</number>
         </attribute>
         <attribute name="verticalHeaderHighlightSections">
          <bool>false</bool>
@@ -679,25 +742,19 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
        </widget>
       </item>
       <item>
-       <widget class="QFrame" name="frame_Update">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>50</height>
-         </size>
+       <widget class="QFrame" name="frame_9">
+        <property name="frameShape">
+         <enum>QFrame::Shape::StyledPanel</enum>
         </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>50</height>
-         </size>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Raised</enum>
         </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <layout class="QHBoxLayout" name="horizontalLayout_7">
          <property name="spacing">
           <number>0</number>
          </property>
          <property name="leftMargin">
-          <number>0</number>
+          <number>12</number>
          </property>
          <property name="topMargin">
           <number>0</number>
@@ -709,60 +766,70 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
           <number>0</number>
          </property>
          <item>
-          <widget class="QFrame" name="frame_4">
+          <widget class="QLabel" name="label_tax_File">
            <property name="minimumSize">
             <size>
              <width>0</width>
-             <height>50</height>
-            </size>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_5">
-            <item>
-             <widget class="QLabel" name="label_plan_File">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>30</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>30</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">background-color: #6272a4;
-border-radius: 5px;
-border: 2px solid #6272a4;
-padding-left: 10px;
-selection-color: rgb(255, 255, 255);
-selection-background-color: rgb(255, 121, 198);
-color: #f8f8f2;</string>
-              </property>
-              <property name="text">
-               <string>File Path</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_5">
-           <property name="minimumSize">
-            <size>
-             <width>120</width>
-             <height>50</height>
+             <height>30</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>250</width>
+             <width>16777215</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QLabel {
+	background-color: #f8f8f2;
+	border-radius: 5px;
+	border: 2px solid #f09d54;
+	padding-left: 10px;
+	color: #964b09;
+	font: 10pt &quot;Tahoma&quot;;
+}</string>
+           </property>
+           <property name="text">
+            <string>Выбери файл или нажми Upload, файл будет взят из основной папки</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="frame_10">
+           <property name="minimumSize">
+            <size>
+             <width>220</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>220</width>
              <height>16777215</height>
             </size>
            </property>
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Shadow::Raised</enum>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_6">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
             <item>
              <widget class="QPushButton" name="btn_open_file">
               <property name="minimumSize">
@@ -781,8 +848,8 @@ color: #f8f8f2;</string>
                <string>Open</string>
               </property>
               <property name="icon">
-               <iconset resource="../../static/resource.qrc">
-                <normaloff>:/icon/icon/folder.svg</normaloff>:/icon/icon/folder.svg</iconset>
+               <iconset resource="../resource.qrc">
+                <normaloff>:/icon/icon/folder — копия — копия.svg</normaloff>:/icon/icon/folder — копия — копия.svg</iconset>
               </property>
              </widget>
             </item>
@@ -804,8 +871,8 @@ color: #f8f8f2;</string>
                <string>Upload</string>
               </property>
               <property name="icon">
-               <iconset resource="../../static/resource.qrc">
-                <normaloff>:/icon/icon/upload.svg</normaloff>:/icon/icon/upload.svg</iconset>
+               <iconset resource="../resource.qrc">
+                <normaloff>:/icon/icon/upload — копия — копия.svg</normaloff>:/icon/icon/upload — копия — копия.svg</iconset>
               </property>
              </widget>
             </item>
@@ -821,7 +888,7 @@ color: #f8f8f2;</string>
   </layout>
  </widget>
  <resources>
-  <include location="../../static/resource.qrc"/>
+  <include location="../resource.qrc"/>
  </resources>
  <connections/>
 </ui>

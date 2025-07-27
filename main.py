@@ -1,49 +1,9 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+# В начале main.py
+# from logger_config import setup_logging
 
-os.environ["QT_QPA_PLATFORM"] = "windows"
-
-# Настройка логирования
-def setup_logging():
-    log_dir = "logs"
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    
-    # Основной логгер приложения
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    
-    # Форматтер
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Файловый обработчик с ротацией
-    file_handler = RotatingFileHandler(
-        os.path.join(log_dir, 'app.log'),
-        maxBytes=1024*1024,  # 1 MB
-        backupCount=5
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.DEBUG)
-    
-    # Консольный обработчик
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
-    
-    # Добавляем обработчики
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    # SQLAlchemy логгер
-    sqlalchemy_logger = logging.getLogger('sqlalchemy.engine')
-    sqlalchemy_logger.setLevel(logging.INFO)
-    sqlalchemy_logger.setLevel(logging.WARNING)  # Можно изменить на INFO для подробных SQL-запросов
-
-# Вызываем настройку логирования в самом начале
-setup_logging()
+# # Настройка логирования
+# logger = setup_logging()
+# logger.info("Приложение запущено")
 
 import os
 import pandas as pd
@@ -56,15 +16,14 @@ from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
 from pages_functions.plans import Plans
-
-from pages_functions.bonus_scheme import Bon_Scheme
 from pages_functions.cost import Costs
+
+
 from pages_functions.dashboard import Dashboard
 from pages_functions.delivery import Rep_Delivery
 from pages_functions.home import Home
 from pages_functions.invoice import Rep_Invoices
 from pages_functions.order import Rep_Orders
-from pages_functions.base_price import BasePL
 
 from wind.main_window_ui import Ui_MainWindow
 
@@ -118,14 +77,13 @@ class MyWindow(QMainWindow):
         self.btn_customer = self.ui.btn_Customers
         self.btn_product = self.ui.btn_Products
         self.btn_plans = self.ui.btn_Plans
-        
+        self.btn_cost = self.ui.btn_Costs
         
         self.btn_order = self.ui.btn_Order
         self.btn_delivery = self.ui.btn_Delivery
         self.btn_invoice = self.ui.btn_Invoice
         self.btn_bonus_scheme = self.ui.btn_Scheme
-        self.btn_cost = self.ui.btn_Costs
-        self.btn_basePL = self.ui.btn_Price
+
 
         ## =======================================================================================================
         ## Create dict for menu buttons and tab windows
@@ -137,13 +95,12 @@ class MyWindow(QMainWindow):
             self.btn_customer: Customer(),
             self.btn_product: Product(),
             self.btn_plans: Plans(),
+            self.btn_cost: Costs(),
             
             self.btn_order: Rep_Orders(),
             self.btn_delivery: Rep_Delivery(),
             self.btn_invoice: Rep_Invoices(),
-            self.btn_bonus_scheme: Bon_Scheme(),
-            self.btn_cost: Costs(),
-            self.btn_basePL: BasePL()
+
         }
 
         ## =======================================================================================================
@@ -162,13 +119,13 @@ class MyWindow(QMainWindow):
         self.btn_customer.clicked.connect(self.show_selected_window)
         self.btn_product.clicked.connect(self.show_selected_window)
         self.btn_plans.clicked.connect(self.show_selected_window)
+        self.btn_cost.clicked.connect(self.show_selected_window)
         
         self.btn_order.clicked.connect(self.show_selected_window)
         self.btn_delivery.clicked.connect(self.show_selected_window)
         self.btn_invoice.clicked.connect(self.show_selected_window)
         self.btn_bonus_scheme.clicked.connect(self.show_selected_window)
-        self.btn_cost.clicked.connect(self.show_selected_window)
-        self.btn_basePL.clicked.connect(self.show_selected_window)
+
 
         ## =======================================================================================================
 

@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
+from pages_functions.cost import Costs
 from config import Material_file, All_data_file, Customer_file, Contract_file
 
 class Home(QWidget):
@@ -19,6 +20,7 @@ class Home(QWidget):
         self.product_module = Product()
         self.managers_module = Managers()
         self.customer_module = Customer()
+        self.cost_module = Costs()
 
     def setup_ui(self):
         """Настройка интерфейса с кнопками"""
@@ -96,6 +98,9 @@ class Home(QWidget):
             # Обновляем справочник клиентов и договоров
             self.customer_module.run_customer_func(Customer_file, All_data_file)
             self.customer_module.run_contract_func(Contract_file)
+            
+            # Обновляем справочник затрат (Costs)
+            self.cost_module.run_cost_func()
             
             self.show_message("Все справочники успешно обновлены!")
         except Exception as e:

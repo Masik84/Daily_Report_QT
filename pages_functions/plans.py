@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
-from sqlalchemy import text
+
+from sqlalchemy import insert
 from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication,
                               QTableWidgetItem, QWidget)
@@ -11,8 +12,7 @@ import locale
 import time, datetime
 
 from db import db, engine
-from models import (Calendar, CompanyPlan, CustomerPlan, TeamLead, Holding, 
-                   Sector, Manager, STL, ABC_cat)
+from models import Calendar, CompanyPlan, CustomerPlan, TeamLead, Holding, Sector, Manager, STL, ABC_list
 from config import All_data_file
 from wind.pages.plans_ui import Ui_Form
 
@@ -100,27 +100,43 @@ class Plans(QWidget):
         return self._cached_calendar.copy()
 
     def read_calendar_file(self, file_path):
-        """Чтение данных календаря из Excel с строгой проверкой формата дат"""
+        """Чтение и валидация данных календаря из Excel"""
         dtype_cal = {
             "Year": int, "Quarter": int, "Month": int, 
             "Week of Year": int, "Week of Month": int, "NETWORKDAYS": int
         }
         
         try:
-            calendar = pd.read_excel(file_path, sheet_name="Календарь", dtype=dtype_cal)
+            # Чтение данных с явным указанием формата даты
+            calendar = pd.read_excel(
+                file_path, 
+                sheet_name="Календарь", 
+                dtype=dtype_cal)
             
-            # Строгая проверка формата дат без преобразования в NaN
-            calendar["День"] = pd.to_datetime(calendar["День"], format="%d.%m.%Y", errors="raise")
+            # Удаление строк с некорректными датами
+            calendar = calendar[calendar["День"].notna()]
+            calendar["День"] = pd.to_datetime(calendar["День"], format="%d.%m.%Y", errors="coerce")
+
+            calendar["День"] = calendar["День"].dt.normalize()
+            calendar = calendar.drop_duplicates(subset=["День"])
             
-            calendar = calendar[["День", "Year", "Quarter", "Month", "Week of Year", "Week of Month", "NETWORKDAYS"]]
+            # Проверка обязательных полей
+            required_columns = ["День", "Year", "Quarter", "Month", "Week of Year", "Week of Month", "NETWORKDAYS"]
+            if not all(col in calendar.columns for col in required_columns):
+                missing = set(required_columns) - set(calendar.columns)
+                raise ValueError(f"Отсутствуют обязательные колонки: {missing}")
+                
+            # Переименование колонок
             calendar = calendar.rename(columns={
                 "День": "Day",
                 "Week of Year": "Week_of_Year",
                 "Week of Month": "Week_of_Month"
             })
+            
             return calendar.to_dict('records')
+            
         except Exception as e:
-            raise Exception(f"Ошибка чтения календаря: {str(e)}")
+            raise Exception(f"Ошибка чтения файла календаря: {str(e)}")
     
     def read_company_plans(self, file_path):
         """Чтение планов по компании из Excel с заменой пустых числовых значений на 0"""
@@ -175,24 +191,29 @@ class Plans(QWidget):
             df_2024 = pd.read_excel(file_path, sheet_name='Планы 2024')
             
             # Проверка обязательных колонок для 2024
-            required_2024 = ['Year', 'Quarter', 'Month', 'ХОЛДИНГ', 'Менеджер', 
-                            'SECTOR', 'STL', 'Team Lead', 'Volume Target cust', 
-                            'Margin C3 Target cust']
+            required_2024 = ['Year', 'Quarter', 'Month', 'ХОЛДИНГ', 'Менеджер', 'SECTOR', 'STL', 'Team Lead', 
+                             'Volume Target cust', 'Margin C3 Target cust']
             
-            if not all(col in df_2024.columns for col in required_2024):
-                missing = [col for col in required_2024 if col not in df_2024.columns]
-                raise Exception(f"В листе 'Планы 2024' отсутствуют колонки: {missing}")
+            # Проверяем наличие всех обязательных колонок
+            missing_cols = [col for col in required_2024 if col not in df_2024.columns]
+            if missing_cols:
+                raise Exception(f"В листе 'Планы 2024' отсутствуют колонки: {missing_cols}")
             
             # Выбираем и переименовываем нужные колонки для 2024
             df_2024 = df_2024[required_2024].rename(columns={
-                'Team Lead': 'TeamLead'
-            })
+                    'Team Lead': 'TeamLead', 
+                    'ХОЛДИНГ': 'Holding', 
+                    'Менеджер': 'Manager', 
+                    'SECTOR': 'Sector',
+                    'Volume Target cust': 'Volume_Target_cust',
+                    'Margin C3 Target cust': 'Margin_C3_Target_cust'
+                })
             
             # Добавляем отсутствующие колонки для 2024
             df_2024['Week_of_Year'] = 0
             df_2024['Week_of_Month'] = 0
-            df_2024['Revenue Target cust'] = 0
-            df_2024['Margin C4 Target cust'] = 0
+            df_2024['Revenue_Target_cust'] = 0
+            df_2024['Margin_C4_Target_cust'] = 0
             
             # Чтение данных за 2025 год
             df_2025 = pd.read_excel(file_path, sheet_name='Планы 2025 (год)')
@@ -202,122 +223,98 @@ class Plans(QWidget):
                             'Team Lead', 'Year Volume', 'Year Revenue', 
                             'Year Margin C3', 'Year Margin C4']
             
-            if not all(col in df_2025.columns for col in required_2025):
-                missing = [col for col in required_2025 if col not in df_2025.columns]
-                raise Exception(f"В листе 'Планы 2025 (год)' отсутствуют колонки: {missing}")
+            missing_cols = [col for col in required_2025 if col not in df_2025.columns]
+            if missing_cols:
+                raise Exception(f"В листе 'Планы 2025 (год)' отсутствуют колонки: {missing_cols}")
             
-            # Преобразование данных 2025 года
-            df_2025 = self.calculate_weekly_plan(df_2025.rename(columns={'Team Lead': 'TeamLead'}))
+            df_2025 = df_2025.rename(columns={
+                'Team Lead': 'TeamLead', 
+                'ХОЛДИНГ': 'Holding', 
+                'Менеджер': 'Manager', 
+                'SECTOR': 'Sector',
+            })
             
+            df_2025 = self.calculate_weekly_plan(df_2025)
+            df_2025 = df_2025.rename(columns={
+                                            'Year Volume': 'Volume_Target_cust',
+                                            'Year Revenue': 'Revenue_Target_cust',
+                                            'Margin C3 Target cust': 'Margin_C3_Target_cust',
+                                            'Margin C4 Target cust': 'Margin_C4_Target_cust'})
             # Объединение данных
             common_columns = [
                 'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
-                'ХОЛДИНГ', 'Менеджер', 'SECTOR', 'STL', 'TeamLead',
-                'Volume Target cust', 'Revenue Target cust',
-                'Margin C3 Target cust', 'Margin C4 Target cust'
+                'Holding', 'Manager', 'Sector', 'STL', 'TeamLead',
+                'Volume_Target_cust', 'Revenue_Target_cust',
+                'Margin_C3_Target_cust', 'Margin_C4_Target_cust'
             ]
+            
+            # Убедимся, что все колонки существуют перед объединением
+            df_2024 = df_2024[[col for col in common_columns if col in df_2024.columns]]
+            df_2025 = df_2025[[col for col in common_columns if col in df_2025.columns]]
             
             df = pd.concat([df_2024, df_2025], ignore_index=True)
             
-            # Список числовых колонок для обработки
             numeric_cols = [
                 'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
-                'Volume Target cust', 'Revenue Target cust',
-                'Margin C3 Target cust', 'Margin C4 Target cust'
+                'Volume_Target_cust', 'Revenue_Target_cust',
+                'Margin_C3_Target_cust', 'Margin_C4_Target_cust'
             ]
             
             # Замена пустых значений в числовых колонках на 0
             for col in numeric_cols:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
             
             df['Status'] = 'План'
             
-            return df[common_columns].to_dict('records')
+            return df.to_dict('records')
             
         except Exception as e:
             raise Exception(f"Ошибка чтения планов по клиентам: {str(e)}")
     
     def calculate_weekly_plan(self, plans_df):
         """Преобразование годовых планов в недельные с использованием данных из БД"""
-        start = time.perf_counter()
         
         try:
             # 1. Получаем данные календаря из БД
             calendar_df = self.get_calendar_from_db()
             plan_years = plans_df["Year"].unique().tolist()
             calendar_df = calendar_df[calendar_df["Year"].isin(plan_years)]
+            calendar_grouped = calendar_df.groupby(["Year", "Quarter", "Month", "Week_of_Year", "Week_of_Month"])["NETWORKDAYS"].agg("sum").reset_index()
             
-            # Группируем календарь по неделям (аналог Excel)
-            calendar_grouped = calendar_df.groupby(
-                ["Year", "Quarter", "Month", "Week_of_Year", "Week_of_Month"]
-            )["NETWORKDAYS"].sum().reset_index()
+            plan_phasing_df = pd.read_excel(All_data_file, sheet_name="Plan phasing")
             
-            # 2. Создаем фиктивный plan_phasing_df с распределением по месяцам
-            # (так как оригинальная таблица PlanPhasing отсутствует)
-            months = range(1, 13)
-            plan_phasing_df = pd.DataFrame({
-                'Year': plan_years * 12,
-                'Month': sorted(months * len(plan_years)),
-                '%': [0.08, 0.07, 0.09, 0.08, 0.08, 0.09, 
-                    0.07, 0.08, 0.09, 0.09, 0.09, 0.09] * len(plan_years)
-            })
-            
-            # 3. Объединяем планы с фазингом (аналог Excel)
             monthly_plans = plans_df.copy()
-            monthly_plans = pd.merge(
-                monthly_plans, 
-                plan_phasing_df, 
-                on=["Year", "Month"], 
-                how="left"
-            )
-            
+            monthly_plans = pd.merge(monthly_plans, plan_phasing_df, on=["Year"], how="left")
             if monthly_plans.empty:
-                print("Warning: Monthly plans DataFrame is empty after the merge.")
+                print("Warning: Monthly plans DataFrame is empty after the merge. Check your merge keys.")
                 return pd.DataFrame()
 
-            # 4. Расчет месячных показателей (сохранена оригинальная логика из Excel)
+            # 4. Расчет месячных показателей
             def calculate_month_values(row, col_name):
-                # Считаем сумму годовых значений для каждой строки
-                return plans_df.loc[
-                    (plans_df['ХОЛДИНГ'] == row['ХОЛДИНГ']) & 
-                    (plans_df['Менеджер'] == row['Менеджер']), 
-                    f'Year {col_name}'
-                ].sum()
+                return plans_df.loc[(plans_df['Holding'] == row['Holding']) & (plans_df['Manager'] == row['Manager']), f'Year {col_name}'].sum()
 
-            monthly_plans['Month Volume'] = monthly_plans.apply(
-                lambda row: calculate_month_values(row, 'Volume') * row['%'], axis=1)
-            monthly_plans['Month Revenue'] = monthly_plans.apply(
-                lambda row: calculate_month_values(row, 'Revenue') * row['%'], axis=1)
-            monthly_plans['Month Margin C3'] = monthly_plans.apply(
-                lambda row: calculate_month_values(row, 'Margin C3') * row['%'], axis=1)
-            monthly_plans['Month Margin C4'] = monthly_plans.apply(
-                lambda row: calculate_month_values(row, 'Margin C4') * row['%'], axis=1)
+            monthly_plans['Month Volume'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Volume') * row['%'], axis=1)
+            monthly_plans['Month Revenue'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Revenue') * row['%'], axis=1)
+            monthly_plans['Month Margin C3'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Margin C3') * row['%'], axis=1)
+            monthly_plans['Month Margin C4'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Margin C4') * row['%'], axis=1)
 
             # 5. Объединяем с календарем для получения недельных данных
-            weekly_plans = pd.merge(
-                calendar_grouped, 
-                monthly_plans, 
-                on=["Year", "Month"],  
-                how="left"
-            )
-            
+            weekly_plans = pd.merge( calendar_df, monthly_plans, on=["Year", "Month"],  how="left", )
             if weekly_plans.empty:
-                print("Warning: Weekly plans DataFrame is empty after the merge.")
+                print("Warning: Weekly plans DataFrame is empty after the merge. Check your merge keys.")
                 return pd.DataFrame()
 
-            # 6. Расчет еженедельных показателей (сохранена оригинальная логика из Excel)
+            # 6. Расчет еженедельных показателей
             def calculate_weekly_target(row, col_name):
-                # Числитель: SUMIFS по Year, Month, ХОЛДИНГ, Менеджер
                 numerator = monthly_plans.loc[
                     (monthly_plans['Year'] == row['Year']) &
                     (monthly_plans['Month'] == row['Month']) &
-                    (monthly_plans['ХОЛДИНГ'] == row['ХОЛДИНГ']) &
-                    (monthly_plans['Менеджер'] == row['Менеджер']),
+                    (monthly_plans['Holding'] == row['Holding']) &
+                    (monthly_plans['Manager'] == row['Manager']),
                     f'Month {col_name}'
                 ].sum()
 
-                # Знаменатель: сумма NETWORKDAYS по Year и Month
                 denominator = calendar_grouped.loc[
                     (calendar_grouped['Year'] == row['Year']) &
                     (calendar_grouped['Month'] == row['Month']),
@@ -329,60 +326,57 @@ class Plans(QWidget):
                 except ZeroDivisionError:
                     return 0
 
-            weekly_plans['Volume Target cust'] = weekly_plans.apply(
-                lambda row: calculate_weekly_target(row, 'Volume'), axis=1)
-            weekly_plans['Revenue Target cust'] = weekly_plans.apply(
-                lambda row: calculate_weekly_target(row, 'Revenue'), axis=1)
-            weekly_plans['Margin C3 Target cust'] = weekly_plans.apply(
-                lambda row: calculate_weekly_target(row, 'Margin C3'), axis=1)
-            weekly_plans['Margin C4 Target cust'] = weekly_plans.apply(
-                lambda row: calculate_weekly_target(row, 'Margin C4'), axis=1)
+            weekly_plans['Volume Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Volume'), axis=1)
+            weekly_plans['Revenue Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Revenue'), axis=1)
+            weekly_plans['Margin C3 Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C3'), axis=1)
+            weekly_plans['Margin C4 Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C4'), axis=1)
 
             # Заполняем нулями пропущенные значения
             weekly_plans = weekly_plans.fillna(0)
-            
-            # Переименовываем колонки для соответствия БД
-            weekly_plans = weekly_plans.rename(columns={
-                'ХОЛДИНГ': 'Holding',
-                'Менеджер': 'Manager',
-                'SECTOR': 'Sector',
-                'Team Lead': 'TeamLead'
-            })
-            
-            print(f"Планы преобразованы за {time.perf_counter() - start:.2f} сек.")
             return weekly_plans
             
         except Exception as e:
             print(f"Ошибка в calculate_weekly_plan: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return pd.DataFrame()
     
     def update_calendar(self, data):
-        """Обновление календаря через ORM с проверкой уникальности дат"""
+        """Обновление календаря с проверкой существующих записей"""
         if not data:
             return
 
         try:
-            # Получаем только те даты, которые есть в новых данных
-            new_days = {row['Day'] for row in data}
-            existing_days = {c.Day for c in db.query(Calendar.Day).filter(Calendar.Day.in_(new_days)).all()}
+            # Получаем список всех дат из входных данных (уже как date объекты)
+            input_dates = {pd.Timestamp(row['Day']).to_pydatetime().date() for row in data}
             
-            to_insert = []
+            # Запрос к базе для получения существующих дат
+            existing_records = db.query(Calendar.Day).filter(Calendar.Day.in_(input_dates)).all()
+            existing_dates = {record.Day for record in existing_records}
             
-            for row in data:
-                if row['Day'] not in existing_days:
-                    to_insert.append(Calendar(**row))
+            # Фильтруем только новые записи
+            new_records = [
+                row for row in data 
+                if pd.Timestamp(row['Day']).to_pydatetime().date() not in existing_dates
+            ]
             
-            if to_insert:
-                db.bulk_save_objects(to_insert)
-                db.commit()
-                print(f"Добавлено {len(to_insert)} записей в календарь")
+            if not new_records:
+                return
                 
-            if hasattr(self, '_cached_calendar'):
-                del self._cached_calendar
-                
-        except Exception as e:
+            # Вставка с обработкой конфликтов
+            stmt = insert(Calendar).values(new_records)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['Day'])
+            db.execute(stmt)
+            db.commit()
+            
+        except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Ошибка сохранения календаря: {str(e)}")
+        except Exception as e:
+            db.rollback()
+            raise Exception(f"Неожиданная ошибка: {str(e)}")
+        finally:
+            db.close()
                 
     def update_company_plans(self, data):
         """Обновление планов компании с правильными связями"""
@@ -390,11 +384,14 @@ class Plans(QWidget):
             return
 
         try:
-            # Получаем существующие записи
+            # Получаем существующие записи с join на ABC_list
             existing_plans = {
-                (c.calendar.Year, c.calendar.Month, c.calendar.Week_of_Year, 
-                c.TeamLead_id, c.ABC): c.id 
-                for c in db.query(CompanyPlan).join(CompanyPlan.calendar).all()
+                (c.calendar.Year, c.calendar.Month, c.calendar.Week_of_Year,
+                c.TeamLead_id, c.abc_list.ABC_category): c.id
+                for c in db.query(CompanyPlan)
+                    .join(CompanyPlan.calendar)
+                    .join(CompanyPlan.abc_list)
+                    .all()
             }
             
             to_insert = []
@@ -422,17 +419,16 @@ class Plans(QWidget):
                 
                 plan_data = {
                     'Work_Days': row['Work_Days'],
-                    'ABC': row.get('ABC'),
-                    'Month_vol': row.get('Month_vol'),
-                    'Month_Revenue': row.get('Month_Revenue'),
-                    'Month_Margin': row.get('Month_Margin'),
+                    'Month_vol': row.get('Month_vol', 0),
+                    'Month_Revenue': row.get('Month_Revenue', 0),
+                    'Month_Margin': row.get('Month_Margin', 0),
                     'Volume_Target_total': row['Volume_Target_total'],
                     'Revenue_Target_total': row['Revenue_Target_total'],
                     'Margin_Target_total': row['Margin_Target_total'],
                     'Status': row.get('Status', 'План'),
                     'TeamLead_id': self._get_id(TeamLead, 'TeamLead_name', row['TeamLead']),
-                    'ABC_category_id': self._get_id(ABC_cat, 'ABC_category', row.get('ABC')),
-                    'calendar_id': calendar.id  # Важная связь
+                    'abc_category_id': self._get_id(ABC_list, 'ABC_category', row.get('ABC')),
+                    'calendar_id': calendar.id
                 }
                 
                 if key in existing_plans:
@@ -481,9 +477,9 @@ class Plans(QWidget):
                 'Week_of_Year': row.get('Week_of_Year'),
                 'Week_of_Month': row.get('Week_of_Month'),
                 'Volume_Target_cust': row['Volume_Target_cust'],
-                'Revenue_Target_cust': row.get('Revenue_Target_cust', 0),
-                'Margin_C3_Target_cust': row['Margin_C3_Target_cust'],
-                'Margin_C4_Target_cust': row.get('Margin_C4_Target_cust', 0),
+                'Revenue_Target_cust': row.get('Revenue Target cust', 0),
+                'Margin_C3_Target_cust': row['Margin C3 Target cust'],
+                'Margin_C4_Target_cust': row.get('Margin C4 Target cust', 0),
                 'Status': row.get('Status', 'План'),
                 'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
                 'Manager_id': self._get_id(Manager, 'Manager_name', row['Manager']),
@@ -553,11 +549,13 @@ class Plans(QWidget):
                 Calendar.Week_of_Year,
                 Calendar.Week_of_Month,
                 TeamLead.TeamLead_name.label('TeamLead'),
-                CompanyPlan.ABC,
+                ABC_list.ABC_category.label('ABC'),
                 CompanyPlan.Volume_Target_total,
                 CompanyPlan.Revenue_Target_total,
                 CompanyPlan.Margin_Target_total
-            ).join(CompanyPlan.calendar).join(CompanyPlan.team_lead)
+            ).join(CompanyPlan.calendar
+            ).join(CompanyPlan.team_lead
+            ).join(ABC_list, CompanyPlan.abc_category_id == ABC_list.id)
             
             if year != '-':
                 query = query.filter(Calendar.Year == int(year))
@@ -589,6 +587,8 @@ class Plans(QWidget):
         except Exception as e:
             print(f"Ошибка при загрузке планов компании: {str(e)}")
             return pd.DataFrame()
+        finally:
+            db.close()
 
     def get_customer_plans_from_db(self, year, quarter, month, tl, kam, holding):
         """Получение планов по клиентам из БД с обработкой пустого результата"""
@@ -631,6 +631,8 @@ class Plans(QWidget):
         except Exception as e:
             print(f"Ошибка при загрузке планов клиентов: {str(e)}")
             return pd.DataFrame()
+        finally:
+            db.close()
 
     def _display_data(self, df):
         """Отображение данных в таблице с обработкой пустого DataFrame"""

@@ -1,5 +1,14 @@
-from sqlalchemy import create_engine, Column, Integer, String, Numeric, ForeignKey, Date, Index, UniqueConstraint
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+naming_convention = {
+    "ix": 'ix_%(column_0_label)s',
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Date, Index, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from db import Base, engine
@@ -26,7 +35,6 @@ class Manager(Base):
     hyundai_dealers = relationship("Hyundai_Dealer", back_populates="manager")
     customer_plans = relationship("CustomerPlan", back_populates="manager")
     
-
 class STL(Base):
     __tablename__ = 'stls'
     
@@ -37,7 +45,6 @@ class STL(Base):
     
     managers = relationship("Manager", back_populates="stl")
     customer_plans = relationship("CustomerPlan", back_populates="stl")
-
 
 class TeamLead(Base):
     __tablename__ = 'team_leads'
@@ -51,7 +58,6 @@ class TeamLead(Base):
     managers = relationship("Manager", back_populates="team_lead")
     company_plans = relationship("CompanyPlan", back_populates="team_lead")
     customer_plans = relationship("CustomerPlan", back_populates="team_lead")
-
 
 class Customer(Base):
     __tablename__ = 'customers'
@@ -69,7 +75,6 @@ class Customer(Base):
     holding = relationship("Holding", back_populates="customers")
     contracts = relationship("Contract", back_populates="customer")
     
-    
 class Holding(Base):
     __tablename__ = 'holdings'
     
@@ -79,7 +84,6 @@ class Holding(Base):
     customers = relationship("Customer", back_populates="holding")
     customer_plans = relationship("CustomerPlan", back_populates="holding")
 
-
 class Sector(Base):
     __tablename__ = 'sectors'
     
@@ -87,7 +91,6 @@ class Sector(Base):
     Sector_name = Column(String, unique=True, nullable=False)
     
     customers = relationship("Customer", back_populates="sector")
-
 
 class Contract(Base):
     __tablename__ = 'contracts'
@@ -105,7 +108,6 @@ class Contract(Base):
     # Связи
     customer = relationship("Customer", back_populates="contracts")
     manager = relationship("Manager", back_populates="contracts")
-
 
 class Hyundai_Dealer(Base):
     __tablename__ = 'hyundai_dealers'
@@ -130,46 +132,88 @@ class Hyundai_Dealer(Base):
     def HasDealerCode(self):
         return self.Dealer_code is not None
     
+class TNVED(Base):
+    __tablename__ = 'tnved'
     
-class Material(Base):
-    __tablename__ = 'material'
+    id = Column(Integer, primary_key=True)
+    code = Column(String, unique=True, nullable=False)  # ТН ВЭД код
+    
+    # Связи
+    product_groups = relationship("Product_Group", back_populates="tnved")
+    ecofee_amounts = relationship("EcoFee_amount", back_populates="tnved")
+    ecofee_standards = relationship("EcoFee_standard", back_populates="tnved")
+    customs_rates = relationship("Customs_Rate", back_populates="tnved")
 
-    Code = Column(String, primary_key=True)
-    Article = Column(String)
-    Material_Name = Column(String, nullable=False, index=True)
-    Full_name = Column(String)
+class Product_Group(Base):
+    __tablename__ = 'product_group'
+    
+    id = Column(String, primary_key=True)  # Код группы
+    Product_name = Column(String)  # Product name
+    TNVED_id = Column(Integer, ForeignKey('tnved.id', name='fk_product_group_tnved'))  # Ссылка на ТН ВЭД
+    
+    # Связи
+    tnved = relationship("TNVED", back_populates="product_groups")
+    product_names = relationship("Product_Names", back_populates="product_group")
+
+class Product_Names(Base):
+    __tablename__ = 'product_names'
+    
+    id = Column(Integer, primary_key=True)
+    Product_name = Column(String, unique=True, nullable=False)
+    Product_Group_id = Column(String, ForeignKey('product_group.id', name='fk_product_names_product_group'))
+    
+    # Связи
+    product_group = relationship("Product_Group", back_populates="product_names")
+    materials = relationship("Materials", back_populates="product_name")
+    abc_cat = relationship("ABC_cat", back_populates="product_name")
+    
+class Materials(Base):
+    __tablename__ = 'material'
+    
+    Code = Column(String, primary_key=True)  # Код
+    Article = Column(String)  # Артикул
+    Full_name = Column(String)  # Полное наименование
     Brand = Column(String)
     Family = Column(String)
-    Product_name = Column(String)
-    Product_type = Column(String)
-    UoM = Column(String)
-    Report_UoM = Column(String)
-    Package_type = Column(String)
-    Items_per_Package = Column(Integer)
-    Items_per_Set = Column(Integer)
-    Package_Volume = Column(Numeric)
-    Net_weight = Column(Numeric)
-    Gross_weight = Column(Numeric)
-    Density = Column(Numeric)
-    TNVED = Column(String)
-    Excise = Column(String)
+    Product_type = Column(String)  # Type
+    UoM = Column(String)  # Единица
+    Report_UoM = Column(String)  # Единица измерения отчетов
+    Package_type = Column(String)  # Вид упаковки
+    Items_per_Package = Column(Integer)  # Количество в упаковке
+    Items_per_Set = Column(Integer)  # Шт в комплекте
+    Package_Volume = Column(Numeric)  # Упаковка(Литраж)
+    Net_weight = Column(Numeric)  # Нетто
+    Gross_weight = Column(Numeric)  # Брутто
+    Density = Column(Numeric)  # Плотность
+    Excise = Column(String)  # Акциз
     
-    abc_categories = relationship("ABC_cat", back_populates="material")
+    Product_Names_id = Column(Integer, ForeignKey('product_names.id', name='fk_materials_product_names'))
+    
+    # Связи
+    product_name = relationship("Product_Names", back_populates="materials")
 
+class ABC_list(Base):
+    __tablename__ = 'abc_list'
+    
+    id = Column(Integer, primary_key=True)
+    ABC_category = Column(String(10), unique=True, nullable=False)  # 'A', 'B', 'C', 'D'
+    
+    # Связи
+    abc_cat = relationship("ABC_cat", back_populates="abc_list")  # Изменили с abc_records на abc_cat
+    company_plans = relationship("CompanyPlan", back_populates="abc_list")
 
 class ABC_cat(Base):
     __tablename__ = 'abc_cat'
     
     id = Column(Integer, primary_key=True)
-    material_code = Column(String, ForeignKey('material.Code', name='fk_abc_material'))
+    product_name_id = Column(Integer, ForeignKey('product_names.id', name='fk_abc_cat_product_names'))
+    abc_list_id = Column(Integer, ForeignKey('abc_list.id', name='fk_abc_cat_abc_list'))
     Start_date = Column(Date)
     End_date = Column(Date)
-    ABC_category = Column(String)
     
     # Связи
-    material = relationship("Material", back_populates="abc_categories")
-    company_plans = relationship("CompanyPlan", back_populates="abc_category")
-
+    product_name = relationship("Product_Names", back_populates="abc_cat")
+    abc_list = relationship("ABC_list", back_populates="abc_cat")
 
 class Supplier(Base):
     __tablename__ = 'supplier'
@@ -179,8 +223,7 @@ class Supplier(Base):
     Imp_Loc = Column(String)
     Customs = Column(String)
     
-    
-class TaxFee(Base):
+class Fees(Base):
     __tablename__ = 'taxfee'
     
     __table_args__ = (
@@ -198,35 +241,37 @@ class TaxFee(Base):
     Money_cost = Column(Numeric)            # Ст-ть Денег
     Additional_money_percent = Column(Numeric)  # Доп% денег
     
-    
-class EcoFee_amount(Base):
+class EcoFee_amount(Base):   #экосбор_ставки
     __tablename__ = 'ecofee_amount'
     
     id = Column(Integer, primary_key=True)
     merge = Column(String, unique=True)
-    TNVED = Column(String)
+    TNVED_id = Column(Integer, ForeignKey('tnved.id', name='fk_ecofee_amount_tnved'))
     Year = Column(Integer)
     ECO_amount = Column(Numeric)
     
-    
-class EcoFee_standard(Base):
+    tnved = relationship("TNVED", back_populates="ecofee_amounts")
+
+class EcoFee_standard(Base):    #экосбор_норматив
     __tablename__ = 'ecofee_standard'
     
     id = Column(Integer, primary_key=True)
     merge = Column(String, unique=True)
-    TNVED = Column(String)
+    TNVED_id = Column(Integer, ForeignKey('tnved.id', name='fk_ecofee_standard_tnved'))
     Year = Column(Integer)
     ECO_standard = Column(Numeric)
-
+    
+    tnved = relationship("TNVED", back_populates="ecofee_standards")
 
 class Customs_Rate(Base):
     __tablename__ = 'customs_rate'
     
     id = Column(Integer, primary_key=True)
     merge = Column(String, unique=True)
-    TNVED = Column(String)
+    TNVED_id = Column(Integer, ForeignKey('tnved.id', name='fk_customs_rate_tnved'))
     Cust_rate = Column(Numeric(5, 2))
     
+    tnved = relationship("TNVED", back_populates="customs_rates")
 
 class DOCType(Base):
     __tablename__ = 'doc_type'
@@ -237,7 +282,6 @@ class DOCType(Base):
     Transaction = Column(String)
     Doc_type = Column(String)
     
-
 class Calendar(Base):
     __tablename__ = 'calendar'
     
@@ -258,13 +302,11 @@ class Calendar(Base):
         Index('idx_calendar_year_month', 'Year', 'Month'),
     )
 
-
 class CompanyPlan(Base):
     __tablename__ = 'company_plans'
     
     id = Column(Integer, primary_key=True)
     Work_Days = Column(Integer)
-    ABC = Column(String)
     Month_vol = Column(Numeric)
     Month_Revenue = Column(Numeric)
     Month_Margin = Column(Numeric)
@@ -274,18 +316,13 @@ class CompanyPlan(Base):
     Status = Column(String, default='План')
     
     # Связи
-    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
-    ABC_category_id = Column(Integer, ForeignKey('abc_cat.id'))
-    calendar_id = Column(Integer, ForeignKey('calendar.id'), nullable=False)
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id', name='fk_company_plan_teamlead'))
+    calendar_id = Column(Integer, ForeignKey('calendar.id', name='fk_company_plan_calendar'))
+    abc_category_id = Column(Integer, ForeignKey('abc_list.id', name='fk_company_plan_abc_cat'))
     
     team_lead = relationship("TeamLead", back_populates="company_plans")
-    abc_category = relationship("ABC_cat", back_populates="company_plans")
     calendar = relationship("Calendar", back_populates="company_plans")
-    
-    __table_args__ = (
-        Index('idx_company_plan_abc', 'ABC'),
-    )
-
+    abc_list = relationship("ABC_list", back_populates="company_plans")
 
 class CustomerPlan(Base):
     __tablename__ = 'customer_plans'
@@ -298,11 +335,11 @@ class CustomerPlan(Base):
     Status = Column(String, default='План')
     
     # Связи
-    Holding_id = Column(Integer, ForeignKey('holdings.id'))
-    Manager_id = Column(Integer, ForeignKey('managers.id'))
-    STL_id = Column(Integer, ForeignKey('stls.id'))
-    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
-    calendar_id = Column(Integer, ForeignKey('calendar.id'), nullable=False)
+    Holding_id = Column(Integer, ForeignKey('holdings.id', name='fk_customer_plan_holding'))
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_customer_plan_manager'))
+    STL_id = Column(Integer, ForeignKey('stls.id', name='fk_customer_plan_stl'))
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id', name='fk_customer_plan_teamlead'))
+    calendar_id = Column(Integer, ForeignKey('calendar.id', name='fk_customer_plan_calendar'))
     
     holding = relationship("Holding", back_populates="customer_plans")
     manager = relationship("Manager", back_populates="customer_plans")
@@ -311,5 +348,5 @@ class CustomerPlan(Base):
     calendar = relationship("Calendar", back_populates="customer_plans")
     
     
-    
-    
+from sqlalchemy.orm import configure_mappers
+configure_mappers()

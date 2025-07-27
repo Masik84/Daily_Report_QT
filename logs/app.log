@@ -1,0 +1,48 @@
+2025-07-24 15:17:47 - root - INFO - Логирование успешно настроено
+2025-07-24 15:17:47 - root - INFO - Приложение запущено
+2025-07-24 15:17:57 - pages_functions.plans - INFO - Сообщение
+2025-07-24 15:17:57 - pages_functions.plans - ERROR - Ошибка
+2025-07-24 15:23:54 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 15:23:54 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 15:23:54 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 15:23:56 - INFO - pages_functions.plans - plans.py:7 - Сообщение
+2025-07-24 15:23:56 - ERROR - pages_functions.plans - plans.py:8 - Ошибка
+2025-07-24 15:24:06 - ERROR - pages_functions.plans - plans.py:329 - Ошибка в calculate_weekly_plan: 'Week of Year'
+Traceback (most recent call last):
+  File "C:\работа\My_Work_Phoenix\Daily_Report_QT\pages_functions\plans.py", line 273, in calculate_weekly_plan
+    calendar_grouped = calendar_df.groupby(["Year", "Quarter", "Month", "Week of Year", "Week of Month"])["NETWORKDAYS"].agg("sum").reset_index()
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\работа\My_Work_Phoenix\Daily_Report_QT\venv\Lib\site-packages\pandas\core\frame.py", line 9183, in groupby
+    return DataFrameGroupBy(
+           ^^^^^^^^^^^^^^^^^
+  File "C:\работа\My_Work_Phoenix\Daily_Report_QT\venv\Lib\site-packages\pandas\core\groupby\groupby.py", line 1329, in __init__
+    grouper, exclusions, obj = get_grouper(
+                               ^^^^^^^^^^^^
+  File "C:\работа\My_Work_Phoenix\Daily_Report_QT\venv\Lib\site-packages\pandas\core\groupby\grouper.py", line 1043, in get_grouper
+    raise KeyError(gpr)
+KeyError: 'Week of Year'
+2025-07-24 15:27:33 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 15:27:33 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 15:27:33 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 15:27:34 - INFO - pages_functions.plans - plans.py:7 - Сообщение
+2025-07-24 15:27:34 - ERROR - pages_functions.plans - plans.py:8 - Ошибка
+2025-07-24 15:30:41 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 15:30:41 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 15:30:41 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 15:30:42 - INFO - pages_functions.plans - plans.py:7 - Сообщение
+2025-07-24 15:30:42 - ERROR - pages_functions.plans - plans.py:8 - Ошибка
+2025-07-24 16:49:19 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 16:49:19 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 16:49:19 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 16:50:13 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 16:50:13 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 16:50:13 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 16:51:18 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 16:51:18 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 16:51:18 - INFO - root - main.py:6 - Приложение запущено
+2025-07-24 16:51:53 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-24 16:51:53 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-24 16:51:53 - INFO - root - main.py:6 - Приложение запущено
+2025-07-26 19:05:16 - INFO - root - logger_config.py:49 - Логирование успешно настроено. Логи будут записываться в C:\работа\My_Work_Phoenix\Daily_Report_QT\logs\app.log
+2025-07-26 19:05:16 - DEBUG - root - logger_config.py:50 - Текущая рабочая директория: C:\работа\My_Work_Phoenix\Daily_Report_QT
+2025-07-26 19:05:16 - INFO - root - main.py:6 - Приложение запущено

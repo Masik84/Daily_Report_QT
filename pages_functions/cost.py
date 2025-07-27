@@ -1,611 +1,533 @@
-import numpy as np
+import os
 import pandas as pd
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem, QWidget
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_
 from sqlalchemy.exc import SQLAlchemyError
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, QWidget, QHeaderView, QApplication
+from PySide6.QtCore import Qt
 
 from db import db
-# from models import LPC, Batch_data, Products, Stock, Stock_data, oCOGS
-from wind.pages.costs_ui import Ui_Form
-
+from models import Fees, EcoFee_amount, EcoFee_standard, TNVED
+from config import All_data_file
+from wind.pages.taxfees_ui import Ui_Form
 
 class Costs(QWidget):
     def __init__(self):
         super(Costs, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-
+        
+        self._setup_ui()
+        self._setup_connections()
+        self.refresh_all_comboboxes()
+    
+    def _setup_ui(self):
+        """Настройка интерфейса"""
         self.table = self.ui.table
-        self.ui.table.resizeColumnsToContents()
+        self.table.resizeColumnsToContents()
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSortingEnabled(True)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+    
+    def _setup_connections(self):
+        """Настройка сигналов и слотов"""
+        self.ui.btn_open_file.clicked.connect(self.get_file)
+        self.ui.btn_upload_file.clicked.connect(self.upload_data)
+        self.ui.btn_find.clicked.connect(self.find_cost)
+    
+    def get_file(self):
+        """Выбор файла через диалоговое окно"""
+        file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с данными')
+        if file_path:
+            self.ui.label_tax_File.setText(file_path)
         
-        self.ui.btn_lpc_open_file.setToolTip('выбери файл ! ALL DATA !.xlsx')
-        # self.ui.btn_lpc_open_file.clicked.connect(self.get_lpc_file)
-        # self.ui.btn_lpc_upload_file.clicked.connect(self.upload_lpc_data)
-        
-        self.ui.btn_stock_open_file.setToolTip('выбери файл с Остатками')
-        # self.ui.btn_stock_open_file.clicked.connect(self.get_stock_file)
-        # self.ui.btn_stock_upload_file.clicked.connect(self.upload_stock_data)
-        
-        self.ui.btn_batch_open_file.setToolTip('выбери файл с Партиями')
-        # self.ui.btn_batch_open_file.clicked.connect(self.get_batch_file)
-        # self.ui.btn_batch_upload_file.clicked.connect(self.upload_batch_data)
-        
-        self.ui.btn_st_type_open_file.setToolTip('выбери файл с Типами Скодов')
-        # self.ui.btn_st_type_open_file.clicked.connect(self.get_stock_type_file)
-        # self.ui.btn_st_type_upload_file.clicked.connect(self.upload_stock_type_data)
-        # self.ui.btn_ocogs_create.clicked.connect(self.create_ocogs)
-        # self.ui.btn_update_tab.clicked.connect(self.update_table)
+    def upload_data(self):
+        """Загрузка данных в базу - обновление всех таблиц"""
+        try:
+            # Определяем путь к файлу
+            file_path = self.ui.label_tax_File.text()
+            if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
+                file_path = All_data_file
 
+            # Проверка существования файла
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
 
-    def get_lpc_file(self):
-        get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-        if get_file:
-            self.ui.label_lpc_file.setText(get_file[0])
-            
-
-    # def upload_lpc_data(self, LPC_file_xls):
-    #     LPC_file_xls = self.ui.label_lpc_file.text()
-    #     if LPC_file_xls == 'File Path' or LPC_file_xls == 'Database was updated successfully':
-    #             msg = QMessageBox()
-    #             msg.setWindowTitle('Programm Error')
-    #             msg.setText('!!! Please choose the file with LPC Data !!!')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 12pt  \"Segoe UI\";"
-    #                             "color: #ff0000;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
-    #     else:
-    #         lpc_data = self.read_lpc_file(LPC_file_xls)
-    #         self.update_lpc_db(lpc_data)
-    #         msg = QMessageBox()
-    #         msg.setText('Database was updated successfully')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 10pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Information)
-    #         x = msg.exec_()
-    #         self.ui.label_lpc_file.setText('File Path')
-
-
-    # def read_lpc_file(self, LPC_file_xls):
-    #     LPC_df = pd.read_excel(LPC_file_xls, sheet_name='LPC_Full')
-    #     LPC_df = LPC_df[['КССС мат', 'Period', 'LPC_price']]
-    #     LPC_df.rename(columns={'КССС мат' : 'KSSS_prod'}, inplace = True)
-    #     LPC_df['merge'] = LPC_df['KSSS_prod'].astype(str) + LPC_df['Period'].astype(str)
-    #     LPC_df['KSSS_prod'] = LPC_df['KSSS_prod'].astype(int)
-    #     LPC_df['LPC_price'] = LPC_df['LPC_price'].astype(float)
-
-    #     LPC_data = LPC_df.to_dict('records')
-
-    #     return LPC_data
-
-
-    # def update_lpc_db(self, data):
-    #     lpc_for_create = []
-    #     lpc_for_update = []
-    #     for row in data:
-    #         lpc_exists = LPC.query.filter(LPC.merge == str(row['merge'])).count()
-    #         if lpc_exists == 0:
-    #             lpc_list = {'merge' : str(row['merge']),
-    #                             'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                             'Period' : row['Period'],
-    #                             'LPC_price' : row['LPC_price']}
-    #             lpc_for_create.append(lpc_list)
-
-    #         elif lpc_exists > 0:
-    #             lpc_list = {'id' : self.get_id_LPC(str(row['merge'])),
-    #                             'merge' : str(row['merge']),
-    #                             'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                             'Period' : row['Period'],
-    #                             'LPC_price' : row['LPC_price']}
-    #             lpc_for_update.append(lpc_list)
+            try:
+                # Основные операции выполняем в отдельной сессии
+                db.begin()
                 
-    #     db.bulk_insert_mappings(LPC, lpc_for_create)
-    #     db.bulk_update_mappings(LPC, lpc_for_update)
-
-    #     try:
-    #         db.commit()
-    #     except SQLAlchemyError as e:
-    #         print_error(row, "Ошибка целостности данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     except ValueError as e:
-    #         print_error(row, "Неправильный формат данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     return lpc_for_create
-
-
-    # def get_id_LPC(self, merge):
-    #     db_data = LPC.query.filter(LPC.merge == merge).first()
-    #     lpc_id = db_data.id
-
-    #     return lpc_id
-
-
-    # def get_stock_file(self):
-    #     get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-    #     if get_file:
-    #         self.ui.label_stock_file.setText(get_file[0])
-            
-
-    # def upload_stock_data(self, stock_file_xls):
-    #     stock_file_xls = self.ui.label_stock_file.text()
-    #     if stock_file_xls == 'File Path' or stock_file_xls == 'Database was updated successfully':
-    #             msg = QMessageBox()
-    #             msg.setWindowTitle('Programm Error')
-    #             msg.setText('!!! Please choose the file with Stock Data !!!')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 12pt  \"Segoe UI\";"
-    #                             "color: #ff0000;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
-    #     else:
-    #         stock_data = self.read_stock_file(stock_file_xls)
-    #         self.update_Stock_data(stock_data)
-    #         msg = QMessageBox()
-    #         msg.setText('Database was updated successfully')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 10pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Information)
-    #         x = msg.exec_()
-    #         self.ui.label_stock_file.setText('File Path')
-
-
-    # def read_stock_file(self, stock_file_xls):
-    #     # stock_df = pd.read_excel(stock_file_xls, skiprows = 11, thousands='.', decimal=',')
-    #     stock_df = pd.read_excel(stock_file_xls, sheet_name='Sheet1', thousands='.', decimal=',')
-
-    #     stock_df = stock_df[['Период:с', 'КодКССС', 'Завод(код)', 'СклдХранен', 'Партия', 'ГодВрбтк', 
-    #                         'МесВрбтк', 'Завод', 'Наименованиепроизводителя', 
-    #                         'ОстНаНач', 'ОстНачСбЕИ', 'ОстНаКонец', 'ОстКнцСбЕд']]
-        
-    #     stock_df.rename(columns={'Период:с' : 'Period',
-    #                                 'КодКССС' : 'KSSS_prod',
-    #                                 'Наименованиематериала' : 'Product_Name',
-    #                                 'Завод(код)' : 'Stock_code',
-    #                                 'СклдХранен' : 'Stock_Name',
-    #                                 'Партия' : 'Batch',
-    #                                 'ГодВрбтк' : 'Year',
-    #                                 'МесВрбтк' : 'Mnth',
-    #                                 'Завод' : 'Plant',
-    #                                 'Наименованиепроизводителя' : 'Plant_Name',
-    #                                 'ОстНаНач' : 'Qty_start',
-    #                                 'ОстНачСбЕИ' : 'Amount_start',
-    #                                 'ОстНаКонец' : 'Qty_end',
-    #                                 'ОстКнцСбЕд' : 'Amount_end'}, inplace = True)
-        
-    #     stock_df = stock_df[(stock_df['KSSS_prod'] > 0)]
-    #     stock_df['KSSS_prod'] = stock_df['KSSS_prod'].astype(int)
-    #     stock_df['Year'] = stock_df['Year'].astype(int)
-    #     stock_df['Mnth'] = stock_df['Mnth'].astype(int)
-    #     stock_df['Batch'] = stock_df['Batch'].astype(str)
-
-    #     stock_df['Plant'] = stock_df['Plant'].fillna('-')
-    #     stock_df['Plant_Name'] = stock_df['Plant_Name'].fillna('-')
-
-    #     stock_df['Qty_start'] = stock_df['Qty_start'].replace(np.nan, 0)
-    #     stock_df['Qty_end'] = stock_df['Qty_end'].replace(np.nan, 0)
-    #     stock_df['check'] = stock_df.apply(self.alert, axis=1)
-    #     stock_df = stock_df[(stock_df['check'] != 'for_del')]
-    #     stock_df.pop('check')
-
-    #     stock_df['Stock_code'] = stock_df['Stock_code'].astype(str)
-    #     stock_df['Plant'] = stock_df['Plant'].astype(str)
-    #     stock_df['Batch'] = stock_df['Batch'].astype(str)
-    #     stock_df['Amount_start'] = stock_df['Amount_start'].astype(float)
-    #     stock_df['Amount_end'] = stock_df['Amount_end'].astype(float)
-    #     stock_df['Qty_start'] = stock_df['Qty_start'].astype(float)
-    #     stock_df['Qty_end'] = stock_df['Qty_end'].astype(float)
-
-    #     stock_df['Stock_code'] = stock_df.apply(self.correct_Stock, axis=1)
-    #     stock_df['Plant'] = stock_df.apply(self.correct_Plant, axis=1)
-
-    #     stock_df['merge'] = stock_df['Period'].astype(str) + stock_df['KSSS_prod'].astype(str) + stock_df['Stock_code'].astype(str) + stock_df['Batch'].astype(str)
-
-    #     stock_data = stock_df.to_dict('records')
-
-    #     return stock_data
-
-
-    # def correct_Stock(self, row):
-    #     if row['Stock_code'].isdigit() == True:
-    #         if int(row['Stock_code']) < 10:
-    #             return '0' + row['Stock_code']
-    #     else:
-    #         return row['Stock_code']
-        
-        
-    # def correct_Plant(self, row):
-    #     if row['Plant'].isdigit() == True:
-    #         if int(row['Plant']) < 10:
-    #             return '0' + row['Plant']
-    #     else:
-    #         return row['Plant']
-
-
-    # def update_Stock_data(self, data):
-    #     stock_for_create = []
-    #     stock_for_update = []
-    #     for row in data:
-    #         stock_exists = Stock_data.query.filter(Stock_data.merge == str(row['merge'])).count()
-    #         if stock_exists == 0:
-    #             stock_list = {'merge' : str(row['merge']),
-    #                                 'Period' : row['Period'],
-    #                                 'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                                 'stock_id' : self.get_id_stock_type(row['Stock_code']),
-    #                                 'Batch' : row['Batch'],
-    #                                 'Year' : row['Year'],
-    #                                 'Mnth' : row['Mnth'],
-    #                                 'Plant' : row['Plant'],
-    #                                 'Plant_Name' : row['Plant_Name'],
-    #                                 'Qty_start' : row['Qty_start'],
-    #                                 'Amount_start' : row['Amount_start'],
-    #                                 'Qty_end' : row['Qty_end'],
-    #                                 'Amount_end' : row['Amount_end']}
-    #             stock_for_create.append(stock_list)
-
-    #         elif stock_exists > 0:
-    #             stock_list = {'id' : self.get_id_Stock_data(str(row['merge'])),
-    #                                 'merge' : row['merge'],
-    #                                 'Period' : row['Period'],
-    #                                 'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                                 'stock_id' : self.get_id_stock_type(row['Stock_code']),
-    #                                 'Batch' : row['Batch'],
-    #                                 'Year' : row['Year'],
-    #                                 'Mnth' : row['Mnth'],
-    #                                 'Plant' : row['Plant'],
-    #                                 'Plant_Name' : row['Plant_Name'],
-    #                                 'Qty_start' : row['Qty_start'],
-    #                                 'Amount_start' : row['Amount_start'],
-    #                                 'Qty_end' : row['Qty_end'],
-    #                                 'Amount_end' : row['Amount_end']}
-    #             stock_for_update.append(stock_list)
+                try:
+                    # Загружаем данные тарифов
+                    success_fees, msg_fees = self._upload_fees_data(file_path)
+                    # Загружаем данные экосборов
+                    success_eco, msg_eco = self._upload_ecofee_data(file_path)
+                    
+                    if success_fees and success_eco:
+                        db.commit()
+                        self.show_message("Все данные успешно загружены!\n"
+                            f"Тарифы: {msg_fees}\n"
+                            f"Экосборы: {msg_eco}"
+                        )
+                        self.refresh_all_comboboxes()
+                    else:
+                        db.rollback()
+                        error_msg = ""
+                        if not success_fees:
+                            error_msg += f"Ошибка тарифов: {msg_fees}\n"
+                        if not success_eco:
+                            error_msg += f"Ошибка экосборов: {msg_eco}"
+                        self.show_error_message(error_msg)
+                    
+                except Exception as e:
+                    db.rollback()
+                    raise
+                    
+            except SQLAlchemyError as e:
+                raise Exception(f"Ошибка базы данных: {str(e)}")
                 
-    #     db.bulk_insert_mappings(Stock_data, stock_for_create)
-    #     db.bulk_update_mappings(Stock_data, stock_for_update)
-
-    #     try:
-    #         db.commit()
-    #     except SQLAlchemyError as e:
-    #         print_error(row, "Ошибка целостности данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     except ValueError as e:
-    #         print_error(row, "Неправильный формат данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     return stock_for_create
-
-
-    # def get_batch_file(self):
-    #     get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-    #     if get_file:
-    #         self.ui.label_batch_file.setText(get_file[0])
+        except FileNotFoundError as e:
+            self.show_error_message(str(e))
+        except ValueError as e:
+            self.show_error_message(f"Ошибка в данных: {str(e)}")
+        except Exception as e:
+            self.show_error_message(f"Ошибка загрузки: {str(e)}")
+        finally:
+            if db.is_active:
+                db.close()
+    
+    def _upload_fees_data(self, file_path):
+        """Загрузка данных о тарифах"""
+        try:
+            dtype_fees = {"Год": int, "Месяц": int}
+            df = pd.read_excel(file_path, sheet_name="TaxFee", dtype=dtype_fees)
             
-
-    # def upload_batch_data(self, batch_file_xls):
-    #     batch_file_xls = self.ui.label_batch_file.text()
-    #     if batch_file_xls == 'File Path' or batch_file_xls == 'Database was updated successfully':
-    #             msg = QMessageBox()
-    #             msg.setWindowTitle('Programm Error')
-    #             msg.setText('!!! Please choose the file with Batch Data !!!')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 12pt  \"Segoe UI\";"
-    #                             "color: #ff0000;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
-    #     else:
-    #         batch_data = self.read_batch_file(batch_file_xls)
-    #         self.update_Batch_data(batch_data)
-    #         msg = QMessageBox()
-    #         msg.setText('Database was updated successfully')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 10pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Information)
-    #         x = msg.exec_()
-    #         self.ui.label_batch_file.setText('File Path')
-
-
-    # def read_batch_file(self, batch_file_xls):
-    #     batch_df = pd.read_excel(batch_file_xls, sheet_name='Лист1')
-    #     batch_df = batch_df[['Партия', 'КССС Мтрл', 'Количество', 'Сумма']]
-    #     batch_df.rename(columns={'Партия' : 'Batch',
-    #                                 'КССС Мтрл' : 'KSSS_prod',
-    #                                 'Количество' : 'Qty',
-    #                                 'Сумма' : 'Proceeds'}, inplace = True)
-        
-    #     batch_df['KSSS_prod'] = batch_df['KSSS_prod'].astype(int)
-    #     batch_df['Batch'] = batch_df['Batch'].astype(str)
-
-    #     reques = db.query(Stock_data, Products).join(Products
-    #                                                      ).with_entities(Products.KSSS_prod, Stock_data.Batch, Stock_data.Qty_start, 
-    #                                                                      Stock_data.Qty_end, Stock_data.Amount_start, Stock_data.Amount_end)
-    #     db_stock = pd.DataFrame(reques)
-
-    #     db_stock['Amount_start'] = db_stock['Amount_start'].astype(float)
-    #     db_stock['Amount_end'] = db_stock['Amount_end'].astype(float)
-    #     db_stock['Qty_start'] = db_stock['Qty_start'].astype(float)
-    #     db_stock['Qty_end'] = db_stock['Qty_end'].astype(float)
-
-    #     db_stock['Amount'] = db_stock.apply(self.check_Amount, axis=1)
-    #     db_stock.pop('Amount_start')
-    #     db_stock.pop('Amount_end')
-
-    #     db_stock['Qty'] = db_stock.apply(self.check_Qty, axis=1)
-    #     db_stock.pop('Qty_start')
-    #     db_stock.pop('Qty_end')
-
-    #     db_stock['Proceeds'] = (db_stock['Amount'] * (db_stock['Qty']/1000)).round(2)
-    #     db_stock.pop('Amount')
-        
-    #     frames = [batch_df, db_stock]
-    #     batch_df = pd.concat(frames)
-
-    #     batch_df['merge'] = batch_df['Batch'].astype(str) + batch_df['KSSS_prod'].astype(str)
-    #     batch_df['merge'] = batch_df['merge'].astype(str)
-    #     batch_df = batch_df.groupby(['merge', 'Batch', 'KSSS_prod']).sum().reset_index()
-    #     batch_df = batch_df[batch_df['Qty'] != 0]
-
-    #     batch_df['Amount'] = (batch_df['Proceeds']/(batch_df['Qty']/1000)).round(2)
-    #     batch_df.pop('Qty')
-    #     batch_df.pop('Proceeds')
-
-    #     batch_data = batch_df.to_dict('records')
-
-    #     return batch_data
-
-
-    # def update_Batch_data(self, data):
-    #     batch_for_create = []
-    #     batch_for_update = []
-    #     for row in data:
-    #         batch_exists = Batch_data.query.filter(Batch_data.merge == row['merge']).count()
-    #         if batch_exists == 0:
-    #             batch_list = {'merge' : str(row['merge']),
-    #                                 'Batch' : row['Batch'],
-    #                                 'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                                 'Amount' : row['Amount']}
-    #             batch_for_create.append(batch_list)
-
-    #         elif batch_exists > 0:
-    #             batch_list = {'id' : self.get_id_Batch_data(row['merge']),
-    #                                 'merge' : str(row['merge']),
-    #                                 'Batch' : row['Batch'],
-    #                                 'prod_id' : self.get_id_Product(row['KSSS_prod']),
-    #                                 'Amount' : row['Amount']}
-    #             batch_for_update.append(batch_list)
+            column_map = {
+                "Год": "Year", "Месяц": "Month", "Акциз": "Excise",
+                "Тамож. оформление": "Customs_clearance", "Комиссия банка": "Bank_commission",
+                "Эко сбор ст-ть": "Eco_fee_amount", "Эко сбор норм": "Eco_fee_standard",
+                "Транспорт (перемещ), л": "Transportation", "Хранение, л": "Storage",
+                "Ст-ть Денег": "Money_cost", "Доп% денег": "Additional_money_percent"
+            }
+            df = df.rename(columns=column_map)
+            
+            # Обработка процентов
+            percent_cols = ["Bank_commission", "Eco_fee_standard", "Money_cost", "Additional_money_percent"]
+            for col in percent_cols:
+                if col in df.columns:
+                    df[col] = df[col].str.rstrip('%').astype(float) / 100
+            
+            records = df.to_dict('records')
+            
+            existing = {(f.Year, f.Month) for f in db.query(Fees.Year, Fees.Month).all()}
+            
+            to_insert = []
+            to_update = []
+            
+            for record in records:
+                key = (record['Year'], record['Month'])
+                if key in existing:
+                    to_update.append(record)
+                else:
+                    to_insert.append(record)
+            
+            if to_insert:
+                db.bulk_insert_mappings(Fees, to_insert)
+            if to_update:
+                db.bulk_update_mappings(Fees, to_update)
+            
+            return True, "Данные тарифов успешно обновлены"
+        except Exception as e:
+            return False, f"Ошибка загрузки данных тарифов: {str(e)}"
+        finally:
+            db.close()
+    
+    def _upload_ecofee_data(self, file_path):
+        """Загрузка данных об экосборах"""
+        try:
+            dtype_tnved = {"Код ТНВЭД": str}
+            
+            # Чтение данных о ставках
+            df_amount = pd.read_excel(file_path, sheet_name="экосбор_ставки", dtype=dtype_tnved, skiprows=1)
+            df_amount_long = df_amount.melt(id_vars=["Код ТНВЭД", "признак", "группа"], var_name="Год", value_name="Сумма")
+            df_amount_long["Год"] = df_amount_long["Год"].astype(int)
+            
+            # Чтение данных о нормативах
+            df_standard = pd.read_excel(file_path, sheet_name="экосбор_норматив", dtype=dtype_tnved, skiprows=1)
+            df_standard_long = df_standard.melt(id_vars=["Код ТНВЭД", "признак", "группа"], var_name="Год", value_name="Норма")
+            df_standard_long["Год"] = df_standard_long["Год"].astype(int)
+            df_standard_long["Норма"] = df_standard_long["Норма"].str.rstrip('%').astype(float) / 100
+            
+            # Добавляем новые коды ТНВЭД
+            existing_tnved = {t.code for t in db.query(TNVED.code).all()}
+            new_tnved = set(df_amount_long["Код ТНВЭД"].unique()) - existing_tnved
+            
+            if new_tnved:
+                db.bulk_insert_mappings(TNVED, [{"code": code} for code in new_tnved])
+            
+            # Получаем ID всех ТНВЭД
+            tnved_ids = {t.code: t.id for t in db.query(TNVED).all()}
+            
+            # Подготовка данных для вставки
+            amount_data = []
+            for _, row in df_amount_long.iterrows():
+                tnved_id = tnved_ids.get(row["Код ТНВЭД"])
+                if tnved_id:
+                    amount_data.append({
+                        "TNVED_id": tnved_id,
+                        "Year": row["Год"],
+                        "ECO_amount": row["Сумма"],
+                        "merge": f"{row['Код ТНВЭД']}_{row['Год']}"
+                    })
+            
+            standard_data = []
+            for _, row in df_standard_long.iterrows():
+                tnved_id = tnved_ids.get(row["Код ТНВЭД"])
+                if tnved_id:
+                    standard_data.append({
+                        "TNVED_id": tnved_id,
+                        "Year": row["Год"],
+                        "ECO_standard": row["Норма"],
+                        "merge": f"{row['Код ТНВЭД']}_{row['Год']}"
+                    })
+            
+            # Обновление существующих записей
+            existing_amount = {e.merge for e in db.query(EcoFee_amount.merge).all()}
+            existing_standard = {e.merge for e in db.query(EcoFee_standard.merge).all()}
+            
+            to_insert_amount = [d for d in amount_data if d["merge"] not in existing_amount]
+            to_update_amount = [d for d in amount_data if d["merge"] in existing_amount]
+            
+            to_insert_standard = [d for d in standard_data if d["merge"] not in existing_standard]
+            to_update_standard = [d for d in standard_data if d["merge"] in existing_standard]
+            
+            # Выполняем операции
+            if to_insert_amount:
+                db.bulk_insert_mappings(EcoFee_amount, to_insert_amount)
+            if to_update_amount:
+                db.bulk_update_mappings(EcoFee_amount, to_update_amount)
+            
+            if to_insert_standard:
+                db.bulk_insert_mappings(EcoFee_standard, to_insert_standard)
+            if to_update_standard:
+                db.bulk_update_mappings(EcoFee_standard, to_update_standard)
+            
+            return True, "Данные экосборов успешно обновлены"
+        except Exception as e:
+            return False, f"Ошибка загрузки данных экосборов: {str(e)}"
+        finally:
+            db.close()
+    
+    def find_cost(self):
+        """Поиск данных по заданным критериям с учетом всех условий"""
+        try:
+            data_type = self.ui.line_taxfee_type.currentText()
+            
+            # Условие 1: Проверка выбранного типа данных
+            if data_type == "-":
+                self.show_error_message("Выбери тип данных")
+                return
+            
+            if data_type == "Тарифы":
+                year = self.ui.line_Year.currentText()
+                month = self.ui.line_Mnth.currentText()
                 
-    #     db.bulk_insert_mappings(Batch_data, batch_for_create)
-    #     db.bulk_update_mappings(Batch_data, batch_for_update)
-
-    #     try:
-    #         db.commit()
-    #     except SQLAlchemyError as e:
-    #         print_error(row, "Ошибка целостности данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     except ValueError as e:
-    #         print_error(row, "Неправильный формат данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     return batch_for_create
-
-
-    # def create_ocogs(self):
-    #     year = self.ui.line_ed_year.text()
-    #     ed_amount = self.ui.line_ed_amount.text()
-    #     eco_amount = self.ui.line_eco_amount.text()
-
-    #     ocogs_for_create = []
-    #     ocogs_for_update = []
-    #     ocogs_exists = oCOGS.query.filter(oCOGS.year == int(year)).count()
-    #     if ocogs_exists == 0:
-    #         ocogs_list = {'year' : int(year),
-    #                                 'ED' : float(ed_amount),
-    #                                 'EcoFee' : float(eco_amount)}
-    #         ocogs_for_create.append(ocogs_list)
-
-    #     elif ocogs_exists > 0:
-    #         ocogs_list = {'id' : self.get_id_oCOGS(int(year)),
-    #                                 'year' : int(year),
-    #                                 'ED' : float(ed_amount),
-    #                                 'EcoFee' : float(eco_amount)}
-    #         ocogs_for_update.append(ocogs_list)
+                if year == "-" and month == "-":
+                    data = self._get_fees_data()
+                elif year != "-" and month == "-":
+                    data = self._get_fees_data(year=year)
+                elif year != "-" and month != "-":
+                    data = self._get_fees_data(year=year, month=month)
+                elif year == "-" and month != "-":
+                    data = self._get_fees_data(month=month)
                 
-    #     db.bulk_insert_mappings(oCOGS, ocogs_for_create)
-    #     db.bulk_update_mappings(oCOGS, ocogs_for_update)
-    #     db.commit()
-    #     self.ui.line_ed_year.clear()
-    #     self.ui.line_ed_amount.clear()
-    #     self.ui.line_eco_amount.clear()
-
-    #     return ocogs_for_create
-
-
-    # def get_stock_type_file(self):
-    #     get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-    #     if get_file:
-    #         self.ui.label_st_type_file.setText(get_file[0])
-            
-            
-    # def upload_stock_type_data(self, st_type_file_xls):
-    #     st_type_file_xls = self.ui.label_st_type_file.text()
-    #     if st_type_file_xls == 'File Path' or st_type_file_xls == 'Database was updated successfully':
-    #             msg = QMessageBox()
-    #             msg.setWindowTitle('Programm Error')
-    #             msg.setText('!!! Please choose the file with Stock Type Data !!!')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 12pt  \"Segoe UI\";"
-    #                             "color: #ff0000;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
-    #     else:
-    #         st_type_data = self.read_stock_type_file(st_type_file_xls)
-    #         self.update_stock(st_type_data)
-    #         msg = QMessageBox()
-    #         msg.setText('Database was updated successfully')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 10pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Information)
-    #         x = msg.exec_()
-    #         self.ui.label_st_type_file.setText('File Path')
-            
-            
-    # def read_stock_type_file(self, st_type_file_xls):
-    #     st_type_df = pd.read_excel(st_type_file_xls)
-    #     st_type_df = st_type_df[['ПОтг', 'Пункт отгрузки', 'без согласования']]
-
-    #     st_type_df.rename(columns={'ПОтг' : 'Stock_code', 'Пункт отгрузки' : 'Stock_Name', 'без согласования' : 'Type'}, inplace = True)
-        
-    #     st_type_df['Stock_code'] = st_type_df['Stock_code'].astype(str)
-    #     st_type_df.drop_duplicates(subset=['Stock_code'], inplace = True)
-    #     st_type_df['Stock_Name'] = st_type_df['Stock_Name'].str.replace('"', '')
-        
-    #     st_type_df['Type'] = st_type_df.apply(self.check_Type, axis=1)
-
-    #     st_type_data = st_type_df.to_dict('records')
-
-    #     return st_type_data
-
-
-    # def update_stock(self, data):
-    #     st_type_for_create = []
-    #     st_type_for_update = []
-    #     for row in data:
-    #         st_type_exists = Stock.query.filter(Stock.Stock == row['Stock_code']).count()
-
-    #         if st_type_exists == 0:
-    #             st_type_list = {'Stock' : row['Stock_code'], 
-    #                                     'Stock_Name' : row['Stock_Name'],
-    #                                     'Type' : row['Type']}
-    #             st_type_for_create.append(st_type_list)
-
-    #         elif st_type_exists > 0:
-    #             st_type_list = {'id' : self.get_id_stock_type(row['Stock_code']), 
-    #                                     'Stock' : row['Stock_code'], 
-    #                                     'Stock_Name' : row['Stock_Name'],
-    #                                     'Type' : row['Type']}
-    #             st_type_for_update.append(st_type_list)
+                self._display_fees_data(data)
                 
-    #     db.bulk_insert_mappings(Stock, st_type_for_create)
-    #     db.bulk_update_mappings(Stock, st_type_for_update)
-
-    #     try:
-    #         db.commit()
-    #     except SQLAlchemyError as e:
-    #         print_error(row, "Ошибка целостности данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     except ValueError as e:
-    #         print_error(row, "Неправильный формат данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     return st_type_for_create
-
-
-    # def get_id_stock_type(self, Stock_code):
-    #     db_data = Stock.query.filter(Stock.Stock == Stock_code).first()
-    #     st_type_id = db_data.id
-
-    #     return st_type_id
-
-
-    # def check_Type(self, row):
-    #     if row['Type'] == '+':
-    #         return 'yes'
-    #     else:
-    #         return 'no'
-
-
-    # def get_id_Stock_data(self, merge):
-    #     db_data = Stock_data.query.filter(Stock_data.merge == merge).first()
-    #     stock_data_id = db_data.id
-
-    #     return stock_data_id
-
-
-    # def get_id_Batch_data(self, merge):
-    #     db_data = Batch_data.query.filter(Batch_data.merge == merge).first()
-    #     batch_data_id = db_data.id
-
-    #     return batch_data_id
-
-
-    # def get_id_oCOGS(self, year):
-    #     db_data = oCOGS.query.filter(oCOGS.year == year).first()
-    #     ocogs_data_id = db_data.id
-
-    #     return ocogs_data_id
-
-
-    # def alert(self, row):
-    #     if row['Qty_start'] == 0.0 and row['Qty_end'] == 0.0:
-    #         return 'for_del'
-    #     else:
-    #         return 'ok'
-
-
-    # def check_Amount(self, row):
-    #     if row['Amount_start'] == 0.0:
-    #         return row['Amount_end']
-    #     else:
-    #         return row['Amount_start']
-
-
-    # def check_Qty(self, row):
-    #     if row['Qty_start'] == 0:
-    #         return row['Qty_end']
-    #     else:
-    #         return row['Qty_start']
-
-
-    # def update_table(self):
-    #     ocogs_reques = db.execute(select(oCOGS.year, oCOGS.ED, oCOGS.EcoFee)).all()
-    #     ocogs_data = pd.DataFrame(ocogs_reques)
-    #     ocogs_data['year'] = ocogs_data['year'].astype(int)
-    #     ocogs_data['ED'] = ocogs_data['ED'].astype(int)
-    #     ocogs_data['EcoFee'] = ocogs_data['EcoFee'].astype(int)
-
-    #     if ocogs_data.empty == True:
-    #         msg = QMessageBox()
-    #         msg.setText('There is no COGS data in Database. \n'
-    #                             'Close the program and open agan!\n'
-    #                             'Then update Database')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 12pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Critical)
-    #         x = msg.exec_()
-    #     else:
-    #         self.table.setColumnCount(len(ocogs_data.columns))
-    #         self.table.setRowCount(len(ocogs_data.index))
+            elif data_type == "Эко Сбор":
+                tnved_code = self.ui.lineEdit_TNVED.text().strip()
+                year = self.ui.line_Year.currentText()
+                
+                # Условие 3: Все данные если нет фильтров
+                if tnved_code == "-" and year == "-":
+                    data = self._get_ecofee_data()
+                    self._display_ecofee_data(data)
+                    return
+                    
+                # Условие 4: Проверки для ТНВЭД
+                if tnved_code:
+                    # 4.a: Проверка на цифры
+                    if not tnved_code.isdigit():
+                        self.show_error_message("В поле должны быть только цифры")
+                        return
+                    
+                    # 4.b: Проверка существования ТНВЭД
+                    try:
+                        exists = db.query(TNVED).filter(TNVED.code == tnved_code).first() is not None
+                        if not exists:
+                            self.show_error_message("Такого кода ТНВЭД в базе не существует")
+                            return
+                    except Exception as e:
+                        self.show_error_message(f"Ошибка проверки кода ТНВЭД: {str(e)}")
+                        return
+                    finally:
+                        if db.is_active:
+                            db.close()
+                
+                # Применяем фильтры
+                tnved_filter = tnved_code if tnved_code != "-" else None
+                year_filter = year if year != "-" else None
+                
+                data = self._get_ecofee_data(tnved_code=tnved_filter, year=year_filter)
+                self._display_ecofee_data(data)
+                
+        except Exception as e:
+            self.show_error_message(f"Ошибка при поиске данных: {str(e)}")
+        finally:
+            db.close()
             
-    #         for i in range(len(ocogs_data.index)):
-    #             for j in range(len(ocogs_data.columns)):
-    #                 self.table.setItem(i,j,QTableWidgetItem(str(ocogs_data.iloc[i, j])))
+    def _get_fees_data(self, year=None, month=None):
+        """Получение данных о тарифах с фильтрацией"""
+        try:
+            query = db.query(Fees)
+            
+            if year and year != '-':
+                query = query.filter(Fees.Year == int(year))
+            if month and month != '-':
+                query = query.filter(Fees.Month == int(month))
+            
+            fees = query.order_by(Fees.Year, Fees.Month).all()
+            
+            result = []
+            for fee in fees:
+                result.append({
+                    "Год": fee.Year,
+                    "Месяц": fee.Month,
+                    "Акциз": fee.Excise,
+                    "Тамож. оформление": fee.Customs_clearance,
+                    "Комиссия банка": fee.Bank_commission,
+                    "Эко сбор ст-ть": fee.Eco_fee_amount,
+                    "Эко сбор норм": fee.Eco_fee_standard,
+                    "Транспорт (перемещ), л": fee.Transportation,
+                    "Хранение, л": fee.Storage,
+                    "Ст-ть Денег": fee.Money_cost,
+                    "Доп% денег": fee.Additional_money_percent
+                })
+            
+            return result
+        except Exception as e:
+            self.show_error_message(f"Ошибка получения данных тарифов: {str(e)}")
+            return []
+        finally:
+            if db.is_active:
+                db.close()
 
+    def _get_ecofee_data(self, tnved_code=None, year=None):
+        """Получение данных об экосборах с фильтрацией"""
+        try:
+            query = (
+                db.query(
+                    TNVED.code.label("ТНВЭД"),
+                    EcoFee_amount.Year.label("Год"),
+                    EcoFee_amount.ECO_amount.label("Эко Ставка"),
+                    EcoFee_standard.ECO_standard.label("Эко Норматив")
+                )
+                .join(EcoFee_amount, EcoFee_amount.TNVED_id == TNVED.id)
+                .join(EcoFee_standard, and_(
+                    EcoFee_standard.TNVED_id == TNVED.id,
+                    EcoFee_standard.Year == EcoFee_amount.Year
+                ))
+            )
+            
+            if tnved_code:
+                query = query.filter(TNVED.code == tnved_code)
+            if year:
+                query = query.filter(EcoFee_amount.Year == int(year))
+            
+            ecofee_data = query.order_by(TNVED.code, EcoFee_amount.Year).all()
+            
+            result = []
+            for row in ecofee_data:
+                result.append({
+                    "ТНВЭД": row.ТНВЭД,
+                    "Год": row.Год,
+                    "Эко Ставка": row.Эко_Ставка,
+                    "Эко Норматив": row.Эко_Норматив
+                })
+            
+            return result
+        except Exception as e:
+            self.show_error_message(f"Ошибка получения данных экосборов: {str(e)}")
+            return []
+        finally:
+            if db.is_active:
+                db.close()
 
-    # def get_id_Product(self, KSSS_prod):
-    #     if KSSS_prod != 'nan':
-    #         db_data = Products.query.filter(Products.KSSS_prod == KSSS_prod).first()
-    #         product_id = db_data.id
-    #     else:
-    #         product_id = None
+    def _validate_tnved_code(self, tnved_code):
+        """Проверка кода ТНВЭД"""
+        if not tnved_code.isdigit():
+            return False, "В поле должны быть только цифры"
+        
+        try:
+            exists = db.query(TNVED).filter(TNVED.code == tnved_code).first() is not None
+            if not exists:
+                return False, "Такого кода ТНВЭД в базе не существует"
+            return True, None
+        except Exception as e:
+            return False, f"Ошибка проверки кода ТНВЭД: {str(e)}"
+        finally:
+            if db.is_active:
+                db.close()
+    
+    def _display_fees_data(self, data):
+        """Отображение данных о тарифах"""
+        self.table.clearContents()
+        self.table.setRowCount(0)
+        
+        if not data:
+            self.show_message("Нет данных о тарифах для отображения")
+            return
+        
+        headers = list(data[0].keys())
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(data))
+        
+        for row_idx, row_data in enumerate(data):
+            for col_idx, col_name in enumerate(headers):
+                value = row_data[col_name]
+                
+                if col_name in ["Комиссия банка", "Эко сбор норм", "Ст-ть Денег", "Доп% денег"]:
+                    display_value = f"{float(value)*100:.2f}%" if value is not None else ""
+                else:
+                    try:
+                        display_value = f"{float(value):,.2f}".replace(",", " ").replace(".", ",") if value is not None else ""
+                    except (ValueError, TypeError):
+                        display_value = str(value) if value is not None else ""
+                
+                item = QTableWidgetItem(display_value)
+                item.setData(Qt.DisplayRole, value)
+                self.table.setItem(row_idx, col_idx, item)
+    
+    def _display_ecofee_data(self, data):
+        """Отображение данных об экосборах"""
+        self.table.clearContents()
+        self.table.setRowCount(0)
+        
+        if not data:
+            self.show_message("Нет данных об экосборах для отображения")
+            return
+        
+        headers = ["ТНВЭД", "Год", "Эко Ставка", "Эко Норматив"]
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(data))
+        
+        for row_idx, row_data in enumerate(data):
+            for col_idx, col_name in enumerate(headers):
+                value = row_data[col_name]
+                
+                if col_name == "Эко Норматив":
+                    display_value = f"{float(value)*100:.2f}%" if value is not None else ""
+                elif col_name == "Эко Ставка":
+                    try:
+                        display_value = f"{float(value):,.2f}".replace(",", " ").replace(".", ",") if value is not None else ""
+                    except (ValueError, TypeError):
+                        display_value = str(value) if value is not None else ""
+                else:
+                    display_value = str(value) if value is not None else ""
+                
+                item = QTableWidgetItem(display_value)
+                item.setData(Qt.DisplayRole, value)
+                self.table.setItem(row_idx, col_idx, item)
 
-    #     return product_id
+    def refresh_all_comboboxes(self):
+        """Обновление всех выпадающих списков"""
+        self.fill_in_year_list()
+        self.fill_in_mnth_list()
+    
+    def fill_in_year_list(self):
+        """Заполнение списка годов"""
+        try:
+            # Получаем года из Fees
+            years_fees = {y[0] for y in db.query(Fees.Year).distinct().all()}
+            
+            # Получаем года из EcoFee_amount
+            years_ecofee = {y[0] for y in db.query(EcoFee_amount.Year).distinct().all()}
+            
+            # Объединяем и сортируем
+            all_years = sorted(years_fees.union(years_ecofee))
+            
+            self._fill_combobox(self.ui.line_Year, all_years)
+        except Exception as e:
+            self.show_error_message(f"Ошибка при загрузке списка годов: {str(e)}")
+            self._fill_combobox(self.ui.line_Year, [])
+        finally:
+            if db.is_active:
+                db.close()
+    
+    def fill_in_mnth_list(self):
+        """Заполнение списка месяцев"""
+        self._fill_combobox(self.ui.line_Mnth, ['-'] + [str(i) for i in range(1, 13)])
+    
+    def _fill_combobox(self, combobox, items):
+        """Универсальное заполнение комбобокса"""
+        combobox.clear()
+        combobox.addItem('-')
+        if items:
+            combobox.addItems([str(item) for item in sorted(items)])
+
+    def show_message(self, text):
+        """Показать информационное сообщение с кнопкой копирования"""
+        msg = QMessageBox()
+        msg.setText(text)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #f8f8f2;
+                font: 10pt "Tahoma";
+            }
+            QMessageBox QLabel {
+                color: #237508;
+            }
+        """)
+        msg.setIcon(QMessageBox.Information)
+
+        clipboard = QApplication.clipboard()
+        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
+        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        ok_button = msg.addButton(QMessageBox.Ok)
+        ok_button.setDefault(True)
+        copy_button.clicked.connect(lambda: None)
+
+        msg.exec_()
+
+    def show_error_message(self, text):
+        """Показать сообщение об ошибке с кнопкой копирования"""
+        msg = QMessageBox()
+        msg.setText(text)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #f8f8f2;
+                font: 10pt "Tahoma";
+            }
+            QMessageBox QLabel {
+                color: #ff0000;
+            }
+        """)
+        msg.setIcon(QMessageBox.Critical)
+
+        clipboard = QApplication.clipboard()
+        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
+        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        ok_button = msg.addButton(QMessageBox.Ok)
+        ok_button.setDefault(True)
+        copy_button.clicked.connect(lambda: None)
+
+        msg.exec_()
 
 
 

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowNIGVUl.ui'
+## Form generated from reading UI file 'main_windowVTKQqw.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.1
+## Created by: Qt User Interface Compiler version 6.9.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -255,12 +255,6 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_3.addWidget(self.btn_Customers)
 
-        self.btn_Plans = QPushButton(self.updater_page)
-        self.btn_Plans.setObjectName(u"btn_Plans")
-        self.btn_Plans.setFont(font1)
-
-        self.verticalLayout_3.addWidget(self.btn_Plans)
-
         self.btn_Products = QPushButton(self.updater_page)
         self.btn_Products.setObjectName(u"btn_Products")
         self.btn_Products.setMinimumSize(QSize(0, 0))
@@ -270,12 +264,11 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_3.addWidget(self.btn_Products)
 
-        self.btn_Price = QPushButton(self.updater_page)
-        self.btn_Price.setObjectName(u"btn_Price")
-        self.btn_Price.setMinimumSize(QSize(0, 0))
-        self.btn_Price.setFont(font1)
+        self.btn_Plans = QPushButton(self.updater_page)
+        self.btn_Plans.setObjectName(u"btn_Plans")
+        self.btn_Plans.setFont(font1)
 
-        self.verticalLayout_3.addWidget(self.btn_Price)
+        self.verticalLayout_3.addWidget(self.btn_Plans)
 
         self.btn_Costs = QPushButton(self.updater_page)
         self.btn_Costs.setObjectName(u"btn_Costs")
@@ -283,6 +276,13 @@ class Ui_MainWindow(object):
         self.btn_Costs.setCheckable(True)
 
         self.verticalLayout_3.addWidget(self.btn_Costs)
+
+        self.btn_Price = QPushButton(self.updater_page)
+        self.btn_Price.setObjectName(u"btn_Price")
+        self.btn_Price.setMinimumSize(QSize(0, 0))
+        self.btn_Price.setFont(font1)
+
+        self.verticalLayout_3.addWidget(self.btn_Price)
 
         self.verticalSpacer_3 = QSpacerItem(20, 388, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
@@ -526,7 +526,7 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         self.toggleButton.toggled.connect(self.menu_widget.setHidden)
 
-        self.toolBox.setCurrentIndex(0)
+        self.toolBox.setCurrentIndex(1)
         self.toolBox.layout().setSpacing(6)
         self.tabWidget.setCurrentIndex(-1)
 
@@ -540,10 +540,10 @@ class Ui_MainWindow(object):
         self.toolBox.setItemText(self.toolBox.indexOf(self.general_page), QCoreApplication.translate("MainWindow", u"General", None))
         self.btn_Managers.setText(QCoreApplication.translate("MainWindow", u"\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440\u044b", None))
         self.btn_Customers.setText(QCoreApplication.translate("MainWindow", u"\u041a\u043b\u0438\u0435\u043d\u0442\u044b", None))
-        self.btn_Plans.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043b\u0430\u043d\u044b", None))
         self.btn_Products.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442\u044b", None))
-        self.btn_Price.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u0430\u0439\u0441-\u043b\u0438\u0441\u0442\u044b", None))
+        self.btn_Plans.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043b\u0430\u043d\u044b", None))
         self.btn_Costs.setText(QCoreApplication.translate("MainWindow", u"Tax / Fees", None))
+        self.btn_Price.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u0430\u0439\u0441-\u043b\u0438\u0441\u0442\u044b", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.updater_page), QCoreApplication.translate("MainWindow", u"\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438", None))
         self.btn_Delivery.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0443\u043f\u043a\u0438", None))
         self.btn_Order.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u0432", None))
