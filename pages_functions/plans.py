@@ -214,7 +214,7 @@ class Plans(QWidget):
             df_2024['Week_of_Month'] = 0
             df_2024['Revenue_Target_cust'] = 0
             df_2024['Margin_C4_Target_cust'] = 0
-            
+
             # Чтение данных за 2025 год
             df_2025 = pd.read_excel(file_path, sheet_name='Планы 2025 (год)')
             
@@ -233,13 +233,15 @@ class Plans(QWidget):
                 'Менеджер': 'Manager', 
                 'SECTOR': 'Sector',
             })
-            
+
             df_2025 = self.calculate_weekly_plan(df_2025)
+
             df_2025 = df_2025.rename(columns={
                                             'Year Volume': 'Volume_Target_cust',
                                             'Year Revenue': 'Revenue_Target_cust',
                                             'Margin C3 Target cust': 'Margin_C3_Target_cust',
                                             'Margin C4 Target cust': 'Margin_C4_Target_cust'})
+
             # Объединение данных
             common_columns = [
                 'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
@@ -250,10 +252,10 @@ class Plans(QWidget):
             
             # Убедимся, что все колонки существуют перед объединением
             df_2024 = df_2024[[col for col in common_columns if col in df_2024.columns]]
-            df_2025 = df_2025[[col for col in common_columns if col in df_2025.columns]]
+            # df_2025 = df_2025[[col for col in common_columns if col in df_2025.columns]]
             
-            df = pd.concat([df_2024, df_2025], ignore_index=True)
-            
+            # df = pd.concat([df_2024, df_2025], ignore_index=True)
+            df = df_2024.copy()
             numeric_cols = [
                 'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
                 'Volume_Target_cust', 'Revenue_Target_cust',
@@ -477,9 +479,9 @@ class Plans(QWidget):
                 'Week_of_Year': row.get('Week_of_Year'),
                 'Week_of_Month': row.get('Week_of_Month'),
                 'Volume_Target_cust': row['Volume_Target_cust'],
-                'Revenue_Target_cust': row.get('Revenue Target cust', 0),
-                'Margin_C3_Target_cust': row['Margin C3 Target cust'],
-                'Margin_C4_Target_cust': row.get('Margin C4 Target cust', 0),
+                'Revenue_Target_cust': row.get('Revenue_Target_cust', 0),
+                'Margin_C3_Target_cust': row.get('Margin_C3_Target_cust', 0),  # Исправлено здесь
+                'Margin_C4_Target_cust': row.get('Margin_C4_Target_cust', 0),  # И здесь
                 'Status': row.get('Status', 'План'),
                 'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
                 'Manager_id': self._get_id(Manager, 'Manager_name', row['Manager']),

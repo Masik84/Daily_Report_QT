@@ -282,29 +282,58 @@ class DOCType(Base):
     Transaction = Column(String)
     Doc_type = Column(String)
     
+class Year(Base):
+    __tablename__ = 'years'
+    id = Column(Integer, primary_key=True)
+    Year = Column(Integer, unique=True, nullable=False)
+    
+    calendar_entries = relationship("Calendar", back_populates="year")
+
+class Quarter(Base):
+    __tablename__ = 'quarters'
+    id = Column(Integer, primary_key=True)
+    Quarter = Column(Integer, nullable=False)  # 1-4
+    
+    months = relationship("Month", back_populates="quarter")
+    calendar_entries = relationship("Calendar", back_populates="quarter")
+
+class Month(Base):
+    __tablename__ = 'months'
+    id = Column(Integer, primary_key=True)
+    Month = Column(Integer, nullable=False)  # 1-12
+    Quarter_id = Column(Integer, ForeignKey('quarters.id', name='fk_months_Quarter_id_quarters'), nullable=False)
+    
+    quarter = relationship("Quarter", back_populates="months")
+    calendar_entries = relationship("Calendar", back_populates="month")
+
+class Week(Base):
+    __tablename__ = 'weeks'
+    id = Column(Integer, primary_key=True)
+    Week_of_Year = Column(Integer, nullable=False)  # 1-53
+    Week_of_Month = Column(Integer, nullable=False)  # 1-5
+    
+    calendar_entries = relationship("Calendar", back_populates="week")
+
 class Calendar(Base):
     __tablename__ = 'calendar'
-    
     id = Column(Integer, primary_key=True)
     Day = Column(Date, nullable=False, unique=True)
-    Year = Column(Integer)
-    Quarter = Column(Integer)
-    Month = Column(Integer)
-    Week_of_Year = Column(Integer)
-    Week_of_Month = Column(Integer)
-    NETWORKDAYS = Column(Integer)
+    Year_id = Column(Integer, ForeignKey('years.id', name='fk_calendar_Year_id_years'), nullable=False)
+    Quarter_id = Column(Integer, ForeignKey('quarters.id', name='fk_calendar_Quarter_id_quarters'), nullable=False)
+    Month_id = Column(Integer, ForeignKey('months.id', name='fk_calendar_Month_id_months'), nullable=False)
+    Week_id = Column(Integer, ForeignKey('weeks.id', name='fk_calendar_Week_id_weeks'), nullable=False)
+    NETWORKDAYS = Column(Integer, nullable=False)
+    
+    year = relationship("Year", back_populates="calendar_entries")
+    quarter = relationship("Quarter", back_populates="calendar_entries")
+    month = relationship("Month", back_populates="calendar_entries")
+    week = relationship("Week", back_populates="calendar_entries")
     
     company_plans = relationship("CompanyPlan", back_populates="calendar")
     customer_plans = relationship("CustomerPlan", back_populates="calendar")
-    
-    __table_args__ = (
-        Index('idx_calendar_day', 'Day'),
-        Index('idx_calendar_year_month', 'Year', 'Month'),
-    )
 
 class CompanyPlan(Base):
     __tablename__ = 'company_plans'
-    
     id = Column(Integer, primary_key=True)
     Work_Days = Column(Integer)
     Month_vol = Column(Numeric)
@@ -315,18 +344,21 @@ class CompanyPlan(Base):
     Margin_Target_total = Column(Numeric)
     Status = Column(String, default='План')
     
-    # Связи
-    TeamLead_id = Column(Integer, ForeignKey('team_leads.id', name='fk_company_plan_teamlead'))
-    calendar_id = Column(Integer, ForeignKey('calendar.id', name='fk_company_plan_calendar'))
-    abc_category_id = Column(Integer, ForeignKey('abc_list.id', name='fk_company_plan_abc_cat'))
+    # Связи с периодами
+    Month_id = Column(Integer, ForeignKey('months.id'))
+    Week_id = Column(Integer, ForeignKey('weeks.id'))
     
-    team_lead = relationship("TeamLead", back_populates="company_plans")
-    calendar = relationship("Calendar", back_populates="company_plans")
-    abc_list = relationship("ABC_list", back_populates="company_plans")
+    # Остальные связи
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    ABC_category_id = Column(Integer, ForeignKey('abc_list.id'))
+    
+    Month = relationship("Month")
+    Week = relationship("Week")
+    TeamLead = relationship("TeamLead")
+    ABC_category = relationship("ABCList")
 
 class CustomerPlan(Base):
     __tablename__ = 'customer_plans'
-    
     id = Column(Integer, primary_key=True)
     Volume_Target_cust = Column(Numeric)
     Revenue_Target_cust = Column(Numeric)
@@ -334,18 +366,22 @@ class CustomerPlan(Base):
     Margin_C4_Target_cust = Column(Numeric)
     Status = Column(String, default='План')
     
-    # Связи
-    Holding_id = Column(Integer, ForeignKey('holdings.id', name='fk_customer_plan_holding'))
-    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_customer_plan_manager'))
-    STL_id = Column(Integer, ForeignKey('stls.id', name='fk_customer_plan_stl'))
-    TeamLead_id = Column(Integer, ForeignKey('team_leads.id', name='fk_customer_plan_teamlead'))
-    calendar_id = Column(Integer, ForeignKey('calendar.id', name='fk_customer_plan_calendar'))
+    # Связи с периодами
+    Month_id = Column(Integer, ForeignKey('months.id'))
+    Week_id = Column(Integer, ForeignKey('weeks.id'))
     
-    holding = relationship("Holding", back_populates="customer_plans")
-    manager = relationship("Manager", back_populates="customer_plans")
-    stl = relationship("STL", back_populates="customer_plans")
-    team_lead = relationship("TeamLead", back_populates="customer_plans")
-    calendar = relationship("Calendar", back_populates="customer_plans")
+    # Остальные связи
+    Holding_id = Column(Integer, ForeignKey('holdings.id'))
+    Manager_id = Column(Integer, ForeignKey('managers.id'))
+    STL_id = Column(Integer, ForeignKey('stls.id'))
+    TeamLead_id = Column(Integer, ForeignKey('team_leads.id'))
+    
+    Month = relationship("Month")
+    Week = relationship("Week")
+    Holding = relationship("Holding")
+    Manager = relationship("Manager")
+    STL = relationship("STL")
+    TeamLead = relationship("TeamLead")
     
     
 from sqlalchemy.orm import configure_mappers

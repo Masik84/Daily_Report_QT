@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowVTKQqw.ui'
+## Form generated from reading UI file 'main_windowBHBiDA.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -526,7 +526,7 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         self.toggleButton.toggled.connect(self.menu_widget.setHidden)
 
-        self.toolBox.setCurrentIndex(1)
+        self.toolBox.setCurrentIndex(0)
         self.toolBox.layout().setSpacing(6)
         self.tabWidget.setCurrentIndex(-1)
 
