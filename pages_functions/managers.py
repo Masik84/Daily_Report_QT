@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget,
-                              QTableWidgetItem, QWidget, QApplication, QPushButton)
+                              QTableWidgetItem, QWidget, QApplication, QTextEdit)
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -86,7 +86,6 @@ class Managers(QWidget):
 
         except Exception as e:
             self._handle_upload_error(e, "продуктов")
-
 
     def _handle_upload_error(self, error):
         """Обработка ошибок загрузки"""
@@ -334,18 +333,28 @@ class Managers(QWidget):
         """Отображение данных в таблице"""
         self.table.clear()
         self.table.setColumnCount(len(df.columns))
-        self.table.setHorizontalHeaderLabels(df.columns.tolist())
-        self.table.setRowCount(len(df))
 
         if df.empty:
             self.show_error_message('Ничего не найдено')
             return
+        
+        # Подготовка данных
+        df = df.fillna('')
+        headers = df.columns.tolist()
+        
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(df))
 
-        for i, row in df.iterrows():
-            for j, value in enumerate(row):
-                item = QTableWidgetItem(str(value))
+        for i in range(len(df)):
+            for j, col in enumerate(headers):
+                value = df.iloc[i][col]
+                value_str = str(value)
+
+                item = QTableWidgetItem(value_str)
+
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 item.setTextAlignment(Qt.AlignCenter)
+
                 self.table.setItem(i, j, item)
 
     def _fill_combobox(self, combobox, column):
@@ -379,49 +388,56 @@ class Managers(QWidget):
         self._fill_combobox(self.ui.line_tl, 'TeamLead_name')
 
     def show_message(self, text):
-        """Показать информационное сообщение с кнопкой копирования"""
-        msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #237508;
-            }
-        """)
-        msg.setIcon(QMessageBox.Information)
-
-        clipboard = QApplication.clipboard()
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
-        ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-        copy_button.clicked.connect(lambda: None)
-
-        msg.exec_()
+            """Показать компактное информационное сообщение"""
+            msg = QMessageBox()
+            msg.setWindowTitle("Информация")
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(text)
+            
+            # Уменьшаем размер окна
+            msg.setMinimumSize(400, 200)
+            
+            # Добавляем кнопку Copy
+            copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+            ok_button = msg.addButton(QMessageBox.Ok)
+            
+            # Настройка буфера обмена
+            clipboard = QApplication.clipboard()
+            
+            # Обработчики кнопок
+            def copy_text():
+                clipboard.setText(text)
+            
+            copy_button.clicked.connect(copy_text)
+            
+            # Показываем сообщение
+            msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке с кнопкой копирования"""
+        """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #ff0000;
-            }
-        """)
+        msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
-
-        clipboard = QApplication.clipboard()
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-        copy_button.clicked.connect(lambda: None)
-
+        
+        # Настройка буфера обмена
+        clipboard = QApplication.clipboard()
+        
+        # Обработчики кнопок
+        def copy_text():
+            clipboard.setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        
+        # Показываем сообщение
         msg.exec_()
+        
+     
+        

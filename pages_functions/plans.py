@@ -1,18 +1,17 @@
-import os
 import pandas as pd
-import numpy as np
+import traceback
 
-from sqlalchemy import insert
+
 from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication,
-                              QTableWidgetItem, QWidget)
+                              QTableWidgetItem, QWidget, )
 from PySide6.QtCore import Qt
 from functools import lru_cache
-import locale
-import time, datetime
+
 
 from db import db, engine
-from models import Calendar, CompanyPlan, CustomerPlan, TeamLead, Holding, Sector, Manager, STL, ABC_list
+from models import (Calendar, CompanyPlan, CustomerPlan, TeamLead, Holding, Sector, Manager, STL, ABC_list, 
+                                    Year, Quarter, Month, Week, Customer, Contract)
 from config import All_data_file
 from wind.pages.plans_ui import Ui_Form
 
@@ -22,7 +21,8 @@ class Plans(QWidget):
         super(Plans, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        
+        if not hasattr(self, 'read_company_plans'):
+            raise NotImplementedError("Метод read_company_plans должен быть реализован")
         self._setup_ui()
         self._setup_connections()
         
@@ -50,6 +50,23 @@ class Plans(QWidget):
         self.ui.btn_upload_file.clicked.connect(self.upload_data)
         self.ui.btn_find.clicked.connect(self.find_plans)
     
+    def showEvent(self, event):
+        """Переопределяем метод открытия окна для сброса значений"""
+        super().showEvent(event)
+        self.reset_all_comboboxes()
+
+    def reset_all_comboboxes(self):
+        """Сбрасывает все выпадающие списки к значениям по умолчанию"""
+        self.ui.line_plan_type.setCurrentIndex(0)  # Устанавливаем первый элемент
+        self.ui.line_Year.setCurrentIndex(0)
+        self.ui.line_Qtr.setCurrentIndex(0)
+        self.ui.line_Mnth.setCurrentIndex(0)
+        self.ui.line_tl.setCurrentIndex(0)
+        self.ui.line_kam.setCurrentIndex(0)
+        self.ui.line_Holding.setCurrentIndex(0)
+        self.fill_in_kam_list()  # Обновляем зависимые списки
+        self.fill_in_hold_list()
+    
     def get_file(self):
         """Выбор файла через диалоговое окно"""
         file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с планами')
@@ -64,25 +81,71 @@ class Plans(QWidget):
             file_path = All_data_file
         
         try:
-            self.run_plans_update(file_path)
-            self.show_message('Данные планов успешно обновлены!')
-            self.refresh_all_comboboxes()
+            plan_type = self.ui.line_plan_type.currentText()
+            if not plan_type or plan_type == '-':
+                self.show_error_message("Пожалуйста, выберите тип плана для обновления")
+                return
+            
+            loaded_rows, message = self.run_plans_update(file_path)
+            
+            if loaded_rows > 0:
+                self.show_message(f"{message}\nЗагружено строк: {loaded_rows}")
+                self.refresh_all_comboboxes()
+            else:
+                self.show_error_message("Данные не были загружены. Проверьте файл и тип плана.")
+                
+        except pd.errors.EmptyDataError:
+            self.show_error_message("Ошибка: Файл пуст или имеет неправильный формат")
+        except KeyError as e:
+            self.show_error_message(f"Ошибка: Отсутствует обязательная колонка в файле - {str(e)}")
+        except ValueError as e:
+            self.show_error_message(f"Ошибка в данных: {str(e)}")
         except Exception as e:
-            self.show_error_message(f'Ошибка загрузки данных: {str(e)}')
-    
+            error_msg = f'Критическая ошибка загрузки: {str(e)}'
+            traceback.print_exc()  # Печать трассировки в консоль
+            self.show_error_message(error_msg)
+
     def run_plans_update(self, file_path):
         """Основная функция обновления планов"""
-        # Обновление календаря
-        calendar_df = self.read_calendar_file(file_path)
-        self.update_calendar(calendar_df)
-        
-        # Обновление планов по компании
-        company_plans_df = self.read_company_plans(file_path)
-        self.update_company_plans(company_plans_df)
-        
-        # Обновление планов по клиентам
-        customer_plans_df = self.read_customer_plans(file_path)
-        self.update_customer_plans(customer_plans_df)
+        try:
+            # 1. Обновляем календарь
+            calendar_df = self.read_calendar_file(file_path)
+            self.update_calendar_tables(calendar_df)
+            
+            # 2. Проверяем тип плана
+            plan_type = self.ui.line_plan_type.currentText()
+            if not plan_type or plan_type == '-':
+                return 0, "Тип плана не выбран"
+            
+            # 3. Загружаем соответствующие данные
+            if plan_type == "План Общий":
+                try:
+                    df = self.read_company_plans(file_path)  # Теперь метод существует
+                    if df.empty:
+                        return 0, "Файл общего плана не содержит данных"
+                    
+                    loaded_rows = self.update_company_plans(df)
+                    return loaded_rows, "Данные общего плана успешно обновлены"
+                    
+                except Exception as e:
+                    raise Exception(f"Ошибка загрузки общего плана: {str(e)}")
+                    
+            elif plan_type == "План КАМ-Клиент":
+                try:
+                    df = self.read_customer_plans(file_path)
+                    if df.empty:
+                        return 0, "Файл плана клиентов не содержит данных"
+                    
+                    loaded_rows = self.update_customer_plans(df)
+                    return loaded_rows, "Данные плана клиентов успешно обновлены"
+                    
+                except Exception as e:
+                    raise Exception(f"Ошибка загрузки плана клиентов: {str(e)}")
+                    
+            return 0, "Неизвестный тип плана"
+            
+        except Exception as e:
+            raise Exception(f"Ошибка при обновлении планов: {str(e)}")
     
     def get_calendar_from_db(self):
         """Получение календаря из БД через ORM"""
@@ -90,11 +153,11 @@ class Plans(QWidget):
             calendar_data = db.query(Calendar).all()
             self._cached_calendar = pd.DataFrame([{
                 'Day': c.Day,
-                'Year': c.Year,
-                'Quarter': c.Quarter,
-                'Month': c.Month,
-                'Week_of_Year': c.Week_of_Year,
-                'Week_of_Month': c.Week_of_Month,
+                'Year': c.year.Year if c.year else None,  # Исправлено: обращение через связь year
+                'Quarter': c.quarter.Quarter if c.quarter else None,  # Исправлено: обращение через связь quarter
+                'Month': c.month.Month if c.month else None,  # Исправлено: обращение через связь month
+                'Week_of_Year': c.week.Week_of_Year if c.week else None,  # Исправлено: обращение через связь week
+                'Week_of_Month': c.week.Week_of_Month if c.week else None,  # Исправлено: обращение через связь week
                 'NETWORKDAYS': c.NETWORKDAYS
             } for c in calendar_data])
         return self._cached_calendar.copy()
@@ -139,75 +202,103 @@ class Plans(QWidget):
             raise Exception(f"Ошибка чтения файла календаря: {str(e)}")
     
     def read_company_plans(self, file_path):
-        """Чтение планов по компании из Excel с заменой пустых числовых значений на 0"""
-        dtype_comp = {
-            'Year': int, 'Quarter': int, 'Month': int, 
-            'Week of Year': int, 'Week of Month': int, 'Work Days': int,
-            'Month vol': float, 'Month Revenue': float, 'Month Margin': float
-        }
-        
+        """Чтение данных общего плана из Excel с загрузкой всех строк"""
         try:
-            df = pd.read_excel(file_path, sheet_name='Планы ОБЩИЕ', dtype=dtype_comp)
-            df = df[[
-                'Year', 'Quarter', 'Month', 'Week of Year', 'Week of Month', 'Work Days',
-                'Team Lead', 'ABC', 'Month vol', 'Month Revenue', 'Month Margin',
-                'Volume Target total', 'Revenue Target total', 'Margin Target total'
-            ]]
+            dtype = {
+                'Year': int, 'Quarter': int, 'Month': int,
+                'Week of Year': int, 'Week of Month': int,
+                'Work Days': int
+            }
             
+            df = pd.read_excel(
+                file_path,
+                sheet_name='Планы ОБЩИЕ',
+                dtype=dtype,
+                na_values=['', 'NA', 'N/A']  # Но не включаем '-' в na_values
+            )
+            
+            # Обязательные колонки (без Team Lead и ABC, так как они могут быть '-')
+            required_cols = [
+                'Year', 'Quarter', 'Month', 'Week of Year', 'Week of Month'
+            ]
+            
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            if missing_cols:
+                raise ValueError(f"Отсутствуют обязательные колонки: {missing_cols}")
+
             # Переименование колонок
-            df = df.rename(columns={
+            col_mapping = {
                 'Week of Year': 'Week_of_Year',
                 'Week of Month': 'Week_of_Month',
                 'Team Lead': 'TeamLead',
                 'Work Days': 'Work_Days',
                 'Month vol': 'Month_vol',
+                'Month Revenue': 'Month_Revenue',
                 'Month Margin': 'Month_Margin',
                 'Volume Target total': 'Volume_Target_total',
                 'Revenue Target total': 'Revenue_Target_total',
                 'Margin Target total': 'Margin_Target_total'
-            })
+            }
             
-            # Список числовых колонок для обработки
+            df = df.rename(columns={k: v for k, v in col_mapping.items() if k in df.columns})
+            
+            # Обработка числовых колонок (заменяем только настоящие NaN, а не '-')
             numeric_cols = [
-                'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month', 'Work_Days',
                 'Month_vol', 'Month_Revenue', 'Month_Margin',
                 'Volume_Target_total', 'Revenue_Target_total', 'Margin_Target_total'
             ]
             
-            # Замена пустых значений в числовых колонках на 0
             for col in numeric_cols:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                    # Заменяем только настоящие NaN, оставляя '-' как строку
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    df[col] = df[col].fillna(0)  # Заполняем только настоящие NaN
+            
+            # Обработка TeamLead и ABC
+            if 'TeamLead' in df.columns:
+                df['TeamLead'] = df['TeamLead'].fillna('-')  # Заменяем NaN на '-'
+            else:
+                df['TeamLead'] = '-'  # Создаем колонку, если отсутствует
+                
+            if 'ABC' in df.columns:
+                df['ABC'] = df['ABC'].fillna('-')
+            else:
+                df['ABC'] = '-'
             
             df['Status'] = 'План'
-            return df.to_dict('records')
-        except Exception as e:
-            raise Exception(f"Ошибка чтения планов по компании: {str(e)}")
+            
+            return df
 
+        except Exception as e:
+            error_msg = f"Ошибка чтения файла общего плана: {str(e)}\n"
+            if 'df' in locals():
+                error_msg += f"Первые 5 строк:\n{df.head().to_string()}"
+            raise Exception(error_msg)
+        
     def read_customer_plans(self, file_path):
-        """Чтение планов по клиентам из Excel с заменой пустых числовых значений на 0"""
+        """Чтение планов клиентов с сохранением обработки двух листов"""
         try:
-            # Чтение данных за 2024 год
+            # 1. Чтение данных за 2024 год
             df_2024 = pd.read_excel(file_path, sheet_name='Планы 2024')
             
             # Проверка обязательных колонок для 2024
-            required_2024 = ['Year', 'Quarter', 'Month', 'ХОЛДИНГ', 'Менеджер', 'SECTOR', 'STL', 'Team Lead', 
-                             'Volume Target cust', 'Margin C3 Target cust']
+            required_2024 = ['Year', 'Quarter', 'Month', 'ХОЛДИНГ', 'Менеджер', 
+                            'SECTOR', 'STL', 'Team Lead', 'Volume Target cust', 
+                            'Margin C3 Target cust']
             
-            # Проверяем наличие всех обязательных колонок
             missing_cols = [col for col in required_2024 if col not in df_2024.columns]
             if missing_cols:
-                raise Exception(f"В листе 'Планы 2024' отсутствуют колонки: {missing_cols}")
-            
-            # Выбираем и переименовываем нужные колонки для 2024
-            df_2024 = df_2024[required_2024].rename(columns={
-                    'Team Lead': 'TeamLead', 
-                    'ХОЛДИНГ': 'Holding', 
-                    'Менеджер': 'Manager', 
-                    'SECTOR': 'Sector',
-                    'Volume Target cust': 'Volume_Target_cust',
-                    'Margin C3 Target cust': 'Margin_C3_Target_cust'
-                })
+                raise ValueError(f"В листе 'Планы 2024' отсутствуют колонки: {missing_cols}")
+
+            # Обработка df_2024
+            df_2024 = df_2024.rename(columns={
+                'Team Lead': 'TeamLead',
+                'ХОЛДИНГ': 'Holding',
+                'Менеджер': 'Manager',
+                'SECTOR': 'Sector',
+                'Volume Target cust': 'Volume_Target_cust',
+                'Margin C3 Target cust': 'Margin_C3_Target_cust'
+            })
             
             # Добавляем отсутствующие колонки для 2024
             df_2024['Week_of_Year'] = 0
@@ -215,9 +306,9 @@ class Plans(QWidget):
             df_2024['Revenue_Target_cust'] = 0
             df_2024['Margin_C4_Target_cust'] = 0
 
-            # Чтение данных за 2025 год
+            # 2. Чтение данных за 2025 год
             df_2025 = pd.read_excel(file_path, sheet_name='Планы 2025 (год)')
-            
+
             # Проверка обязательных колонок для 2025
             required_2025 = ['Year', 'ХОЛДИНГ', 'Менеджер', 'SECTOR', 'STL', 
                             'Team Lead', 'Year Volume', 'Year Revenue', 
@@ -225,8 +316,9 @@ class Plans(QWidget):
             
             missing_cols = [col for col in required_2025 if col not in df_2025.columns]
             if missing_cols:
-                raise Exception(f"В листе 'Планы 2025 (год)' отсутствуют колонки: {missing_cols}")
-            
+                raise ValueError(f"В листе 'Планы 2025 (год)' отсутствуют колонки: {missing_cols}")
+
+            # Обработка df_2025 (сохраняем вашу оригинальную логику)
             df_2025 = df_2025.rename(columns={
                 'Team Lead': 'TeamLead', 
                 'ХОЛДИНГ': 'Holding', 
@@ -237,12 +329,13 @@ class Plans(QWidget):
             df_2025 = self.calculate_weekly_plan(df_2025)
 
             df_2025 = df_2025.rename(columns={
-                                            'Year Volume': 'Volume_Target_cust',
-                                            'Year Revenue': 'Revenue_Target_cust',
-                                            'Margin C3 Target cust': 'Margin_C3_Target_cust',
-                                            'Margin C4 Target cust': 'Margin_C4_Target_cust'})
+                'Year Volume': 'Volume_Target_cust',
+                'Year Revenue': 'Revenue_Target_cust',
+                'Year Margin C3': 'Margin_C3_Target_cust',
+                'Year Margin C4': 'Margin_C4_Target_cust'
+            })
 
-            # Объединение данных
+            # 3. Объединение данных
             common_columns = [
                 'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
                 'Holding', 'Manager', 'Sector', 'STL', 'TeamLead',
@@ -250,30 +343,34 @@ class Plans(QWidget):
                 'Margin_C3_Target_cust', 'Margin_C4_Target_cust'
             ]
             
-            # Убедимся, что все колонки существуют перед объединением
+            # Приводим колонки к единому формату
             df_2024 = df_2024[[col for col in common_columns if col in df_2024.columns]]
-            # df_2025 = df_2025[[col for col in common_columns if col in df_2025.columns]]
-            
-            # df = pd.concat([df_2024, df_2025], ignore_index=True)
-            df = df_2024.copy()
+            df_2025 = df_2025[[col for col in common_columns if col in df_2025.columns]]
+
+            df = pd.concat([df_2024, df_2025], ignore_index=True)
+
+            # 4. Обработка числовых колонок
             numeric_cols = [
-                'Year', 'Quarter', 'Month', 'Week_of_Year', 'Week_of_Month',
                 'Volume_Target_cust', 'Revenue_Target_cust',
                 'Margin_C3_Target_cust', 'Margin_C4_Target_cust'
             ]
             
-            # Замена пустых значений в числовых колонках на 0
             for col in numeric_cols:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(float)
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
             df['Status'] = 'План'
-            
-            return df.to_dict('records')
-            
+            df.to_excel("test_plans.py")
+            return df
+
         except Exception as e:
-            raise Exception(f"Ошибка чтения планов по клиентам: {str(e)}")
-    
+            error_msg = f"Ошибка чтения планов клиентов: {str(e)}\n"
+            if 'df_2024' in locals():
+                error_msg += f"Структура 2024:\n{df_2024.columns.tolist()}\n"
+            if 'df_2025' in locals():
+                error_msg += f"Структура 2025:\n{df_2025.columns.tolist()}"
+            raise Exception(error_msg)
+        
     def calculate_weekly_plan(self, plans_df):
         """Преобразование годовых планов в недельные с использованием данных из БД"""
         
@@ -343,180 +440,340 @@ class Plans(QWidget):
             traceback.print_exc()
             return pd.DataFrame()
     
-    def update_calendar(self, data):
-        """Обновление календаря с проверкой существующих записей"""
+    def update_calendar_tables(self, data):
+        """Обновление таблиц Year, Quarter, Month, Week и Calendar с обработкой процентов"""
         if not data:
             return
 
         try:
-            # Получаем список всех дат из входных данных (уже как date объекты)
-            input_dates = {pd.Timestamp(row['Day']).to_pydatetime().date() for row in data}
-            
-            # Запрос к базе для получения существующих дат
-            existing_records = db.query(Calendar.Day).filter(Calendar.Day.in_(input_dates)).all()
-            existing_dates = {record.Day for record in existing_records}
-            
-            # Фильтруем только новые записи
-            new_records = [
-                row for row in data 
-                if pd.Timestamp(row['Day']).to_pydatetime().date() not in existing_dates
-            ]
-            
-            if not new_records:
-                return
+            for row in data:
+                # Обработка процентных значений
+                if 'NETWORKDAYS' in row and isinstance(row['NETWORKDAYS'], str) and '%' in row['NETWORKDAYS']:
+                    row['NETWORKDAYS'] = float(row['NETWORKDAYS'].replace('%', '')) / 100
                 
-            # Вставка с обработкой конфликтов
-            stmt = insert(Calendar).values(new_records)
-            stmt = stmt.on_conflict_do_nothing(index_elements=['Day'])
-            db.execute(stmt)
-            db.commit()
-            
+                # Year
+                year = db.query(Year).filter(Year.Year == row['Year']).first()
+                if not year:
+                    year = Year(Year=row['Year'])
+                    db.add(year)
+                    db.commit()
+                
+                # Quarter
+                quarter = db.query(Quarter).filter(Quarter.Quarter == row['Quarter']).first()
+                if not quarter:
+                    quarter = Quarter(Quarter=row['Quarter'])
+                    db.add(quarter)
+                    db.commit()
+                
+                # Month
+                month = db.query(Month).filter(
+                    Month.Month == row['Month'],
+                    Month.Quarter_id == quarter.id).first()
+                if not month:
+                    month = Month(Month=row['Month'], Quarter_id=quarter.id)
+                    db.add(month)
+                    db.commit()
+                
+                # Week
+                week = db.query(Week).filter(
+                    Week.Week_of_Year == row['Week_of_Year'],
+                    Week.Week_of_Month == row['Week_of_Month']
+                ).first()
+                if not week:
+                    week = Week(
+                        Week_of_Year=row['Week_of_Year'],
+                        Week_of_Month=row['Week_of_Month']
+                    )
+                    db.add(week)
+                    db.commit()
+                
+                # Calendar
+                calendar = db.query(Calendar).filter(Calendar.Day == row['Day']).first()
+                
+                if calendar:
+                    calendar.Year_id = year.id
+                    calendar.Quarter_id = quarter.id
+                    calendar.Month_id = month.id
+                    calendar.Week_id = week.id
+                    calendar.NETWORKDAYS = row['NETWORKDAYS']
+                else:
+                    calendar = Calendar(
+                        Day=row['Day'],
+                        Year_id=year.id,
+                        Quarter_id=quarter.id,
+                        Month_id=month.id,
+                        Week_id=week.id,
+                        NETWORKDAYS=row['NETWORKDAYS']
+                    )
+                    db.add(calendar)
+                
+                db.commit()
+                
         except SQLAlchemyError as e:
             db.rollback()
-            raise Exception(f"Ошибка сохранения календаря: {str(e)}")
+            raise Exception(f"Ошибка сохранения календарных данных: {str(e)}")
+        finally:
+            db.close()
+
+    def update_company_plans(self, df):
+        """Обновление планов компании с учетом переименованных колонок"""
+        if df.empty:
+            print("Предупреждение: Передан пустой DataFrame")
+            return 0
+
+        try:
+            # 1. Получаем все справочники
+            years = {y.Year: y.id for y in db.query(Year).all()}
+            months = {m.Month: m.id for m in db.query(Month).all()}
+            weeks = {(w.Week_of_Year, w.Week_of_Month): w.id for w in db.query(Week).all()}
+            teamleads = {tl.TeamLead_name: tl.id for tl in db.query(TeamLead).all()}
+            abc_categories = {abc.ABC_category: abc.id for abc in db.query(ABC_list).all()}
+
+            # 2. Подготовка данных
+            records_to_insert = []
+            records_to_update = []
+            duplicate_errors = []
+            processed_rows = 0
+
+            for idx, row in df.iterrows():
+                try:
+                    # Получаем ID для обязательных полей (используем переименованные колонки)
+                    year_id = years.get(int(row['Year']))
+                    month_id = months.get(int(row['Month']))
+                    week_id = weeks.get((int(row['Week_of_Year']), int(row['Week_of_Month'])))
+                    
+                    # Обработка TeamLead (уже переименовано в read_company_plans)
+                    teamlead_name = str(row['TeamLead'])
+                    if teamlead_name == '-' or not teamlead_name:
+                        teamlead_id = None
+                    else:
+                        teamlead = db.query(TeamLead).filter(TeamLead.TeamLead_name == teamlead_name).first()
+                        if not teamlead:
+                            teamlead = TeamLead(TeamLead_name=teamlead_name)
+                            db.add(teamlead)
+                            db.commit()
+                            teamleads[teamlead_name] = teamlead.id
+                        teamlead_id = teamlead.id
+                    
+                    # Обработка ABC (уже переименовано в read_company_plans)
+                    abc_category = str(row['ABC'])
+                    if abc_category == '-' or not abc_category:
+                        abc_id = None
+                    else:
+                        abc = db.query(ABC_list).filter(ABC_list.ABC_category == abc_category).first()
+                        if not abc:
+                            abc = ABC_list(ABC_category=abc_category)
+                            db.add(abc)
+                            db.commit()
+                            abc_categories[abc_category] = abc.id
+                        abc_id = abc.id
+
+                    # Формируем запись (используем переименованные колонки)
+                    record = {
+                        'Year_id': year_id,
+                        'Month_id': month_id,
+                        'Week_id': week_id,
+                        'TeamLead_id': teamlead_id,
+                        'ABC_category_id': abc_id,
+                        'Work_Days': int(row['Work_Days']),
+                        'Month_vol': float(row.get('Month_vol', 0)),
+                        'Month_Revenue': float(row.get('Month_Revenue', 0)),
+                        'Month_Margin': float(row.get('Month_Margin', 0)),
+                        'Volume_Target_total': float(row.get('Volume_Target_total', 0)),
+                        'Revenue_Target_total': float(row.get('Revenue_Target_total', 0)),
+                        'Margin_Target_total': float(row.get('Margin_Target_total', 0)),
+                        'Status': str(row.get('Status', 'План'))
+                    }
+
+                    # Проверка существования записи
+                    existing = db.query(CompanyPlan).filter(
+                        CompanyPlan.Year_id == year_id,
+                        CompanyPlan.Month_id == month_id,
+                        CompanyPlan.Week_id == week_id,
+                        CompanyPlan.TeamLead_id == (teamlead_id if teamlead_id else None),
+                        CompanyPlan.ABC_category_id == (abc_id if abc_id else None)
+                    ).first()
+
+                    if existing:
+                        record['id'] = existing.id
+                        records_to_update.append(record)
+                    else:
+                        records_to_insert.append(record)
+                    
+                    processed_rows += 1
+
+                except Exception as e:
+                    error_msg = f"Ошибка в строке {idx}:\n{row.to_dict()}\n{str(e)}"
+                    print(error_msg)
+                    duplicate_errors.append(error_msg)
+                    continue
+
+            # 3. Выполняем операции
+            if records_to_update:
+                db.bulk_update_mappings(CompanyPlan, records_to_update)
+            if records_to_insert:
+                db.bulk_insert_mappings(CompanyPlan, records_to_insert)
+            
+            db.commit()
+
+            # 4. Логирование результатов
+            print("\n=== Результаты обработки ===")
+            print(f"Всего строк в файле: {len(df)}")
+            print(f"Успешно обработано: {processed_rows}")
+            print(f"Добавлено новых: {len(records_to_insert)}")
+            print(f"Обновлено существующих: {len(records_to_update)}")
+            print(f"Ошибки обработки: {len(duplicate_errors)}")
+
+            if duplicate_errors:
+                print("\n=== Ошибочные строки ===")
+                for error in duplicate_errors[:5]:
+                    print(error)
+                if len(duplicate_errors) > 5:
+                    print(f"... и еще {len(duplicate_errors)-5} ошибок")
+
+            return len(records_to_insert) + len(records_to_update)
+
         except Exception as e:
             db.rollback()
-            raise Exception(f"Неожиданная ошибка: {str(e)}")
+            error_msg = f"Критическая ошибка обновления планов: {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            raise Exception(error_msg)
+        
         finally:
             db.close()
-                
-    def update_company_plans(self, data):
-        """Обновление планов компании с правильными связями"""
-        if not data:
-            return
+
+    def update_customer_plans(self, df):
+        """Обновление планов клиентов с проверкой на дубликаты"""
+        if df.empty:
+            print("Предупреждение: Нет данных для обновления")
+            return 0
 
         try:
-            # Получаем существующие записи с join на ABC_list
-            existing_plans = {
-                (c.calendar.Year, c.calendar.Month, c.calendar.Week_of_Year,
-                c.TeamLead_id, c.abc_list.ABC_category): c.id
-                for c in db.query(CompanyPlan)
-                    .join(CompanyPlan.calendar)
-                    .join(CompanyPlan.abc_list)
-                    .all()
-            }
-            
-            to_insert = []
-            to_update = []
-            
-            for row in data:
-                # Ищем соответствующий календарь
-                calendar = db.query(Calendar).filter(
-                    Calendar.Year == row['Year'],
-                    Calendar.Month == row['Month'],
-                    Calendar.Week_of_Year == row['Week_of_Year']
-                ).first()
-                
-                if not calendar:
-                    print(f"Пропущена запись: не найден календарь для {row}")
-                    continue
+            # Получаем справочники один раз
+            years = {y.Year: y.id for y in db.query(Year).all()}
+            months = {m.Month: m.id for m in db.query(Month).all()}
+            weeks = {(w.Week_of_Year, w.Week_of_Month): w.id for w in db.query(Week).all()}
+            holdings = {h.Holding_name: h.id for h in db.query(Holding).all()}
+            managers = {m.Manager_name: m.id for m in db.query(Manager).all()}
+            stls = {s.STL_name: s.id for s in db.query(STL).all()}
+            teamleads = {tl.TeamLead_name: tl.id for tl in db.query(TeamLead).all()}
+            sectors = {s.Sector_name: s.id for s in db.query(Sector).all()}
+
+            records_to_insert = []
+            records_to_update = []
+            processed_count = 0
+
+            for _, row in df.iterrows():
+                try:
+                    # Получаем ID для всех полей
+                    year_id = years.get(int(row['Year']))
+                    month_id = months.get(int(row['Month'])) if pd.notna(row['Month']) else None
+                    week_id = weeks.get((int(row['Week_of_Year']), int(row['Week_of_Month'])))
+                    holding_id = holdings.get(str(row['Holding']))
+                    manager_id = managers.get(str(row['Manager']))
+                    stl_id = stls.get(str(row['STL'])) if pd.notna(row['STL']) else None
+                    teamlead_id = teamleads.get(str(row['TeamLead'])) if pd.notna(row['TeamLead']) else None
+                    sector_id = sectors.get(str(row['Sector'])) if pd.notna(row['Sector']) else None
+
+                    # Формируем запись
+                    new_record = {
+                        'Year_id': year_id,
+                        'Month_id': month_id,
+                        'Week_id': week_id,
+                        'Holding_id': holding_id,
+                        'Manager_id': manager_id,
+                        'STL_id': stl_id,
+                        'TeamLead_id': teamlead_id,
+                        'Sector_id': sector_id,
+                        'Volume_Target_cust': float(row['Volume_Target_cust']),
+                        'Revenue_Target_cust': float(row.get('Revenue_Target_cust', 0)),
+                        'Margin_C3_Target_cust': float(row['Margin_C3_Target_cust']),
+                        'Margin_C4_Target_cust': float(row.get('Margin_C4_Target_cust', 0)),
+                        'Status': str(row.get('Status', 'План'))
+                    }
+
+                    # Проверяем существование записи
+                    existing = db.query(CustomerPlan).filter(
+                        CustomerPlan.Year_id == year_id,
+                        CustomerPlan.Month_id == month_id,
+                        CustomerPlan.Week_id == week_id,
+                        CustomerPlan.Holding_id == holding_id,
+                        CustomerPlan.Manager_id == manager_id
+                    ).first()
+
+                    if existing:
+                        # Проверяем, нужно ли обновлять
+                        needs_update = False
+                        for field in ['Volume_Target_cust', 'Revenue_Target_cust', 
+                                    'Margin_C3_Target_cust', 'Margin_C4_Target_cust']:
+                            if abs(getattr(existing, field) - new_record[field]) > 0.01:
+                                needs_update = True
+                                break
+                        
+                        if needs_update:
+                            new_record['id'] = existing.id
+                            records_to_update.append(new_record)
+                    else:
+                        records_to_insert.append(new_record)
                     
-                key = (
-                    row['Year'],
-                    row['Month'],
-                    row['Week_of_Year'],
-                    self._get_id(TeamLead, 'TeamLead_name', row['TeamLead']),
-                    row.get('ABC')
-                )
-                
-                plan_data = {
-                    'Work_Days': row['Work_Days'],
-                    'Month_vol': row.get('Month_vol', 0),
-                    'Month_Revenue': row.get('Month_Revenue', 0),
-                    'Month_Margin': row.get('Month_Margin', 0),
-                    'Volume_Target_total': row['Volume_Target_total'],
-                    'Revenue_Target_total': row['Revenue_Target_total'],
-                    'Margin_Target_total': row['Margin_Target_total'],
-                    'Status': row.get('Status', 'План'),
-                    'TeamLead_id': self._get_id(TeamLead, 'TeamLead_name', row['TeamLead']),
-                    'abc_category_id': self._get_id(ABC_list, 'ABC_category', row.get('ABC')),
-                    'calendar_id': calendar.id
-                }
-                
-                if key in existing_plans:
-                    plan_data['id'] = existing_plans[key]
-                    to_update.append(plan_data)
-                else:
-                    to_insert.append(plan_data)
+                    processed_count += 1
+
+                except Exception as e:
+                    print(f"Ошибка обработки строки {_}: {str(e)}")
+                    continue
+
+            # Выполняем операции с БД
+            if records_to_update:
+                db.bulk_update_mappings(CustomerPlan, records_to_update)
+            if records_to_insert:
+                db.bulk_insert_mappings(CustomerPlan, records_to_insert)
             
-            if to_insert:
-                db.bulk_insert_mappings(CompanyPlan, to_insert)
-            if to_update:
-                db.bulk_update_mappings(CompanyPlan, to_update)
             db.commit()
-            
-        except SQLAlchemyError as e:
+
+            print(f"\nИтоги обработки:")
+            print(f"Обработано строк: {processed_count}/{len(df)}")
+            print(f"Добавлено новых: {len(records_to_insert)}")
+            print(f"Обновлено существующих: {len(records_to_update)}")
+
+            return len(records_to_insert) + len(records_to_update)
+
+        except Exception as e:
             db.rollback()
-            raise Exception(f"Ошибка сохранения планов компании: {str(e)}")
+            print(f"Критическая ошибка: {str(e)}")
+            traceback.print_exc()
+            raise
         finally:
             db.close()
-    
-    def update_customer_plans(self, data):
-        """Обновление планов по клиентам в БД"""
-        if not data:
-            return
-        
-        existing_plans = {
-            (c.Year, c.Month, c.Week_of_Year, c.Holding_id, c.Manager_id): c.id 
-            for c in db.query(CustomerPlan).all()
-        }
-        to_insert = []
-        to_update = []
-        
-        for row in data:
-            key = (
-                row['Year'], 
-                row['Month'], 
-                row.get('Week_of_Year', 0),
-                self._get_id(Holding, 'Holding_name', row['Holding']),
-                self._get_id(Manager, 'Manager_name', row['Manager'])
-            )
-            
-            plan_data = {
-                'Year': row['Year'],
-                'Quarter': row['Quarter'],
-                'Month': row['Month'],
-                'Week_of_Year': row.get('Week_of_Year'),
-                'Week_of_Month': row.get('Week_of_Month'),
-                'Volume_Target_cust': row['Volume_Target_cust'],
-                'Revenue_Target_cust': row.get('Revenue_Target_cust', 0),
-                'Margin_C3_Target_cust': row.get('Margin_C3_Target_cust', 0),  # Исправлено здесь
-                'Margin_C4_Target_cust': row.get('Margin_C4_Target_cust', 0),  # И здесь
-                'Status': row.get('Status', 'План'),
-                'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
-                'Manager_id': self._get_id(Manager, 'Manager_name', row['Manager']),
-                'Sector_id': self._get_id(Sector, 'Sector_name', row.get('Sector')),
-                'STL_id': self._get_id(STL, 'STL_name', row.get('STL')),
-                'TeamLead_id': self._get_id(TeamLead, 'TeamLead_name', row['TeamLead'])
-            }
-            
-            if key in existing_plans:
-                plan_data['id'] = existing_plans[key]
-                to_update.append(plan_data)
-            else:
-                to_insert.append(plan_data)
-        
-        try:
-            if to_insert:
-                db.bulk_insert_mappings(CustomerPlan, to_insert)
-            if to_update:
-                db.bulk_update_mappings(CustomerPlan, to_update)
-            db.commit()
-        except SQLAlchemyError as e:
-            db.rollback()
-            raise Exception(f"Ошибка сохранения планов клиентов: {str(e)}")
-        finally:
-            db.close()
-    
+
     @lru_cache(maxsize=32)
-    def _get_id(self, model, name_field, name):
-        """Получение ID по имени (с кэшированием)"""
+    def _get_id(self, model, name_field, name, name_field2=None, name2=None):
+        """Улучшенная версия с поддержкой составных ключей"""
         if not name or pd.isna(name) or name == '-':
             return None
         
-        item = db.query(model).filter(getattr(model, name_field) == name).first()
+        query = db.query(model).filter(getattr(model, name_field) == name)
+        
+        # Добавляем условие для второго поля, если указано
+        if name_field2 and name2 and not pd.isna(name2) and name2 != '-':
+            query = query.filter(getattr(model, name_field2) == name2)
+        
+        item = query.first()
         return item.id if item else None
     
+    @lru_cache(maxsize=128)
+    def _get_week_id(self, week_of_year, week_of_month):
+        """Получение ID недели по двум параметрам с кэшированием"""
+        if pd.isna(week_of_year) or pd.isna(week_of_month):
+            return None
+        
+        week = db.query(Week).filter(
+            Week.Week_of_Year == int(week_of_year),
+            Week.Week_of_Month == int(week_of_month)
+        ).first()
+        
+        return week.id if week else None
+
     def find_plans(self):
         """Поиск планов по заданным критериям"""
         self.table.clearContents()
@@ -542,33 +799,35 @@ class Plans(QWidget):
         self._update_summary(df, plan_type)
     
     def get_company_plans_from_db(self, year, quarter, month, tl):
-        """Получение планов компании через ORM"""
+        """Получение планов компании через ORM с новыми связями"""
         try:
             query = db.query(
-                Calendar.Year,
-                Calendar.Quarter,
-                Calendar.Month,
-                Calendar.Week_of_Year,
-                Calendar.Week_of_Month,
+                Year.Year.label('Year'),
+                Quarter.Quarter.label('Quarter'),
+                Month.Month.label('Month'),
+                Week.Week_of_Year.label('Week_of_Year'),
+                Week.Week_of_Month.label('Week_of_Month'),
                 TeamLead.TeamLead_name.label('TeamLead'),
                 ABC_list.ABC_category.label('ABC'),
                 CompanyPlan.Volume_Target_total,
                 CompanyPlan.Revenue_Target_total,
                 CompanyPlan.Margin_Target_total
-            ).join(CompanyPlan.calendar
+            ).join(CompanyPlan.year
+            ).join(CompanyPlan.month
+            ).join(Month.quarter
+            ).join(CompanyPlan.week
             ).join(CompanyPlan.team_lead
-            ).join(ABC_list, CompanyPlan.abc_category_id == ABC_list.id)
+            ).join(ABC_list, CompanyPlan.ABC_category_id == ABC_list.id)
             
             if year != '-':
-                query = query.filter(Calendar.Year == int(year))
+                query = query.filter(Year.Year == int(year))
             if quarter != '-':
-                query = query.filter(Calendar.Quarter == int(quarter))
+                query = query.filter(Quarter.Quarter == int(quarter))
             if month != '-':
-                query = query.filter(Calendar.Month == int(month))
+                query = query.filter(Month.Month == int(month))
             if tl != '-':
                 query = query.filter(TeamLead.TeamLead_name == tl)
             
-            # Конвертируем результат ORM в DataFrame
             plans = query.all()
             if not plans:
                 return pd.DataFrame()
@@ -596,11 +855,11 @@ class Plans(QWidget):
         """Получение планов по клиентам из БД с обработкой пустого результата"""
         try:
             query = db.query(
-                Calendar.Year,
-                Calendar.Quarter,
-                Calendar.Month,
-                Calendar.Week_of_Year,
-                Calendar.Week_of_Month,
+                Year.Year.label('Year'),
+                Quarter.Quarter.label('Quarter'),
+                Month.Month.label('Month'),
+                Week.Week_of_Year.label('Week_of_Year'),
+                Week.Week_of_Month.label('Week_of_Month'),
                 Holding.Holding_name.label('Holding'),
                 Manager.Manager_name.label('Manager'),
                 STL.STL_name.label('STL'),
@@ -609,18 +868,21 @@ class Plans(QWidget):
                 CustomerPlan.Revenue_Target_cust,
                 CustomerPlan.Margin_C3_Target_cust,
                 CustomerPlan.Margin_C4_Target_cust
-            ).join(CustomerPlan, CustomerPlan.calendar_id == Calendar.id
-            ).join(Holding, CustomerPlan.Holding_id == Holding.id
-            ).join(Manager, CustomerPlan.Manager_id == Manager.id
-            ).outerjoin(STL, CustomerPlan.STL_id == STL.id
-            ).join(TeamLead, CustomerPlan.TeamLead_id == TeamLead.id)
+            ).join(CustomerPlan.year
+            ).join(CustomerPlan.month
+            ).join(Month.quarter
+            ).join(CustomerPlan.week
+            ).join(CustomerPlan.holding
+            ).join(Manager, CustomerPlan.manager
+            ).outerjoin(STL, Manager.stl
+            ).join(TeamLead, Manager.team_lead)
             
             if year != '-':
-                query = query.filter(Calendar.Year == int(year))
+                query = query.filter(Year.Year == int(year))
             if quarter != '-':
-                query = query.filter(Calendar.Quarter == int(quarter))
+                query = query.filter(Quarter.Quarter == int(quarter))
             if month != '-':
-                query = query.filter(Calendar.Month == int(month))
+                query = query.filter(Month.Month == int(month))
             if tl != '-':
                 query = query.filter(TeamLead.TeamLead_name == tl)
             if kam != '-':
@@ -629,7 +891,7 @@ class Plans(QWidget):
                 query = query.filter(Holding.Holding_name == holding)
             
             df = pd.read_sql(query.statement, db.bind)
-            return df if not df.empty else pd.DataFrame()  # Возвращаем пустой DataFrame если нет данных
+            return df if not df.empty else pd.DataFrame()
         except Exception as e:
             print(f"Ошибка при загрузке планов клиентов: {str(e)}")
             return pd.DataFrame()
@@ -637,7 +899,7 @@ class Plans(QWidget):
             db.close()
 
     def _display_data(self, df):
-        """Отображение данных в таблице с обработкой пустого DataFrame"""
+        """Отображение данных в таблице с обработкой пустого DataFrame и процентов"""
         self.table.clearContents()
         self.table.setRowCount(0)
         
@@ -645,11 +907,21 @@ class Plans(QWidget):
             self.show_message('Данные не найдены')
             return
         
-        self.table.setColumnCount(len(df.columns))
-        self.table.setRowCount(len(df))
-        self.table.setHorizontalHeaderLabels(df.columns)
+        # Копируем DataFrame для преобразования данных
+        display_df = df.copy()
         
-        for row_idx, row in df.iterrows():
+        # Преобразуем числовые значения в проценты для отображения
+        percent_columns = ['Margin_C3_Target_cust', 'Margin_C4_Target_cust', 'Margin_Target_total']
+        for col in percent_columns:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(
+                    lambda x: f"{x*100:.2f}%" if isinstance(x, (float, int)) else str(x))
+        
+        self.table.setColumnCount(len(display_df.columns))
+        self.table.setRowCount(len(display_df))
+        self.table.setHorizontalHeaderLabels(display_df.columns)
+        
+        for row_idx, row in display_df.iterrows():
             for col_idx, value in enumerate(row):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
@@ -693,7 +965,8 @@ class Plans(QWidget):
     def fill_in_year_list(self):
         """Заполнение списка годов через ORM"""
         try:
-            years = db.query(Calendar.Year).distinct().order_by(Calendar.Year.desc()).all()
+            # Исправлено: запрашиваем годы из таблицы Year, а не Calendar
+            years = db.query(Year.Year).distinct().order_by(Year.Year.desc()).all()
             years_list = [str(y[0]) for y in years] if years else []
             self._fill_combobox(self.ui.line_Year, years_list)
         except Exception as e:
@@ -741,7 +1014,11 @@ class Plans(QWidget):
             query = db.query(Holding.Holding_name).distinct().order_by(Holding.Holding_name)
             
             if kam != '-':
-                query = query.join(CustomerPlan).join(Manager).filter(Manager.Manager_name == kam)
+                # Правильный путь связей: Holding -> customers -> contracts -> manager
+                query = query.join(Holding.customers)\
+                            .join(Customer.contracts)\
+                            .join(Contract.manager)\
+                            .filter(Manager.Manager_name == kam)
             
             holdings = query.all()
             holdings_list = [h[0] for h in holdings] if holdings else []
@@ -749,6 +1026,8 @@ class Plans(QWidget):
         except Exception as e:
             print(f"Ошибка при загрузке списка холдингов: {str(e)}")
             self._fill_combobox(self.ui.line_Holding, [])
+        finally:
+            db.close()
 
     def _fill_combobox(self, combobox, items):
         """Универсальное заполнение комбобокса с обработкой пустого списка"""
@@ -759,69 +1038,56 @@ class Plans(QWidget):
             combobox.addItems(items)
     
     def show_message(self, text):
-        """Показать информационное сообщение (не закрывается при копировании)"""
+        """Показать компактное информационное сообщение"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #237508;
-            }
-        """)
+        msg.setWindowTitle("Информация")
         msg.setIcon(QMessageBox.Information)
-
-        # Создаем кнопку копирования
-        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-
+        
         # Настройка буфера обмена
         clipboard = QApplication.clipboard()
         
-        # Подключаем кнопку копирования
+        # Обработчики кнопок
         def copy_text():
             clipboard.setText(text)
-            copy_button.setText("Скопировано!")
-            copy_button.setEnabled(False)
         
         copy_button.clicked.connect(copy_text)
         
-        # Запускаем диалог
+        # Показываем сообщение
         msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке (не закрывается при копировании)"""
+        """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #ff0000;
-            }
-        """)
+        msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
-
-        # Создаем кнопку копирования
-        copy_button = msg.addButton("Копировать", QMessageBox.ActionRole)
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-
+        
         # Настройка буфера обмена
         clipboard = QApplication.clipboard()
         
-        # Подключаем кнопку копирования
+        # Обработчики кнопок
         def copy_text():
             clipboard.setText(text)
-            copy_button.setText("Скопировано!")
-            copy_button.setEnabled(False)
         
         copy_button.clicked.connect(copy_text)
         
-        # Запускаем диалог
+        # Показываем сообщение
         msg.exec_()
+    
+     
+

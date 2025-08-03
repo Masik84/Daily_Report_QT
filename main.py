@@ -28,7 +28,7 @@ from pages_functions.order import Rep_Orders
 from wind.main_window_ui import Ui_MainWindow
 
 
-# alembic revision --m "..." --autogenerate
+# alembic revision --autogenerate -m "fixed_naming"
 # alembic upgrade head
 # pyside6-rcc -o resource_rc.py resource.qrc
 

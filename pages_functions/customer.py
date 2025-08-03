@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, QPushButton,
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, QTextEdit,
                               QTableWidgetItem, QWidget)
 from PySide6.QtCore import Qt
 from functools import lru_cache
@@ -69,11 +69,45 @@ class Customer(QWidget):
             self.ui.label_Cust_File.setText(file_path)
 
     def upload_data(self):
-        """Загрузка данных"""
-        if self.current_upload_step == 0:
-            self._upload_customer_data()
-        else:
-            self._upload_contract_data()
+        """Загрузка данных клиентов и контрактов за один шаг"""
+        file_path = self.cust_file_path or Customer_file
+        contract_path = self.contract_file_path or Contract_file
+
+        try:
+            # Проверка файлов
+            if not os.path.exists(file_path):
+                raise Exception(f"Файл клиентов {os.path.basename(file_path)} не найден")
+            if not os.path.exists(contract_path):
+                raise Exception(f"Файл контрактов {os.path.basename(contract_path)} не найден")
+
+            # Начинаем транзакцию
+            try:
+                # 1. Загружаем клиентов
+                self.run_customer_func(file_path, All_data_file)
+                
+                # 2. Загружаем контракты
+                self.run_contract_func(contract_path)
+                
+                db.commit()
+                self.show_message('Данные клиентов и контрактов успешно загружены!')
+                
+                # Сброс состояния
+                self.current_upload_step = 0
+                self.cust_file_path = None
+                self.contract_file_path = None
+                self.ui.label_Cust_File.setText("Файлы успешно загружены")
+                
+                # Обновление интерфейса
+                self.refresh_all_comboboxes()
+                
+            except Exception as e:
+                db.rollback()
+                raise
+            finally:
+                db.close()
+
+        except Exception as e:
+            self._handle_upload_error(e, "клиентов и контрактов")
 
     def _upload_customer_data(self):
         """Загрузка данных Customer и Holding"""
@@ -140,6 +174,7 @@ class Customer(QWidget):
         self.save_Customer(data)
         data2 = self.read_HYUNDAI_file(all_data_file)
         self.save_HYUNDAI(data2)
+        self.refresh_all_comboboxes()
 
     def run_contract_func(self, contract_file_xls):
         """Основная функция обработки данных Contract"""
@@ -154,9 +189,10 @@ class Customer(QWidget):
             required_columns = ['Код', 'Наименование в программе', 'Холдинг']
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
-
+            df = df[df["Это группа"]] == 'нет'
+            
             column_map = {
-                'ИНН': 'INN', 'Код': 'id',
+                'ИНН': 'INN', 'Код': 'id', 
                 'Наименование в программе': 'Customer_name',
                 'Сектор': 'Sector', 'Тип цен': 'Price_type',
                 'Холдинг': 'Holding'
@@ -172,18 +208,26 @@ class Customer(QWidget):
             return []
 
     def read_contract_file(self, contract_file_xls):
-        """Чтение данных договоров из Excel"""
+        """Чтение данных договоров из Excel с обработкой NaN"""
         try:
-            df = pd.read_excel(contract_file_xls, sheet_name=0, dtype={'Код контрагента': str})
+            df = pd.read_excel(
+                contract_file_xls, 
+                sheet_name=0, 
+                dtype={'Код контрагента': str}
+            ).replace([np.nan], [None])  # Преобразуем NaN в None
 
             required_columns = ['Код', 'Вид договора', 'Наименование', 'Условие оплаты']
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
-
+            
+            df["Менеджер"] = df["Менеджер"].fillna("-")
             column_map = {
-                'Вид договора': 'Contract_Type', 'Код': 'id',
-                'Менеджер': 'Manager_name', 'Наименование': 'Contract',
-                'Тип цен': 'Price_Type', 'Условие оплаты': 'Payment_Condition',
+                'Вид договора': 'Contract_Type', 
+                'Код': 'id',
+                'Менеджер': 'Manager_name', 
+                'Наименование': 'Contract',
+                'Тип цен': 'Price_Type', 
+                'Условие оплаты': 'Payment_Condition',
                 'Код контрагента': 'Customer_id'
             }
 
@@ -346,17 +390,22 @@ class Customer(QWidget):
             return
 
         existing_contracts = {c.id: c for c in db.query(Contract).all()}
+        existing_managers = {m.Manager_name: m.id for m in db.query(Manager).all()}
+        
         to_insert = []
         to_update = []
 
         for row in data:
-            contract_id = row['id']
-            manager_id = self._get_id(Manager, 'Manager_name', row['Manager_name'])
+            # Пропускаем записи с NaN в Manager_name
+            if pd.isna(row['Manager_name']):
+                continue
+                
+            manager_id = existing_managers.get(row['Manager_name'])
             if not manager_id:
                 continue
 
             contract_data = {
-                'id': contract_id,
+                'id': row['id'],
                 'Contract': row['Contract'],
                 'Contract_Type': row['Contract_Type'],
                 'Price_Type': row['Price_Type'],
@@ -365,7 +414,7 @@ class Customer(QWidget):
                 'Manager_id': manager_id
             }
 
-            if contract_id in existing_contracts:
+            if row['id'] in existing_contracts:
                 to_update.append(contract_data)
             else:
                 to_insert.append(contract_data)
@@ -436,7 +485,7 @@ class Customer(QWidget):
     def get_Customers_from_db(self):
         """Получение клиентов из базы"""
         query = db.query(
-            Cust_db.id,
+            Cust_db.id,  # Используем Cust_db вместо Customer
             Cust_db.INN,
             Cust_db.Customer_name,
             Holding.Holding_name.label('Holding'),
@@ -448,10 +497,11 @@ class Customer(QWidget):
         .join(Sector, Cust_db.Sector_id == Sector.id) \
         .outerjoin(Contract, Cust_db.id == Contract.Customer_id) \
         .outerjoin(Manager, Contract.Manager_id == Manager.id) \
-        .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id)
+        .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id) \
+        .group_by(Cust_db.id, Holding.Holding_name, Sector.Sector_name, Manager.Manager_name, TeamLead.TeamLead_name)
 
         df = pd.read_sql(query.statement, db.bind)
-        df = df.drop_duplicates().where(pd.notnull(df), None)
+        df = df.where(pd.notnull(df), None)
 
         return df
 
@@ -499,8 +549,6 @@ class Customer(QWidget):
             cust_df = cust_df[cust_df['AM'] == am]
         elif tl != '-':
             cust_df = cust_df[cust_df['TeamLead'] == tl]
-
-
 
         self._display_data(cust_df.sort_values('Customer_name'))
 
@@ -568,6 +616,7 @@ class Customer(QWidget):
 
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""
+        self._get_id.cache_clear()
         self.fill_in_tl_list()
         self.fill_in_kam_list()
         self.fill_in_cust_list()
@@ -678,61 +727,56 @@ class Customer(QWidget):
             combobox.addItems(sorted(items))
 
     def show_message(self, text):
-        """Показать информационное сообщение с кнопкой копирования"""
-        msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #237508;
-            }
-        """)
-        msg.setIcon(QMessageBox.Information)
-
-        clipboard = QApplication.clipboard()
-
-        # Добавляем кнопку "Copy msg" (не закрывает окно)
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
-
-        # Основная кнопка OK
-        ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-
-        # Отключаем закрытие окна при нажатии на "Copy msg"
-        copy_button.clicked.connect(lambda: None)
-
-        msg.exec_()
+            """Показать компактное информационное сообщение"""
+            msg = QMessageBox()
+            msg.setWindowTitle("Информация")
+            msg.setIcon(QMessageBox.Information)
+            msg.setText(text)
+            
+            # Уменьшаем размер окна
+            msg.setMinimumSize(400, 200)
+            
+            # Добавляем кнопку Copy
+            copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+            ok_button = msg.addButton(QMessageBox.Ok)
+            
+            # Настройка буфера обмена
+            clipboard = QApplication.clipboard()
+            
+            # Обработчики кнопок
+            def copy_text():
+                clipboard.setText(text)
+            
+            copy_button.clicked.connect(copy_text)
+            
+            # Показываем сообщение
+            msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке с кнопкой копирования"""
+        """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #ff0000;
-            }
-        """)
+        msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
-
-        clipboard = QApplication.clipboard()
-
-        # Добавляем кнопку "Copy msg" (не закрывает окно)
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
-
-        # Основная кнопка OK
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-
-        # Отключаем закрытие окна при нажатии на "Copy msg"
-        copy_button.clicked.connect(lambda: None)
-
+        
+        # Настройка буфера обмена
+        clipboard = QApplication.clipboard()
+        
+        # Обработчики кнопок
+        def copy_text():
+            clipboard.setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        
+        # Показываем сообщение
         msg.exec_()
+        
+     
+        

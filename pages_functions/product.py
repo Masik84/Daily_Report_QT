@@ -3,8 +3,8 @@ import pandas as pd
 from sqlalchemy import func
 import datetime
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, 
-                              QTableWidgetItem, QWidget, QApplication, QPushButton)
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QPushButton, QLabel, QScrollArea, QVBoxLayout,
+                              QTableWidgetItem, QWidget, QApplication, QDialogButtonBox)
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -60,7 +60,7 @@ class Product(QWidget):
             # Закрываем предыдущие сессии, если они есть
             if db.is_active:
                 db.close()
-
+            
             # Определяем путь к файлу
             file_path = self.ui.label_Prod_File.text()
             if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
@@ -122,6 +122,7 @@ class Product(QWidget):
         self.save_Product_Group(data)
         self.save_Product_Names(data)
         self.save_Materials(data)
+        self.refresh_all_comboboxes()
 
     def read_product_file(self, file_path):
         """Чтение данных из Excel с фильтрацией и обработкой значений"""
@@ -143,15 +144,33 @@ class Product(QWidget):
                 valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
                 df = df[df['Номенклатурная группа'].isin(valid_groups)]
             
+            if 'Артикул' in df.columns:
+                df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
+            if 'Наименование' in df.columns:
+                df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
+            
             # 3. Переименование колонок
             column_map = {
-                'Код': 'Code', 'Артикул': 'Article', 'Наименование': 'Material_Name',
-                'Полное наименование': 'Full_name', 'Brand': 'Brand', 'Family': 'Family',
-                'Product name': 'Product_name', 'Type': 'Product_type', 'Единица': 'UoM',
-                'Единица измерения отчетов': 'Report_UoM', 'Вид упаковки': 'Package_type',
-                'Количество в упаковке': 'Items_per_Package', 'Шт в комплекте': 'Items_per_Set',
-                'Упаковка(Литраж)': 'Package_Volume', 'Нетто': 'Net_weight', 'Брутто': 'Gross_weight',
-                'Плотность': 'Density', 'ТН ВЭД': 'TNVED', 'Акциз': 'Excise'
+                'Код': 'Code', 
+                'Артикул': 'Article', 
+                'Наименование': 'Material_Name',
+                'Полное наименование': 'Full_name',
+                'Brand': 'Brand', 
+                'Family': 'Family',
+                'Product name': 'Product_name', 
+                'Type': 'Product_type', 
+                'Единица': 'UoM',
+                'Единица измерения отчетов': 'Report_UoM', 
+                'Вид упаковки': 'Package_type',
+                'Количество в упаковке': 'Items_per_Package', 
+                'Шт в комплекте': 'Items_per_Set',
+                'Упаковка(Литраж)': 'Package_Volume', 
+                'Нетто': 'Net_weight', 
+                'Брутто': 'Gross_weight',
+                'Плотность': 'Density', 
+                'ТН ВЭД': 'TNVED', 
+                'Акциз': 'Excise',
+                'Код группы': 'Код_группы'
             }
             df = df.rename(columns=column_map)
             
@@ -217,6 +236,7 @@ class Product(QWidget):
                 tnved_id = db.query(TNVED.id).filter(TNVED.code == row['TNVED']).scalar()
                 if tnved_id:
                     product_groups[row['Код_группы']] = {
+                        'id': row['Код_группы'],
                         'Product_name': row['Product_name'],
                         'TNVED_id': tnved_id
                     }
@@ -261,7 +281,10 @@ class Product(QWidget):
         product_names = {}
         for row in data:
             if row.get('Material_Name') and row.get('Код_группы'):
-                product_names[row['Material_Name']] = row['Код_группы']
+                product_names[row['Material_Name']] = {
+                    'Product_name': row['Material_Name'], 
+                    'Product_Group_id': row['Код_группы']
+                }
 
         # Получаем существующие наименования из БД
         existing_names = {n.Product_name: n for n in db.query(Product_Names).all()}
@@ -270,18 +293,18 @@ class Product(QWidget):
         to_insert = []
         to_update = []
         
-        for name, group_id in product_names.items():
+        for name, name_data in product_names.items():
             if name in existing_names:
                 # Обновляем только если изменилась группа
-                if existing_names[name].Product_Group_id != group_id:
+                if existing_names[name].Product_Group_id != name_data['Product_Group_id']:
                     to_update.append({
                         'id': existing_names[name].id,
-                        'Product_Group_id': group_id
+                        'Product_Group_id': name_data['Product_Group_id']
                     })
             else:
                 to_insert.append({
-                    'Name': name,
-                    'Product_Group_id': group_id
+                    'Product_name': name_data['Product_name'],
+                    'Product_Group_id': name_data['Product_Group_id']
                 })
         
         try:
@@ -301,114 +324,123 @@ class Product(QWidget):
         if not data:
             return
 
-        # Получаем существующие материалы из БД (теперь таблица 'material')
-        existing_materials = {m.Code: m for m in db.query(Materials).all()}  # Обратите внимание: класс Materials, а таблица 'material'
-        
-        # Получаем mapping наименований продуктов к их ID (таблица 'product_names')
-        name_to_id = {n.Name: n.id for n in db.query(Product_Names).all()}
-        
-        to_insert = []
-        to_update = []
-        
-        for row in data:
-            if not row.get('Code') or not row.get('Material_Name'):
-                continue
-                
-            product_name_id = name_to_id.get(row['Material_Name'])
-            if not product_name_id:
-                continue
-                
-            material_data = {
-                'Code': row['Code'],
-                'Article': row.get('Article'),
-                'Full_name': row.get('Full_name'),
-                'Brand': row.get('Brand'),
-                'Family': row.get('Family'),
-                'Product_type': row.get('Product_type'),
-                'UoM': row.get('UoM'),
-                'Report_UoM': row.get('Report_UoM'),
-                'Package_type': row.get('Package_type'),
-                'Items_per_Package': row.get('Items_per_Package'),
-                'Items_per_Set': row.get('Items_per_Set'),
-                'Package_Volume': row.get('Package_Volume'),
-                'Net_weight': row.get('Net_weight'),
-                'Gross_weight': row.get('Gross_weight'),
-                'Density': row.get('Density'),
-                'Excise': row.get('Excise'),
-                'Product_Names_id': product_name_id
-            }
-            
-            if row['Code'] in existing_materials:
-                to_update.append(material_data)
-            else:
-                to_insert.append(material_data)
-        
         try:
+            # Получаем существующие материалы из БД
+            existing_materials = {m.Code: m for m in db.query(Materials).all()}
+            
+            # Получаем mapping наименований продуктов к их ID (используем правильное имя атрибута Product_name)
+            name_to_id = {n.Product_name: n.id for n in db.query(Product_Names).all()}
+            
+            to_insert = []
+            to_update = []
+            
+            for row in data:
+                if not row.get('Code') or not row.get('Material_Name'):
+                    continue
+                    
+                product_name_id = name_to_id.get(row['Material_Name'])
+                if not product_name_id:
+                    continue
+                    
+                material_data = {
+                    'Code': row['Code'],
+                    'Article': row.get('Article'),
+                    'Full_name': row.get('Full_name'),
+                    'Brand': row.get('Brand'),
+                    'Family': row.get('Family'),
+                    'Product_type': row.get('Product_type'),
+                    'UoM': row.get('UoM'),
+                    'Report_UoM': row.get('Report_UoM'),
+                    'Package_type': row.get('Package_type'),
+                    'Items_per_Package': row.get('Items_per_Package'),
+                    'Items_per_Set': row.get('Items_per_Set'),
+                    'Package_Volume': row.get('Package_Volume'),
+                    'Net_weight': row.get('Net_weight'),
+                    'Gross_weight': row.get('Gross_weight'),
+                    'Density': row.get('Density'),
+                    'Excise': row.get('Excise'),
+                    'Product_Names_id': product_name_id
+                }
+                
+                if row['Code'] in existing_materials:
+                    to_update.append(material_data)
+                else:
+                    to_insert.append(material_data)
+            
             if to_insert:
-                db.bulk_insert_mappings(Materials, to_insert)  # Класс Models.Materials, но таблица в БД 'material'
+                db.bulk_insert_mappings(Materials, to_insert)
             if to_update:
                 db.bulk_update_mappings(Materials, to_update)
             db.commit()
+            
         except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Ошибка сохранения Materials: {str(e)}")
         finally:
             db.close()
+
+    def _read_abc_file(self):
+        """Чтение файла ABC (общая функция для всех методов)"""
+        file_path = All_data_file
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
+
+        with pd.ExcelFile(file_path) as excel:
+            df = pd.read_excel(excel, sheet_name="ABC")
+
+        if 'Категория ABCD' not in df.columns:
+            raise ValueError("Файл не содержит обязательной колонки 'Категория ABCD'")
+        
+        df["Дата изм"] = pd.to_datetime(df["Дата изм"], format="%d.%m.%Y", errors="coerce")
+        df["Дата оконч"] = pd.to_datetime(df["Дата оконч"], format="%d.%m.%Y", errors="coerce")
+
+        return df
     
     def save_ABC_list(self):
-        """Инициализация списка ABC категорий (A, B, C, D)"""
+        """Загрузка всех уникальных категорий из файла в таблицу ABC_list"""
         try:
-            # Стандартные категории ABC
-            abc_categories = [
-                {'ABC_category': 'A', 'description': 'Высокоприоритетные товары'},
-                {'ABC_category': 'B', 'description': 'Товары среднего приоритета'},
-                {'ABC_category': 'C', 'description': 'Низкоприоритетные товары'},
-                {'ABC_category': 'D', 'description': 'Товары под списание'}
-            ]
+            df = self._read_abc_file()
             
-            # Получаем существующие категории
+            # Получаем все уникальные категории (игнорируем пустые и '-')
+            abc_categories = set(
+                str(c).strip() 
+                for c in df['Категория ABCD'].unique() 
+                if pd.notna(c) and str(c).strip() not in ('', '-')
+            )
+            
+            if not abc_categories:
+                self.show_message("Нет категорий для загрузки в файле ABC")
+                return
+            
+            # Получаем существующие категории из БД
             existing_categories = {c.ABC_category for c in db.query(ABC_list).all()}
             
             # Добавляем только новые категории
-            to_insert = [
-                ABC_list(**category) 
-                for category in abc_categories 
-                if category['ABC_category'] not in existing_categories
+            new_categories = [
+                ABC_list(ABC_category=cat) 
+                for cat in abc_categories 
+                if cat not in existing_categories
             ]
             
-            if to_insert:
-                db.add_all(to_insert)
+            if new_categories:
+                db.add_all(new_categories)
                 db.commit()
-                self.show_message('Список ABC категорий успешно инициализирован')
+                self.show_message(f"Добавлено новых категорий: {len(new_categories)}")
             else:
-                self.show_message('Все ABC категории уже существуют')
+                self.show_message("Все категории уже существуют в БД")
                 
         except Exception as e:
             db.rollback()
-            self.show_error_message(f'Ошибка инициализации ABC категорий: {str(e)}')
+            self.show_error_message(f"Ошибка загрузки категорий: {str(e)}")
         finally:
             db.close()
 
     def update_ABC_cat(self):
+        """Обновление ABC категорий для продуктов с улучшенной обработкой"""
         try:
-            # Закрываем все предыдущие сессии, если они есть
-            if db.is_active:
-                db.close()
-
-            file_path = All_data_file
+            # Чтение файла
+            df = self._read_abc_file()
             
-            if not os.path.exists(file_path):
-                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
-
-            # Читаем Excel файл с использованием контекстного менеджера
-            with pd.ExcelFile(file_path) as excel:
-                df = pd.read_excel(excel, sheet_name="ABC")
-
-            # Проверка обязательных столбцов
-            required_columns = ['Продукт + упаковка', 'Дата изм', 'Дата оконч', 'Категория ABCD']
-            if not all(col in df.columns for col in required_columns):
-                raise ValueError("Файл не содержит всех необходимых столбцов")
-
             # Переименование колонок
             df = df.rename(columns={
                 'Продукт + упаковка': 'product_name',
@@ -417,113 +449,95 @@ class Product(QWidget):
                 'Категория ABCD': 'ABC_category'
             })
 
-            # Обработка дат
+            # Очистка данных
+            df = df.dropna(subset=['product_name', 'ABC_category', 'Start_date', 'End_date'])
+            df['ABC_category'] = df['ABC_category'].astype(str).str.strip()
+            df = df[df['ABC_category'] != '']
+            
+            # Преобразование дат
             df['Start_date'] = pd.to_datetime(df['Start_date'], dayfirst=True, errors='coerce').dt.date
             df['End_date'] = pd.to_datetime(df['End_date'], dayfirst=True, errors='coerce').dt.date
+            df = df.dropna(subset=['Start_date', 'End_date'])
+            
+            if df.empty:
+                self.show_message("Нет данных для обработки после очистки")
+                return
 
-            # Фильтрация данных
-            df = df[(df['ABC_category'] != '-') & 
-                    (df['product_name'].notna()) & 
-                    (df['Start_date'].notna()) & 
-                    (df['End_date'].notna())]
+            # Получаем данные из БД с нормализацией
+            products = {n.Product_name.lower().strip(): n.id for n in db.query(Product_Names).all()}
+            categories = {c.ABC_category.lower().strip(): c.id for c in db.query(ABC_list).all()}
+            
+            # Создаем временный словарь для новых категорий
+            new_categories = {}
+            for cat in df['ABC_category'].unique():
+                norm_cat = str(cat).lower().strip()
+                if norm_cat not in categories and norm_cat not in new_categories:
+                    new_categories[norm_cat] = cat  # Сохраняем оригинальное написание
 
-            # Получаем соответствия названий продуктов и ABC категорий
-            try:
-                product_mapping = {n.Product_name: n.id for n in db.query(Product_Names).all()}
-                abc_mapping = {c.ABC_category: c.id for c in db.query(ABC_list).all()}
-            finally:
-                if db.is_active:
-                    db.close()
+            # Добавляем новые категории в БД
+            if new_categories:
+                for norm_cat, orig_cat in new_categories.items():
+                    db.add(ABC_list(ABC_category=orig_cat))
+                db.commit()
+                # Обновляем список категорий
+                categories = {c.ABC_category.lower().strip(): c.id for c in db.query(ABC_list).all()}
 
+            # Подготовка данных для вставки
             to_insert = []
-            to_update = []
-
-            # Обрабатываем каждую строку DataFrame
+            missing_products = set()
+            
             for _, row in df.iterrows():
-                product_name = row['product_name']
-                abc_category = row['ABC_category']
-
-                # Пропускаем если нет соответствий
-                if product_name not in product_mapping or abc_category not in abc_mapping:
-                    continue
-
-                product_id = product_mapping[product_name]
-                abc_id = abc_mapping[abc_category]
-
-                # Проверяем существующие записи для этого продукта
-                try:
-                    existing_records = db.query(ABC_cat).filter(
-                        ABC_cat.product_name_id == product_id
-                    ).all()
-
-                    # Проверяем точное совпадение
-                    exact_match = any(
-                        record.abc_list_id == abc_id and
-                        record.Start_date == row['Start_date'] and
-                        record.End_date == row['End_date']
-                        for record in existing_records
-                    )
-
-                    if exact_match:
-                        continue  # Запись уже существует
-
-                    # Проверяем пересечение периодов
-                    for record in existing_records:
-                        if (record.abc_list_id != abc_id and
-                            row['Start_date'] <= record.End_date and
-                            row['End_date'] >= record.Start_date):
-                            
-                            # Обновляем существующую запись
-                            to_update.append({
-                                'id': record.id,
-                                'abc_list_id': abc_id,
-                                'Start_date': row['Start_date'],
-                                'End_date': row['End_date']
-                            })
-                            break
-                    else:
-                        # Добавляем новую запись
-                        to_insert.append({
-                            'product_name_id': product_id,
-                            'abc_list_id': abc_id,
-                            'Start_date': row['Start_date'],
-                            'End_date': row['End_date']
-                        })
-
-                finally:
-                    if db.is_active:
-                        db.close()
-
-            # Выполняем финальные операции с БД
-            try:
-                with db.begin():
-                    if to_insert:
-                        db.bulk_insert_mappings(ABC_cat, to_insert)
-                    if to_update:
-                        db.bulk_update_mappings(ABC_cat, to_update)
-
-                # Формируем информационное сообщение
-                message_parts = []
-                if to_insert:
-                    message_parts.append(f"Добавлено новых: {len(to_insert)}")
-                if to_update:
-                    message_parts.append(f"Обновлено: {len(to_update)}")
+                norm_product = str(row['product_name']).lower().strip()
+                norm_category = str(row['ABC_category']).lower().strip()
                 
-                if message_parts:
-                    self.show_message("ABC категории обновлены. " + ", ".join(message_parts))
-                else:
-                    self.show_message("Нет изменений для обновления")
+                product_id = products.get(norm_product)
+                category_id = categories.get(norm_category)
+                
+                if not product_id:
+                    missing_products.add(row['product_name'])
+                    continue
+                    
+                # Проверяем существование записи
+                exists = db.query(ABC_cat).filter(
+                    ABC_cat.product_name_id == product_id,
+                    ABC_cat.abc_list_id == category_id,
+                    ABC_cat.Start_date == row['Start_date'],
+                    ABC_cat.End_date == row['End_date']
+                ).first()
+                
+                if not exists:
+                    to_insert.append({
+                        'product_name_id': product_id,
+                        'abc_list_id': category_id,
+                        'Start_date': row['Start_date'],
+                        'End_date': row['End_date']
+                    })
 
-            except Exception as e:
-                db.rollback()
-                raise
-            finally:
-                if db.is_active:
-                    db.close()
-
+            # Вставка данных
+            if to_insert:
+                db.bulk_insert_mappings(ABC_cat, to_insert)
+                db.commit()
+            
+            # Формирование отчета
+            report = [
+                f"Всего строк в файле: {len(df)}",
+                f"Добавлено новых записей: {len(to_insert)}",
+                f"Добавлено новых категорий: {len(new_categories)}",
+                f"Пропущено из-за отсутствия продукта: {len(missing_products)}"
+            ]
+            
+            if missing_products:
+                report.append("\nПримеры отсутствующих продуктов:")
+                report.extend(list(missing_products)[:5])
+            
+            self.show_message("\n".join(report))
+            
         except Exception as e:
-            self.show_error_message(f'Ошибка обновления ABC категорий: {str(e)}')
-        
+            db.rollback()
+            self.show_error_message(f"Ошибка обновления ABC: {str(e)}")
+        finally:
+            db.close()
+            
     @lru_cache(maxsize=32)
     def _get_unique_values(self, column, filter_column=None, filter_value=None):
         """Получение уникальных значений с фильтрацией"""
@@ -554,6 +568,7 @@ class Product(QWidget):
 
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""
+        self._get_unique_values.cache_clear()
         self.fill_in_prod_brand_list()
         self.fill_in_prod_fam_list()
         self.fill_in_prod_name_list()
@@ -718,51 +733,56 @@ class Product(QWidget):
         self.show_message('Отчет сохранен')
 
     def show_message(self, text):
-        """Показать информационное сообщение с кнопкой копирования"""
+        """Показать компактное информационное сообщение"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #237508;
-            }
-        """)
+        msg.setWindowTitle("Информация")
         msg.setIcon(QMessageBox.Information)
-
-        clipboard = QApplication.clipboard()
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-        copy_button.clicked.connect(lambda: None)
-
+        
+        # Настройка буфера обмена
+        clipboard = QApplication.clipboard()
+        
+        # Обработчики кнопок
+        def copy_text():
+            clipboard.setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        
+        # Показываем сообщение
         msg.exec_()
 
     def show_error_message(self, text):
-        """Показать сообщение об ошибке с кнопкой копирования"""
+        """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()
-        msg.setText(text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #f8f8f2;
-                font: 10pt "Tahoma";
-            }
-            QMessageBox QLabel {
-                color: #ff0000;
-            }
-        """)
+        msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
-
-        clipboard = QApplication.clipboard()
-        copy_button = msg.addButton("Copy msg", QMessageBox.ActionRole)
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
+        msg.setText(text)
+        
+        # Уменьшаем размер окна
+        msg.setMinimumSize(400, 200)
+        
+        # Добавляем кнопку Copy
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
-        ok_button.setDefault(True)
-        copy_button.clicked.connect(lambda: None)
-
+        
+        # Настройка буфера обмена
+        clipboard = QApplication.clipboard()
+        
+        # Обработчики кнопок
+        def copy_text():
+            clipboard.setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        
+        # Показываем сообщение
         msg.exec_()
-        
-        
+    
+    
+    
