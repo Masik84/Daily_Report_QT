@@ -199,6 +199,7 @@ class Materials(Base):
     Gross_weight = Column(Numeric)  # Брутто
     Density = Column(Numeric)  # Плотность
     Excise = Column(String)  # Акциз
+    Status = Column(String)
 
     Product_Names_id = Column(Integer, ForeignKey('product_names.id', name='fk_materials_product_names'))
 
@@ -405,6 +406,11 @@ class CompanyPlan(Base):
 
 class CustomerPlan(Base):
     __tablename__ = 'customer_plans'
+    
+    __table_args__ = (
+        UniqueConstraint('Year_id', 'Month_id', 'Week_id', 'Holding_id', 'Manager_id', 
+                       name='uq_customer_plan_unique'),)
+    
     id = Column(Integer, primary_key=True)
     Volume_Target_cust = Column(Numeric)
     Revenue_Target_cust = Column(Numeric)

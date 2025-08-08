@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import select, and_, or_
 from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, 
-                              QWidget, QHeaderView, QApplication, QTextEdit)
+                              QWidget, QHeaderView, QApplication, QMenu)
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -23,19 +23,70 @@ class Costs(QWidget):
         self.refresh_all_comboboxes()
     
     def _setup_ui(self):
-        """Настройка интерфейса"""
+        """Настройка интерфейса таблицы"""
         self.table = self.ui.table
-        self.table.resizeColumnsToContents()
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSortingEnabled(True)
-        self.table.setWordWrap(False)
-        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
-    
+        
+        # Базовые настройки таблицы
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)  # Выделение отдельных ячеек
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # Запрет редактирования
+        self.table.setAlternatingRowColors(True)  # Чередование цветов строк
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # Изменяемые размеры
+        self.table.horizontalHeader().setStretchLastSection(True)  # Растягивание последнего столбца
+        self.table.verticalHeader().setVisible(False)  # Скрытие вертикальных заголовков
+        self.table.setSortingEnabled(True)  # Сортировка по клику на заголовок
+        self.table.setWordWrap(False)  # Запрет переноса слов
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)  # Обрезка длинного текста
+        
+        # Настройка контекстного меню для копирования
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        
+        # Стилизация таблицы
+        self.table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f0f0f0;
+                selection-background-color: #3daee9;
+                selection-color: black;
+            }
+            QTableWidget::item {
+                padding: 3px;
+            }
+        """)
+
+    def show_context_menu(self, position):
+        """Показ контекстного меню для копирования"""
+        menu = QMenu()
+        copy_action = menu.addAction("Копировать")
+        copy_action.triggered.connect(self.copy_cell_content)
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def copy_cell_content(self):
+        """Копирование содержимого выделенных ячеек"""
+        selected_items = self.table.selectedItems()
+        if selected_items:
+            clipboard = QApplication.clipboard()
+            # Если выделена одна ячейка - копируем только ее
+            if len(selected_items) == 1:
+                text = selected_items[0].text()
+            else:
+                # Если выделено несколько ячеек - копируем с разделением табуляцией и переносом строк
+                rows = {}
+                for item in selected_items:
+                    row = item.row()
+                    col = item.column()
+                    if row not in rows:
+                        rows[row] = {}
+                    rows[row][col] = item.text()
+                
+                # Сортируем ячейки по строкам и столбцам
+                sorted_rows = sorted(rows.items())
+                text = ""
+                for row, cols in sorted_rows:
+                    sorted_cols = sorted(cols.items())
+                    text += "\t".join([text for col, text in sorted_cols]) + "\n"
+            
+            clipboard.setText(text.strip())
+
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
         self.ui.btn_open_file.clicked.connect(self.get_file)
@@ -107,9 +158,9 @@ class Costs(QWidget):
     def _update_calendar_tables(self, data):
         """Обновление таблиц Year, Month для Costs"""
         try:
-            # Получаем уникальные года и месяцы
-            years = data['Year'].unique()
-            months = data['Month'].unique()
+            # Получаем уникальные года и месяцы, преобразуя numpy.int64 в int
+            years = [int(year) for year in data['Year'].unique()]
+            months = [int(month) for month in data['Month'].unique()]
             
             # Добавляем новые года
             for year in years:

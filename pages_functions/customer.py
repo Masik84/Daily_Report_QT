@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, QTextEdit,
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QApplication, QMenu,
                               QTableWidgetItem, QWidget)
 from PySide6.QtCore import Qt
 from functools import lru_cache
@@ -30,12 +30,11 @@ class Customer(QWidget):
 
         self.refresh_all_comboboxes()
 
-
     def _setup_ui(self):
         """Настройка интерфейса"""
         self.table = self.ui.table
         self.table.resizeColumnsToContents()
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)  # Изменено с SelectRows на SelectItems
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
@@ -44,6 +43,31 @@ class Customer(QWidget):
         self.table.setSortingEnabled(True)
         self.table.setWordWrap(False)
         self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        
+        # Добавляем контекстное меню для копирования
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        
+        self.table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f0f0f0;
+                selection-background-color: #3daee9;
+                selection-color: black;
+            }
+        """)
+
+    def show_context_menu(self, position):
+        menu = QMenu()
+        copy_action = menu.addAction("Копировать")
+        copy_action.triggered.connect(self.copy_cell_content)
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def copy_cell_content(self):
+        selected_items = self.table.selectedItems()
+        if selected_items:
+            clipboard = QApplication.clipboard()
+            text = "\n".join(item.text() for item in selected_items)
+            clipboard.setText(text)
 
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
@@ -72,7 +96,7 @@ class Customer(QWidget):
         """Загрузка данных клиентов и контрактов за один шаг"""
         file_path = self.cust_file_path or Customer_file
         contract_path = self.contract_file_path or Contract_file
-
+        
         try:
             # Проверка файлов
             if not os.path.exists(file_path):
@@ -82,10 +106,8 @@ class Customer(QWidget):
 
             # Начинаем транзакцию
             try:
-                # 1. Загружаем клиентов
-                self.run_customer_func(file_path, All_data_file)
-                
-                # 2. Загружаем контракты
+
+                self.run_customer_func(file_path)
                 self.run_contract_func(contract_path)
                 
                 db.commit()
@@ -109,53 +131,6 @@ class Customer(QWidget):
         except Exception as e:
             self._handle_upload_error(e, "клиентов и контрактов")
 
-    def _upload_customer_data(self):
-        """Загрузка данных Customer и Holding"""
-        file_path = self.cust_file_path or Customer_file
-
-        try:
-            if not os.path.exists(file_path):
-                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
-
-            try:
-                self.run_customer_func(file_path, All_data_file)
-                db.commit()
-                self.show_message('Данные загружены!')
-            except Exception as e:
-                db.rollback()
-                raise
-            finally:
-                db.close()
-
-        except Exception as e:
-            self._handle_upload_error(e, "клиентов")
-
-    def _upload_contract_data(self):
-        """Загрузка данных Contract"""
-        file_path = self.contract_file_path or Contract_file
-
-        try:
-            if not os.path.exists(file_path):
-                raise Exception(f"Файл {os.path.basename(file_path)} не найден")
-
-            try:
-                self.run_contract_func(file_path)
-                db.commit()
-                self.show_message('Данные Contract загружены!')
-                self.current_upload_step = 0
-                self.cust_file_path = None
-                self.contract_file_path = None
-                self.ui.label_Cust_File.setText("Выбери файл или нажми Upload")
-                self.refresh_all_comboboxes()
-            except Exception as e:
-                db.rollback()
-                raise
-            finally:
-                db.close()
-
-        except Exception as e:
-            self._handle_upload_error(e, "договоров")
-
     def _handle_upload_error(self, error, data_type):
         """Обработка ошибок загрузки"""
         if "transaction is already begun" in str(error):
@@ -166,13 +141,14 @@ class Customer(QWidget):
             msg = f"Ошибка загрузки {data_type}: {str(error)}"
         self.show_error_message(msg)
 
-    def run_customer_func(self, data_file_xls, all_data_file):
+    def run_customer_func(self, data_file_xls):
         """Основная функция обработки данных Customer и Holding"""
         data = self.read_customer_file(data_file_xls)
         self.save_Sector(data)
         self.save_Holding(data)
         self.save_Customer(data)
-        data2 = self.read_HYUNDAI_file(all_data_file)
+        self.show_message('Данные клиентов загружены в БД')
+        data2 = self.read_HYUNDAI_file(All_data_file)
         self.save_HYUNDAI(data2)
         self.refresh_all_comboboxes()
 
@@ -182,26 +158,96 @@ class Customer(QWidget):
         self.save_Contract(data)
 
     def read_customer_file(self, cust_file_xls):
-        """Чтение данных клиентов из Excel"""
+        """Чтение данных клиентов с детализацией несоответствий"""
         try:
-            df = pd.read_excel(cust_file_xls, sheet_name=0, dtype={'ИНН': str})
-
-            required_columns = ['Код', 'Наименование в программе', 'Холдинг']
-            if not all(col in df.columns for col in required_columns):
-                raise ValueError("Файл не содержит необходимых столбцов")
-            df = df[df["Это группа"]] == 'нет'
+            # Чтение и подготовка данных
+            df = pd.read_excel(All_data_file, sheet_name='Customers', dtype={'Контрагент.ИНН': str})
             
             column_map = {
-                'ИНН': 'INN', 'Код': 'id', 
-                'Наименование в программе': 'Customer_name',
-                'Сектор': 'Sector', 'Тип цен': 'Price_type',
-                'Холдинг': 'Holding'
+                'Контрагент.ИНН': 'INN',
+                'Контрагент.Код': 'id',
+                'Контрагент': 'Customer_name',
+                'SECTOR': 'Sector',
+                'Тип цен': 'Price_type',
+                'ХОЛДИНГ': 'Holding'
             }
-
             df = df.rename(columns=column_map)[list(column_map.values())]
-            df['Sector'] = df['Sector'].fillna("-")
-            df["Holding"] = np.where(pd.isna(df["Holding"]), df['Customer_name'], df["Holding"])
-            return df[df['id'] != 'n/a'].to_dict('records')
+            df[['Sector', 'Price_type']] = df[['Sector', 'Price_type']].fillna("-")
+            
+            # Удаляем записи с 'new'
+            df = df[~df['id'].astype(str).str.contains('new', case=False, na=False)]
+            
+            # Клиенты, которые не проверяются
+            excluded_customers = ["OZON", "Yandex", "Wildberries", "СберМегаМаркет"]
+            ksh_mask = df['id'].astype(str).str.startswith('КШ-')
+            excluded_mask = df['Customer_name'].isin(excluded_customers)
+            
+            # Данные для проверки
+            df_to_check = df[~ksh_mask & ~excluded_mask].copy()
+            
+            if not df_to_check.empty:
+                df_cust1c = pd.read_excel(cust_file_xls, sheet_name=0, dtype={'ИНН': str})
+                df_cust1c = df_cust1c[(df_cust1c["Это группа"] == 'Нет') & (df_cust1c['Код'].isin(df_to_check['id']))]
+                
+                if not df_cust1c.empty:
+                    # Подготовка данных 1С
+                    column_map_1c = {
+                        'ИНН': 'INN_1C',
+                        'Код': 'id_1C',
+                        'Наименование в программе': 'Customer_name_1C',
+                        'Сектор': 'Sector_1C',
+                        'Тип цен': 'Price_type_1C',
+                        'Холдинг': 'Holding_1C'
+                    }
+                    df_cust1c = df_cust1c.rename(columns=column_map_1c)[list(column_map_1c.values())]
+                    df_cust1c["Customer_name_1C"] = df_cust1c['Customer_name_1C'].str.replace('не исп_', '', regex=False)
+                    df_cust1c["Holding_1C"] = df_cust1c['Holding_1C'].str.replace('не исп_', '', regex=False)
+                    df_cust1c[['Sector_1C', 'Price_type_1C']] = df_cust1c[['Sector_1C', 'Price_type_1C']].fillna("-")
+                    df_cust1c["Holding_1C"] = np.where(pd.isna(df_cust1c["Holding_1C"]), df_cust1c['Customer_name_1C'], df_cust1c["Holding_1C"])
+                    
+                    # Объединение и проверка несоответствий
+                    merged = pd.merge(df_to_check, df_cust1c, left_on='id', right_on='id_1C', how='left')
+                    
+                    # Добавляем колонку с несоответствиями только в df_to_check
+                    merged['Несоответствия'] = ""
+                    field_names = {
+                        'Customer_name': 'Название',
+                        'Sector': 'Сектор',
+                        'Holding': 'Холдинг',
+                        'Price_type': 'Тип цены'
+                    }
+                    
+                    for col in field_names.keys():
+                        if col == 'Price_type':
+                            mask = (
+                                ((merged['Price_type'] == "-") & (merged['Price_type_1C'] != "-")) |
+                                ((merged['Price_type'] != "-") & (merged['Price_type_1C'] != "-") & 
+                                (merged['Price_type'] != merged['Price_type_1C']))
+                            )
+                        else:
+                            mask = (merged[col] != merged[f"{col}_1C"]) & ~pd.isna(merged[f"{col}_1C"])
+                        
+                        merged.loc[mask, 'Несоответствия'] = merged.loc[mask, 'Несоответствия'] + \
+                            (", " if merged.loc[mask, 'Несоответствия'].any() else "") + field_names[col]
+                    
+                    merged['Несоответствия'] = merged['Несоответствия'].str.lstrip(", ")
+                    
+                    # Формирование отчета только по проверенным данным
+                    result_df = merged[merged['Несоответствия'] != ""]
+                    if not result_df.empty:
+                        output_df = result_df[['id', 'Customer_name', 'INN', 'Sector', 'Holding', 
+                                            'Price_type', 'Несоответствия'] + 
+                                    [f"{col}_1C" for col in field_names.keys()]]
+                        output_file = "mismatches_report.xlsx"
+                        output_df.to_excel(output_file, index=False)
+                        self.show_message(
+                            f"Найдено {len(result_df)} несоответствий.\n"
+                            f"Отчет сохранен в {output_file}\n"
+                            "Проверьте данные в файле клиентов"
+                        )
+            
+            # Возвращаем все данные (кроме 'new') для загрузки в БД
+            return df.to_dict('records')
 
         except Exception as e:
             self.show_error_message(f"Ошибка чтения файла клиентов: {str(e)}")
@@ -210,11 +256,7 @@ class Customer(QWidget):
     def read_contract_file(self, contract_file_xls):
         """Чтение данных договоров из Excel с обработкой NaN"""
         try:
-            df = pd.read_excel(
-                contract_file_xls, 
-                sheet_name=0, 
-                dtype={'Код контрагента': str}
-            ).replace([np.nan], [None])  # Преобразуем NaN в None
+            df = pd.read_excel(contract_file_xls, sheet_name=0, dtype={'Код контрагента': str}).replace([np.nan], [None])
 
             required_columns = ['Код', 'Вид договора', 'Наименование', 'Условие оплаты']
             if not all(col in df.columns for col in required_columns):
@@ -378,6 +420,7 @@ class Customer(QWidget):
             if to_update:
                 db.bulk_update_mappings(Cust_db, to_update)
             db.commit()
+            
         except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Ошибка сохранения клиентов: {str(e)}")
@@ -385,49 +428,116 @@ class Customer(QWidget):
             db.close()
 
     def save_Contract(self, data):
-        """Сохранение договоров с обновлением существующих"""
+        """Сохранение договоров с поиском менеджеров по AM_1C_Name"""
         if not data:
+            self.show_message("Нет данных для сохранения")
             return
 
-        existing_contracts = {c.id: c for c in db.query(Contract).all()}
-        existing_managers = {m.Manager_name: m.id for m in db.query(Manager).all()}
-        
-        to_insert = []
-        to_update = []
-
-        for row in data:
-            # Пропускаем записи с NaN в Manager_name
-            if pd.isna(row['Manager_name']):
-                continue
-                
-            manager_id = existing_managers.get(row['Manager_name'])
-            if not manager_id:
-                continue
-
-            contract_data = {
-                'id': row['id'],
-                'Contract': row['Contract'],
-                'Contract_Type': row['Contract_Type'],
-                'Price_Type': row['Price_Type'],
-                'Payment_Condition': row['Payment_Condition'],
-                'Customer_id': row['Customer_id'],
-                'Manager_id': manager_id
-            }
-
-            if row['id'] in existing_contracts:
-                to_update.append(contract_data)
-            else:
-                to_insert.append(contract_data)
+        stats = {
+            'total': 0,
+            'saved': 0,
+            'no_manager': 0,
+            'invalid_customer': 0,
+            'missing_fields': 0,
+            'skipped': []
+        }
 
         try:
+            # Получаем справочники из БД
+            existing_contracts = {c.id: c for c in db.query(Contract).all()}
+            
+            # Важное изменение: создаем словарь для поиска менеджеров по AM_1C_Name
+            managers = db.query(Manager).all()
+            manager_name_to_id = {
+                m.AM_1C_Name: m.id 
+                for m in managers 
+                if m.AM_1C_Name  # Исключаем пустые значения
+            }
+            
+            # Дополнительный словарь для обратной совместимости (если часть данных использует Manager_name)
+            manager_name_fallback = {
+                m.Manager_name: m.id 
+                for m in managers 
+                if m.Manager_name  # Исключаем пустые значения
+            }
+            
+            customer_ids = {c[0] for c in db.query(Cust_db.id).all()}
+            
+            to_insert = []
+            to_update = []
+
+            for row in data:
+                stats['total'] += 1
+                
+                # Проверка обязательных полей
+                required_fields = ['id', 'Contract', 'Contract_Type', 'Customer_id', 'Manager_name']
+                if not all(field in row for field in required_fields):
+                    stats['missing_fields'] += 1
+                    stats['skipped'].append(f"Отсутствуют обязательные поля в строке {stats['total']}")
+                    continue
+
+                # Проверка менеджера (основная логика)
+                manager_name = str(row['Manager_name']).strip()
+                if not manager_name or manager_name == '-':
+                    stats['no_manager'] += 1
+                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Пустое имя менеджера)")
+                    continue
+                    
+                # Поиск менеджера по AM_1C_Name (основной способ)
+                manager_id = manager_name_to_id.get(manager_name)
+                
+                # Если не нашли, пробуем найти по Manager_name (для обратной совместимости)
+                if not manager_id:
+                    manager_id = manager_name_fallback.get(manager_name)
+                
+                if not manager_id:
+                    stats['no_manager'] += 1
+                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Менеджер '{manager_name}' не найден ни по AM_1C_Name, ни по Manager_name)")
+                    continue
+
+                # Проверка customer_id
+                customer_id = row['Customer_id']
+                if not customer_id or customer_id not in customer_ids:
+                    stats['invalid_customer'] += 1
+                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Неверный Customer_id: {customer_id})")
+                    continue
+
+                # Формирование данных договора
+                contract_data = {
+                    'id': row['id'],
+                    'Contract': row['Contract'],
+                    'Contract_Type': row['Contract_Type'],
+                    'Price_Type': row.get('Price_Type'),
+                    'Payment_Condition': row.get('Payment_Condition'),
+                    'Customer_id': customer_id,
+                    'Manager_id': manager_id
+                }
+
+                if row['id'] in existing_contracts:
+                    to_update.append(contract_data)
+                else:
+                    to_insert.append(contract_data)
+                stats['saved'] += 1
+
+            # Сохранение данных
             if to_insert:
                 db.bulk_insert_mappings(Contract, to_insert)
             if to_update:
                 db.bulk_update_mappings(Contract, to_update)
             db.commit()
+
+            # Формирование отчёта
+            report = [
+                f"Всего обработано: {stats['total']}",
+                f"Сохранено договоров: {stats['saved']}"
+            ]
+            
+            self.show_message("\n".join(report))
+
         except SQLAlchemyError as e:
             db.rollback()
-            self.show_error_message(f"Ошибка сохранения договоров: {str(e)}")
+            error_msg = f"Ошибка сохранения договоров: {str(e)}\n\n{stats}"
+            self.show_error_message(error_msg)
         finally:
             db.close()
 
@@ -483,27 +593,61 @@ class Customer(QWidget):
         return item.id if item else None
 
     def get_Customers_from_db(self):
-        """Получение клиентов из базы"""
-        query = db.query(
-            Cust_db.id,  # Используем Cust_db вместо Customer
-            Cust_db.INN,
-            Cust_db.Customer_name,
-            Holding.Holding_name.label('Holding'),
-            Sector.Sector_name.label('Sector'),
-            Cust_db.Price_type,
-            Manager.Manager_name.label('AM'),
-            TeamLead.TeamLead_name.label('TeamLead')
-        ).join(Holding, Cust_db.Holding_id == Holding.id) \
-        .join(Sector, Cust_db.Sector_id == Sector.id) \
-        .outerjoin(Contract, Cust_db.id == Contract.Customer_id) \
-        .outerjoin(Manager, Contract.Manager_id == Manager.id) \
-        .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id) \
-        .group_by(Cust_db.id, Holding.Holding_name, Sector.Sector_name, Manager.Manager_name, TeamLead.TeamLead_name)
-
-        df = pd.read_sql(query.statement, db.bind)
-        df = df.where(pd.notnull(df), None)
-
-        return df
+        """Получение клиентов из базы с корректным отображением AM и TeamLead"""
+        try:
+            # Базовый запрос для получения информации о клиентах
+            base_query = db.query(
+                Cust_db.id,
+                Cust_db.INN,
+                Cust_db.Customer_name,
+                Holding.Holding_name.label('Holding'),
+                Sector.Sector_name.label('Sector'),
+                Cust_db.Price_type
+            ).join(Holding, Cust_db.Holding_id == Holding.id) \
+            .join(Sector, Cust_db.Sector_id == Sector.id)
+            
+            # Получаем базовые данные о клиентах
+            customers = pd.read_sql(base_query.statement, db.bind)
+            
+            if customers.empty:
+                return customers
+                
+            # Отдельный запрос для получения менеджеров и тимлидов
+            managers_query = db.query(
+                Contract.Customer_id,
+                Manager.Manager_name.label('AM'),
+                TeamLead.TeamLead_name.label('TeamLead')
+            ).join(Manager, Contract.Manager_id == Manager.id) \
+            .outerjoin(TeamLead, Manager.TeamLead_id == TeamLead.id) \
+            .filter(Contract.Customer_id.in_(customers['id'].tolist()))
+            
+            managers = pd.read_sql(managers_query.statement, db.bind)
+            
+            # Группируем менеджеров и тимлидов по клиентам
+            if not managers.empty:
+                grouped = managers.groupby('Customer_id').agg({
+                    'AM': lambda x: ', '.join(set(filter(None, x))),
+                    'TeamLead': lambda x: ', '.join(set(filter(None, x)))
+                }).reset_index()
+                
+                # Объединяем с основными данными
+                result = pd.merge(
+                    customers,
+                    grouped,
+                    left_on='id',
+                    right_on='Customer_id',
+                    how='left'
+                ).drop(columns=['Customer_id'])
+            else:
+                result = customers.copy()
+                result['AM'] = None
+                result['TeamLead'] = None
+                
+            return result.where(pd.notnull(result), None)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка при получении клиентов: {str(e)}")
+            return pd.DataFrame()
 
     def get_Hyundai_from_db(self):
         """Получение дилеров Hyundai из базы"""
@@ -583,36 +727,35 @@ class Customer(QWidget):
 
     def _display_data(self, df):
         """Метод отображения данных"""
-
-        # Полная очистка таблицы
-        self.table.clear()  # Use clear() - cleans all
-        self.table.setColumnCount(len(df.columns))  # Set column count
-
+        self.table.clear()
+        self.table.setColumnCount(len(df.columns))
+        
         if df.empty:
             self.show_error_message('Ничего не найдено')
             return
-
-        # Подготовка данных
+        
         df = df.fillna('')
         headers = df.columns.tolist()
-
-        # Установка заголовков столбцов
+        
         self.table.setHorizontalHeaderLabels(headers)
-        self.table.setRowCount(len(df))  # Set row count AFTER clear
-
-        # Заполнение данных с проверкой
-        for i in range(len(df)):  # Iterate using range
-            for j, col in enumerate(headers):  # Iterate over columns
-                value = df.iloc[i][col]  # Access cell value by row and column name
-                value_str = str(value)  # Convert value to string
-
+        self.table.setRowCount(len(df))
+        
+        for i in range(len(df)):
+            for j, col in enumerate(headers):
+                value = df.iloc[i][col]
+                value_str = str(value)
+                
                 item = QTableWidgetItem(value_str)
-
-                # Critical settings:
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)  # Disable editing
-                item.setTextAlignment(Qt.AlignCenter)  # Center text
-
-                self.table.setItem(i, j, item)  # Set item to the cell
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                item.setTextAlignment(Qt.AlignCenter)
+                self.table.setItem(i, j, item)
+        
+        # Авто-подгонка ширины столбцов
+        self.table.resizeColumnsToContents()
+        # Установите минимальную ширину для столбцов, если нужно
+        for i in range(self.table.columnCount()):
+            if self.table.columnWidth(i) < 100:
+                self.table.setColumnWidth(i, 100)
 
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""

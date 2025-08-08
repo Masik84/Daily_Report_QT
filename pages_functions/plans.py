@@ -41,6 +41,14 @@ class Plans(QWidget):
         self.table.setSortingEnabled(True)
         self.table.setWordWrap(False)
         self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        
+        self.table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f0f0f0;
+                selection-background-color: #3daee9;
+                selection-color: black;
+            }
+        """)
     
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
@@ -360,7 +368,7 @@ class Plans(QWidget):
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
             df['Status'] = 'План'
-            df.to_excel("test_plans.py")
+            df.to_excel("test_plans.xlsx")
             return df
 
         except Exception as e:
@@ -389,22 +397,24 @@ class Plans(QWidget):
                 print("Warning: Monthly plans DataFrame is empty after the merge. Check your merge keys.")
                 return pd.DataFrame()
 
-            # 4. Расчет месячных показателей
+            # 2. Расчет месячных показателей
             def calculate_month_values(row, col_name):
-                return plans_df.loc[(plans_df['Holding'] == row['Holding']) & (plans_df['Manager'] == row['Manager']), f'Year {col_name}'].sum()
+                return plans_df.loc[(plans_df['Holding'] == row['Holding']) & 
+                                (plans_df['Manager'] == row['Manager']), 
+                                f'Year {col_name}'].sum()
 
             monthly_plans['Month Volume'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Volume') * row['%'], axis=1)
             monthly_plans['Month Revenue'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Revenue') * row['%'], axis=1)
             monthly_plans['Month Margin C3'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Margin C3') * row['%'], axis=1)
             monthly_plans['Month Margin C4'] = monthly_plans.apply(lambda row: calculate_month_values(row, 'Margin C4') * row['%'], axis=1)
 
-            # 5. Объединяем с календарем для получения недельных данных
-            weekly_plans = pd.merge( calendar_df, monthly_plans, on=["Year", "Month"],  how="left", )
+            # 3. Объединяем с календарем для получения недельных данных
+            weekly_plans = pd.merge(calendar_grouped, monthly_plans, on=["Year", "Month"], how="left")
             if weekly_plans.empty:
                 print("Warning: Weekly plans DataFrame is empty after the merge. Check your merge keys.")
                 return pd.DataFrame()
 
-            # 6. Расчет еженедельных показателей
+            # 4. Расчет еженедельных показателей
             def calculate_weekly_target(row, col_name):
                 numerator = monthly_plans.loc[
                     (monthly_plans['Year'] == row['Year']) &
@@ -425,13 +435,23 @@ class Plans(QWidget):
                 except ZeroDivisionError:
                     return 0
 
-            weekly_plans['Volume Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Volume'), axis=1)
-            weekly_plans['Revenue Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Revenue'), axis=1)
-            weekly_plans['Margin C3 Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C3'), axis=1)
-            weekly_plans['Margin C4 Target cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C4'), axis=1)
+            weekly_plans['Volume_Target_cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Volume'), axis=1)
+            weekly_plans['Revenue_Target_cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Revenue'), axis=1)
+            weekly_plans['Margin_C3_Target_cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C3'), axis=1)
+            weekly_plans['Margin_C4_Target_cust'] = weekly_plans.apply(lambda row: calculate_weekly_target(row, 'Margin C4'), axis=1)
+
+            # Удаляем временные колонки
+            weekly_plans = weekly_plans.drop(columns=[
+                'Month Volume', 'Month Revenue', 'Month Margin C3', 'Month Margin C4', 
+                'Year Volume', 'Year Revenue', 'Year Margin C3', 'Year Margin C4', '%'
+            ], errors='ignore')
 
             # Заполняем нулями пропущенные значения
             weekly_plans = weekly_plans.fillna(0)
+            
+            # Удаляем дубликаты
+            weekly_plans = weekly_plans.drop_duplicates()
+            
             return weekly_plans
             
         except Exception as e:
@@ -616,21 +636,6 @@ class Plans(QWidget):
             
             db.commit()
 
-            # 4. Логирование результатов
-            print("\n=== Результаты обработки ===")
-            print(f"Всего строк в файле: {len(df)}")
-            print(f"Успешно обработано: {processed_rows}")
-            print(f"Добавлено новых: {len(records_to_insert)}")
-            print(f"Обновлено существующих: {len(records_to_update)}")
-            print(f"Ошибки обработки: {len(duplicate_errors)}")
-
-            if duplicate_errors:
-                print("\n=== Ошибочные строки ===")
-                for error in duplicate_errors[:5]:
-                    print(error)
-                if len(duplicate_errors) > 5:
-                    print(f"... и еще {len(duplicate_errors)-5} ошибок")
-
             return len(records_to_insert) + len(records_to_update)
 
         except Exception as e:
@@ -664,7 +669,16 @@ class Plans(QWidget):
             records_to_update = []
             processed_count = 0
 
-            for _, row in df.iterrows():
+            # Получаем ВСЕ существующие записи с их ID
+            existing_records = db.query(CustomerPlan).all()
+            
+            # Создаем словарь для быстрого поиска ID по уникальным полям
+            existing_ids_map = {
+                (rec.Year_id, rec.Month_id, rec.Week_id, rec.Holding_id, rec.Manager_id): rec.id
+                for rec in existing_records
+            }
+
+            for idx, row in df.iterrows():
                 try:
                     # Получаем ID для всех полей
                     year_id = years.get(int(row['Year']))
@@ -676,8 +690,16 @@ class Plans(QWidget):
                     teamlead_id = teamleads.get(str(row['TeamLead'])) if pd.notna(row['TeamLead']) else None
                     sector_id = sectors.get(str(row['Sector'])) if pd.notna(row['Sector']) else None
 
-                    # Формируем запись
-                    new_record = {
+                    # Проверяем обязательные поля
+                    if None in [year_id, holding_id, manager_id]:
+                        print(f"Пропуск строки {idx}: отсутствуют обязательные данные")
+                        continue
+
+                    # Формируем ключ для проверки дубликатов
+                    record_key = (year_id, month_id, week_id, holding_id, manager_id)
+
+                    # Формируем данные записи
+                    record_data = {
                         'Year_id': year_id,
                         'Month_id': month_id,
                         'Week_id': week_id,
@@ -686,47 +708,34 @@ class Plans(QWidget):
                         'STL_id': stl_id,
                         'TeamLead_id': teamlead_id,
                         'Sector_id': sector_id,
-                        'Volume_Target_cust': float(row['Volume_Target_cust']),
-                        'Revenue_Target_cust': float(row.get('Revenue_Target_cust', 0)),
-                        'Margin_C3_Target_cust': float(row['Margin_C3_Target_cust']),
-                        'Margin_C4_Target_cust': float(row.get('Margin_C4_Target_cust', 0)),
+                        'Volume_Target_cust': self._safe_float(row, 'Volume_Target_cust'),
+                        'Revenue_Target_cust': self._safe_float(row, 'Revenue_Target_cust', 0),
+                        'Margin_C3_Target_cust': self._safe_float(row, 'Margin_C3_Target_cust'),
+                        'Margin_C4_Target_cust': self._safe_float(row, 'Margin_C4_Target_cust', 0),
                         'Status': str(row.get('Status', 'План'))
                     }
 
                     # Проверяем существование записи
-                    existing = db.query(CustomerPlan).filter(
-                        CustomerPlan.Year_id == year_id,
-                        CustomerPlan.Month_id == month_id,
-                        CustomerPlan.Week_id == week_id,
-                        CustomerPlan.Holding_id == holding_id,
-                        CustomerPlan.Manager_id == manager_id
-                    ).first()
-
-                    if existing:
-                        # Проверяем, нужно ли обновлять
-                        needs_update = False
-                        for field in ['Volume_Target_cust', 'Revenue_Target_cust', 
-                                    'Margin_C3_Target_cust', 'Margin_C4_Target_cust']:
-                            if abs(getattr(existing, field) - new_record[field]) > 0.01:
-                                needs_update = True
-                                break
-                        
-                        if needs_update:
-                            new_record['id'] = existing.id
-                            records_to_update.append(new_record)
+                    if record_key in existing_ids_map:
+                        # Для обновления добавляем ID записи
+                        record_data['id'] = existing_ids_map[record_key]
+                        records_to_update.append(record_data)
                     else:
-                        records_to_insert.append(new_record)
+                        records_to_insert.append(record_data)
                     
                     processed_count += 1
 
                 except Exception as e:
-                    print(f"Ошибка обработки строки {_}: {str(e)}")
+                    print(f"Ошибка обработки строки {idx}: {str(e)}")
                     continue
 
             # Выполняем операции с БД
             if records_to_update:
+                # Обновляем существующие записи
                 db.bulk_update_mappings(CustomerPlan, records_to_update)
+            
             if records_to_insert:
+                # Добавляем новые записи
                 db.bulk_insert_mappings(CustomerPlan, records_to_insert)
             
             db.commit()
@@ -745,6 +754,16 @@ class Plans(QWidget):
             raise
         finally:
             db.close()
+
+    def _safe_float(self, row, column_name, default=0.0):
+        """Безопасное преобразование в float"""
+        try:
+            value = row.get(column_name, default)
+            if pd.isna(value) or value == '':
+                return default
+            return float(value)
+        except (ValueError, TypeError):
+            return default
 
     @lru_cache(maxsize=32)
     def _get_id(self, model, name_field, name, name_field2=None, name2=None):
@@ -812,12 +831,13 @@ class Plans(QWidget):
                 CompanyPlan.Volume_Target_total,
                 CompanyPlan.Revenue_Target_total,
                 CompanyPlan.Margin_Target_total
+            ).select_from(CompanyPlan
             ).join(CompanyPlan.year
             ).join(CompanyPlan.month
-            ).join(Month.quarter
+            ).join(Quarter, Month.Quarter_id == Quarter.id  # Добавлено явное соединение с Quarter
             ).join(CompanyPlan.week
-            ).join(CompanyPlan.team_lead
-            ).join(ABC_list, CompanyPlan.ABC_category_id == ABC_list.id)
+            ).outerjoin(CompanyPlan.team_lead
+            ).outerjoin(ABC_list, CompanyPlan.ABC_category_id == ABC_list.id)
             
             if year != '-':
                 query = query.filter(Year.Year == int(year))
@@ -910,13 +930,25 @@ class Plans(QWidget):
         # Копируем DataFrame для преобразования данных
         display_df = df.copy()
         
-        # Преобразуем числовые значения в проценты для отображения
-        percent_columns = ['Margin_C3_Target_cust', 'Margin_C4_Target_cust', 'Margin_Target_total']
+        # Форматирование числовых колонок
+        numeric_cols = ['Volume_Target_total', 'Revenue_Target_total', 'Margin_Target_total', 
+                                    'Volume_Target_cust', 'Revenue_Target_cust',
+                                    'Margin_C3_Target_cust', 'Margin_C4_Target_cust']
+        for col in numeric_cols:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(
+                    lambda x: f"{float(x):,.2f}".replace(',', ' ').replace('.', ',') 
+                    if pd.notnull(x) else '0,00')
+        
+        # # Преобразуем числовые значения в проценты для отображения
+        percent_columns = []  # если нужно, вписать названия колонок
         for col in percent_columns:
             if col in display_df.columns:
                 display_df[col] = display_df[col].apply(
-                    lambda x: f"{x*100:.2f}%" if isinstance(x, (float, int)) else str(x))
+                    lambda x: f"{float(x)*100:.2f}%".replace('.', ',') 
+                    if isinstance(x, (float, int)) else str(x))
         
+        # Настройка таблицы
         self.table.setColumnCount(len(display_df.columns))
         self.table.setRowCount(len(display_df))
         self.table.setHorizontalHeaderLabels(display_df.columns)
@@ -925,7 +957,16 @@ class Plans(QWidget):
             for col_idx, value in enumerate(row):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                
+                # Выравнивание чисел по правому краю
+                if any(col in self.table.horizontalHeaderItem(col_idx).text() 
+                for col in numeric_cols + percent_columns):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                
                 self.table.setItem(row_idx, col_idx, item)
+        
+        # Автоматическое растягивание колонок
+        self.table.resizeColumnsToContents()
 
     def _update_summary(self, df, plan_type):
         """Обновление сводной информации с обработкой пустого DataFrame"""
@@ -942,16 +983,20 @@ class Plans(QWidget):
                 margin = df['Margin_C3_Target_cust'].sum()
             else:
                 volume = revenue = margin = 0
+                
+        # Форматирование чисел
+        def format_number(value):
+            return f"{float(value):,.2f}".replace(',', ' ').replace('.', ',')
         
-        self.ui.label_Volume.setText(f"{volume:,.0f} л." if volume != 0 else "0 л.")
-        self.ui.label_Revenue.setText(f"{revenue:,.0f} р" if revenue != 0 else "0 р")
-        self.ui.label_Margin.setText(f"{margin:,.0f} р" if margin != 0 else "0 р")
+        self.ui.label_Volume.setText(f"{format_number(volume)} л." if volume != 0 else "0,00 л.")
+        self.ui.label_Revenue.setText(f"{format_number(revenue)} р" if revenue != 0 else "0,00 р")
+        self.ui.label_Margin.setText(f"{format_number(margin)} р" if margin != 0 else "0,00 р")
         
         if volume != 0:
             unit_margin = margin / volume
-            self.ui.label_uC3.setText(f"{unit_margin:,.0f} р/л")
+            self.ui.label_uC3.setText(f"{format_number(unit_margin)} р/л")
         else:
-            self.ui.label_uC3.setText("0 р/л")
+            self.ui.label_uC3.setText("0,00 р/л")
     
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""

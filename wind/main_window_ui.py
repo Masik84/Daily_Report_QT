@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowBHBiDA.ui'
+## Form generated from reading UI file 'main_windowJUbsxX.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -402,6 +402,23 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout.addItem(self.horizontalSpacer)
 
+        self.widget = QWidget(self.search_widget)
+        self.widget.setObjectName(u"widget")
+        self.widget.setMinimumSize(QSize(70, 0))
+        self.verticalLayout_5 = QVBoxLayout(self.widget)
+        self.verticalLayout_5.setObjectName(u"verticalLayout_5")
+        self.label = QLabel(self.widget)
+        self.label.setObjectName(u"label")
+        self.label.setMinimumSize(QSize(50, 50))
+        self.label.setMaximumSize(QSize(50, 60))
+        self.label.setPixmap(QPixmap(u":/image/logo/\u043b\u043e\u0433\u043e_\u043a\u0430\u043f\u043b\u044f.ico"))
+        self.label.setScaledContents(True)
+
+        self.verticalLayout_5.addWidget(self.label)
+
+
+        self.horizontalLayout.addWidget(self.widget)
+
         self.label_prog_name = QLabel(self.search_widget)
         self.label_prog_name.setObjectName(u"label_prog_name")
         self.label_prog_name.setMinimumSize(QSize(150, 0))
@@ -554,7 +571,8 @@ class Ui_MainWindow(object):
         self.btn_Plan.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0417\u041e\u041d", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.bonus_page), QCoreApplication.translate("MainWindow", u"\u041e\u0442\u0447\u0435\u0442", None))
         self.toggleButton.setText("")
-        self.label_prog_name.setText(QCoreApplication.translate("MainWindow", u"Phoenix Report Program", None))
+        self.label.setText("")
+        self.label_prog_name.setText(QCoreApplication.translate("MainWindow", u"Phoenix Lubricants Report Program", None))
         self.minimizeAppBtn.setText("")
         self.maximizeRestoreAppBtn.setText("")
         self.closeAppBtn.setText("")

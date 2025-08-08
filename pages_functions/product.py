@@ -3,8 +3,8 @@ import pandas as pd
 from sqlalchemy import func
 import datetime
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QPushButton, QLabel, QScrollArea, QVBoxLayout,
-                              QTableWidgetItem, QWidget, QApplication, QDialogButtonBox)
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QMenu, 
+                              QTableWidgetItem, QWidget, QApplication)
 from PySide6.QtCore import Qt
 from functools import lru_cache
 
@@ -25,18 +25,69 @@ class Product(QWidget):
         self.refresh_all_comboboxes()
 
     def _setup_ui(self):
-        """Настройка интерфейса"""
+        """Настройка интерфейса таблицы"""
         self.table = self.ui.table
-        self.table.resizeColumnsToContents()
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSortingEnabled(True)
-        self.table.setWordWrap(False)
-        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        
+        # Базовые настройки таблицы
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)  # Выделение отдельных ячеек
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # Запрет редактирования
+        self.table.setAlternatingRowColors(True)  # Чередование цветов строк
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # Изменяемые размеры
+        self.table.horizontalHeader().setStretchLastSection(True)  # Растягивание последнего столбца
+        self.table.verticalHeader().setVisible(False)  # Скрытие вертикальных заголовков
+        self.table.setSortingEnabled(True)  # Сортировка по клику на заголовок
+        self.table.setWordWrap(False)  # Запрет переноса слов
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)  # Обрезка длинного текста
+        
+        # Настройка контекстного меню для копирования
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        
+        # Стилизация таблицы
+        self.table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f0f0f0;
+                selection-background-color: #3daee9;
+                selection-color: black;
+            }
+            QTableWidget::item {
+                padding: 3px;
+            }
+        """)
+
+    def show_context_menu(self, position):
+        """Показ контекстного меню для копирования"""
+        menu = QMenu()
+        copy_action = menu.addAction("Копировать")
+        copy_action.triggered.connect(self.copy_cell_content)
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def copy_cell_content(self):
+        """Копирование содержимого выделенных ячеек"""
+        selected_items = self.table.selectedItems()
+        if selected_items:
+            clipboard = QApplication.clipboard()
+            # Если выделена одна ячейка - копируем только ее
+            if len(selected_items) == 1:
+                text = selected_items[0].text()
+            else:
+                # Если выделено несколько ячеек - копируем с разделением табуляцией и переносом строк
+                rows = {}
+                for item in selected_items:
+                    row = item.row()
+                    col = item.column()
+                    if row not in rows:
+                        rows[row] = {}
+                    rows[row][col] = item.text()
+                
+                # Сортируем ячейки по строкам и столбцам
+                sorted_rows = sorted(rows.items())
+                text = ""
+                for row, cols in sorted_rows:
+                    sorted_cols = sorted(cols.items())
+                    text += "\t".join([text for col, text in sorted_cols]) + "\n"
+            
+            clipboard.setText(text.strip())
 
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
@@ -47,7 +98,6 @@ class Product(QWidget):
         self.ui.btn_find.clicked.connect(self.find_Product)
         self.ui.btn_upd_ABCD.clicked.connect(self.update_ABC_cat)
         
-
     def get_file(self):
         """Выбор файла через диалоговое окно"""
         file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с данными продуктов')
@@ -144,8 +194,11 @@ class Product(QWidget):
                 valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
                 df = df[df['Номенклатурная группа'].isin(valid_groups)]
             
+            # Добавляем колонку Статус перед обработкой артикулов
             if 'Артикул' in df.columns:
+                df['Статус'] = df['Артикул'].apply(lambda x: 'не активный' if 'удален_' in str(x) else 'активный')
                 df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
+                
             if 'Наименование' in df.columns:
                 df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
             
@@ -170,7 +223,8 @@ class Product(QWidget):
                 'Плотность': 'Density', 
                 'ТН ВЭД': 'TNVED', 
                 'Акциз': 'Excise',
-                'Код группы': 'Код_группы'
+                'Код группы': 'Код_группы',
+                'Статус': 'Status'  # Добавляем новую колонку в маппинг
             }
             df = df.rename(columns=column_map)
             
@@ -179,7 +233,7 @@ class Product(QWidget):
                         'Net_weight', 'Gross_weight', 'Density']
             text_cols = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family',
                     'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
-                    'Package_type', 'TNVED', 'Excise']
+                    'Package_type', 'TNVED', 'Excise', 'Status']  # Добавляем Status
             
             # Замена пустот в числовых колонках на 0
             for col in numeric_cols:
@@ -579,23 +633,45 @@ class Product(QWidget):
         self._fill_combobox(self.ui.line_Brand, brands)
 
     def fill_in_prod_fam_list(self):
-        """Заполнение списка семейств"""
+        """Заполняет список Family только для выбранного Brand"""
         brand = self.ui.line_Brand.currentText()
-        families = self._get_unique_values(
-            Materials.Family,  # Используем прямое обращение к колонке
-            Materials.Brand if brand != '-' else None,
-            brand
-        )
+        
+        if brand == '-':
+            # Если бренд не выбран, показываем все семейства
+            families = self._get_unique_values(Materials.Family)
+        else:
+            # Фильтруем Family только для выбранного Brand
+            families = self._get_unique_values(
+                Materials.Family,
+                filter_column=Materials.Brand,
+                filter_value=brand
+            )
+        
         self._fill_combobox(self.ui.line_Prod_Fam, families)
 
     def fill_in_prod_name_list(self):
-        """Заполнение списка продуктов"""
+        """Заполняет список Product_name только для выбранных Brand и Family"""
+        brand = self.ui.line_Brand.currentText()
         family = self.ui.line_Prod_Fam.currentText()
-        products = self._get_unique_values(
-            "product_name",  # Используем строковый идентификатор
-            Materials.Family if family != '-' else None,
-            family
-        )
+        
+        if family == '-':
+            # Если Family не выбрано, фильтруем только по Brand (если выбран)
+            if brand == '-':
+                products = self._get_unique_values("product_name")  # Все продукты
+            else:
+                products = self._get_unique_values(
+                    "product_name",
+                    filter_column=Materials.Brand,
+                    filter_value=brand
+                )
+        else:
+            # Фильтруем Product_name по Brand + Family
+            products = self._get_unique_values(
+                "product_name",
+                filter_column=Materials.Family,
+                filter_value=family
+            )
+        
         self._fill_combobox(self.ui.line_Prod_name, products)
     
     def _fill_combobox(self, combobox, items):
@@ -608,29 +684,28 @@ class Product(QWidget):
     def get_Products_from_db(self):
         today = datetime.date.today()
         
-        # Подзапрос для ABC-категорий (теперь через связь с ABC_list)
+        # Подзапрос для ABC-категорий
         subq = (
             db.query(
                 ABC_cat.product_name_id,
-                ABC_list.ABC_category.label('ABC_category'),  # Берем категорию из ABC_list
+                ABC_list.ABC_category.label('ABC_category'),
                 func.max(ABC_cat.Start_date).label('max_date')
             )
-            .join(ABC_list, ABC_cat.abc_list_id == ABC_list.id)  # Добавляем join к ABC_list
+            .join(ABC_list, ABC_cat.abc_list_id == ABC_list.id)
             .filter(ABC_cat.End_date >= today)
-            .group_by(ABC_cat.product_name_id, ABC_list.ABC_category)  # Группируем по категории
+            .group_by(ABC_cat.product_name_id, ABC_list.ABC_category)
             .subquery()
         )
         
-        # Основной запрос
+        # Основной запрос с JOIN к TNVED
         query = (
             db.query(
                 Materials.Code,
                 Materials.Article,
-                Materials.Material_Name,
                 Materials.Full_name,
+                Product_Names.Product_name.label('Material_Name'),
                 Materials.Brand,
                 Materials.Family,
-                Materials.Product_name,
                 Materials.Product_type,
                 Materials.UoM,
                 Materials.Report_UoM,
@@ -641,73 +716,95 @@ class Product(QWidget):
                 Materials.Net_weight,
                 Materials.Gross_weight,
                 Materials.Density,
-                Materials.TNVED,
                 Materials.Excise,
-                subq.c.ABC_category.label('ABC_category')  # Используем категорию из подзапроса
+                TNVED.code.label('TNVED'),  # Добавляем код ТН ВЭД
+                subq.c.ABC_category
             )
             .join(Product_Names, Materials.Product_Names_id == Product_Names.id)
-            .outerjoin(
-                subq, 
-                Product_Names.id == subq.c.product_name_id
-            )
+            .join(Product_Group, Product_Names.Product_Group_id == Product_Group.id)  # Связь Product_Names → Product_Group
+            .join(TNVED, Product_Group.TNVED_id == TNVED.id)  # Связь Product_Group → TNVED
+            .outerjoin(subq, Product_Names.id == subq.c.product_name_id)
         )
         
         df = pd.read_sql(query.statement, db.bind)
         return df.where(pd.notnull(df), None)
     
     def find_Product(self):
-        """Поиск продуктов"""
         self.table.clearContents()
         self.table.setRowCount(0)
 
         prod_df = self.get_Products_from_db()
-        if prod_df.empty:
-            self.show_error_message('Нет данных о продуктах')
-            return
 
-        code = self.ui.line_ID.text().strip()
-        article = self.ui.line_Artical.text().strip()
-        product_name = self.ui.line_Prod_name.currentText()
-        product_family = self.ui.line_Prod_Fam.currentText()
-        brand = self.ui.line_Brand.currentText()
+        # Применяем фильтры
+        if not prod_df.empty:
+            code = self.ui.line_ID.text().strip()
+            article = self.ui.line_Artical.text().strip()
+            brand = self.ui.line_Brand.currentText()
+            family = self.ui.line_Prod_Fam.currentText()
+            product_name = self.ui.line_Prod_name.currentText()
 
-        if code:
-            prod_df = prod_df[prod_df['Code'] == code]
-        elif article:
-            prod_df = prod_df[prod_df['Article'] == article]
-        elif brand != '-':
-            prod_df = prod_df[prod_df['Brand'] == brand]
-            if product_family != '-':
-                prod_df = prod_df[prod_df['Family'] == product_family]
-                if product_name != '-':
-                    prod_df = prod_df[prod_df['Product_name'] == product_name]
-        elif product_family != '-':
-            prod_df = prod_df[prod_df['Family'] == product_family]
-            if product_name != '-':
-                prod_df = prod_df[prod_df['Product_name'] == product_name]
-        elif product_name != '-':
-            prod_df = prod_df[prod_df['Product_name'] == product_name]
+            if code:
+                prod_df = prod_df[prod_df["Code"].astype(str).str.contains(code, case=False, na=False)]
+            if article:
+                prod_df = prod_df[prod_df["Article"].astype(str).str.contains(article, case=False, na=False)]
+            if brand != "-":
+                prod_df = prod_df[prod_df["Brand"] == brand]
+            if family != "-":
+                prod_df = prod_df[prod_df["Family"] == family]
+            if product_name != "-":
+                prod_df = prod_df[prod_df["Material_Name"] == product_name]
 
-        self._display_data(prod_df.sort_values('Material_Name'))
+            self._display_data(prod_df)
+        else:
+            self.show_error_message("Нет данных для отображения")
 
     def _display_data(self, df):
-        """Отображение данных в таблице"""
+        """Отображение данных в таблице с настройкой выравнивания"""
         self.table.clear()
-        self.table.setColumnCount(len(df.columns))
-        self.table.setHorizontalHeaderLabels(df.columns.tolist())
-        self.table.setRowCount(len(df))
-
+        self.table.setColumnCount(0)
+        self.table.setRowCount(0)
+        
         if df.empty:
-            self.show_error_message('Ничего не найдено')
+            self.show_error_message('Нет данных для отображения')
             return
-
-        for i, row in df.iterrows():
-            for j, value in enumerate(row):
+        
+        # Заполнение пропущенных значений
+        df = df.fillna('')
+        
+        # Установка размеров таблицы
+        headers = df.columns.tolist()
+        self.table.setColumnCount(len(headers))
+        self.table.setRowCount(len(df))
+        self.table.setHorizontalHeaderLabels(headers)
+        
+        # Определение текстовых колонок (можно адаптировать под ваши данные)
+        text_columns = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family', 
+                    'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
+                    'Package_type', 'TNVED', 'Excise', 'Status']
+        
+        # Заполнение данных с разным выравниванием
+        for i in range(len(df)):
+            for j, col in enumerate(headers):
+                value = df.iloc[i][col]
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                item.setTextAlignment(Qt.AlignCenter)
+                
+                # Выравнивание: текст - по левому краю, числа - по центру
+                if col in text_columns:
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignCenter)
+                    
                 self.table.setItem(i, j, item)
-
+        
+        # Автоматическая настройка ширины столбцов
+        self.table.resizeColumnsToContents()
+        
+        # Установка минимальной ширины для столбцов
+        for i in range(self.table.columnCount()):
+            if self.table.columnWidth(i) < 100:
+                self.table.setColumnWidth(i, 100)
+                    
     def download_Products(self):
         """Скачивание продуктов"""
         file_path, _ = QFileDialog.getSaveFileName(

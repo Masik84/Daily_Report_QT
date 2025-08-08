@@ -14,9 +14,8 @@ MAIN_FOLDER = 'C:\\работа\\My_Work_Phoenix\\Daily_Report\\'
 ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 
-
-
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"
+
 Material_file = MAIN_FOLDER + "Выгрузки_new\\Реестр номенклатур XLSX.xlsx"
 Customer_file = MAIN_FOLDER + "Выгрузки_new\\Реестр контрагентов XLSX.xlsx"
 Contract_file = MAIN_FOLDER + "Выгрузки_new\\Реестр договоров XLSX.xlsx"
@@ -25,9 +24,6 @@ Contract_file = MAIN_FOLDER + "Выгрузки_new\\Реестр договор
 Collection_file = MAIN_FOLDER + "! Сборщик отчета !.xlsx"
 Complectation_file = MAIN_FOLDER + "! Комплектации !.xlsx" 
 new_Complectation_file = MAIN_FOLDER + "ERRORs_Compectations_new.xlsx"
-
-
-
 
 
 

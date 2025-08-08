@@ -842,6 +842,43 @@ QPushButton:pressed {
              </property>
             </spacer>
            </item>
+           <item>
+            <widget class="QWidget" name="widget" native="true">
+             <property name="minimumSize">
+              <size>
+               <width>70</width>
+               <height>0</height>
+              </size>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_5">
+              <item>
+               <widget class="QLabel" name="label">
+                <property name="minimumSize">
+                 <size>
+                  <width>50</width>
+                  <height>50</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>50</width>
+                  <height>60</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="pixmap">
+                 <pixmap resource="resource.qrc">:/image/logo/лого_капля.ico</pixmap>
+                </property>
+                <property name="scaledContents">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
            <item alignment="Qt::AlignmentFlag::AlignHCenter">
             <widget class="QLabel" name="label_prog_name">
              <property name="minimumSize">
@@ -864,7 +901,7 @@ QPushButton:pressed {
               </font>
              </property>
              <property name="text">
-              <string>Phoenix Report Program</string>
+              <string>Phoenix Lubricants Report Program</string>
              </property>
              <property name="alignment">
               <set>Qt::AlignmentFlag::AlignCenter</set>
