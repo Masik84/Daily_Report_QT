@@ -486,6 +486,27 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
+             <widget class="QPushButton" name="btn_Supplier">
+              <property name="text">
+               <string>Поставщики</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_AddCosts">
+              <property name="text">
+               <string>Доп Расходы (Закуп)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_CustDelivery">
+              <property name="text">
+               <string>Доставка до клиента</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="btn_Price">
               <property name="minimumSize">
                <size>
@@ -557,7 +578,7 @@ QPushButton:pressed {
              <number>5</number>
             </property>
             <item>
-             <widget class="QPushButton" name="btn_Delivery">
+             <widget class="QPushButton" name="btn_Purchases">
               <property name="minimumSize">
                <size>
                 <width>0</width>
@@ -584,7 +605,7 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="btn_Order">
+             <widget class="QPushButton" name="btn_Purch_Orders">
               <property name="minimumSize">
                <size>
                 <width>0</width>
@@ -611,7 +632,7 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="btn_Invoice">
+             <widget class="QPushButton" name="btn_Sales">
               <property name="minimumSize">
                <size>
                 <width>0</width>
@@ -638,7 +659,7 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="btn_Order_Cust">
+             <widget class="QPushButton" name="btn_Cust_Orders">
               <property name="font">
                <font>
                 <family>Tahoma</family>
@@ -649,6 +670,20 @@ QPushButton:pressed {
               </property>
               <property name="text">
                <string>Заказы клиентов</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_MarketPlace">
+              <property name="text">
+               <string>Маркет Плейсы</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_Complect">
+              <property name="text">
+               <string>Комплектации</string>
               </property>
              </widget>
             </item>

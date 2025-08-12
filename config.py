@@ -15,6 +15,7 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"
+AddCosts_File = MAIN_FOLDER + "! ДопРасходы !.xlsx"
 
 Material_file = MAIN_FOLDER + "Выгрузки_new\\Реестр номенклатур XLSX.xlsx"
 Customer_file = MAIN_FOLDER + "Выгрузки_new\\Реестр контрагентов XLSX.xlsx"

@@ -177,7 +177,43 @@ class Product(QWidget):
     def read_product_file(self, file_path):
         """Чтение данных из Excel с фильтрацией и обработкой значений"""
         try:
+            # Чтение файла с новыми продуктами (из All_data_file)
             dtype_prod = {"Артикул": str, "ТН ВЭД": str}
+            new_df_oil = pd.read_excel(All_data_file, sheet_name="Oils", dtype=dtype_prod)
+            new_df_other = pd.read_excel(All_data_file, sheet_name="Other", dtype=dtype_prod)
+            
+            # Объединяем и фильтруем новые продукты (только те, где ID начинается с 'new')
+            new_df = pd.concat([new_df_oil, new_df_other], ignore_index=True)
+            new_df = new_df[new_df['ID 1C'].str.startswith('new', na=False)]
+            
+            # Переименовываем колонки для соответствия с основной таблицей
+            new_df = new_df.rename(columns={
+                'ID 1C': 'Code',
+                'Артикул': 'Article',
+                'Продукт + упаковка': 'Material_Name',
+                'Product name': 'Product_name',
+                'Type': 'Product_type',
+                'Brand': 'Brand',
+                'Family': 'Family',
+                'ЕИ в 1С': 'UoM',
+                'ЕИ': 'Report_UoM',
+                'Вид упаковки': 'Package_type',
+                'Акциз (да/нет)': 'Excise',
+                'Упаковка': 'Package_Volume',
+                'Кол-во в упак': 'Items_per_Package',
+                'Плотность': 'Density',
+                'Вес Нетто кг': 'Net_weight',
+                'Вес Брутто кг': 'Gross_weight',
+                'Код ТНВЭД': 'TNVED',
+                'Полное наименование': 'Full_name',
+                'Код группы': 'Код_группы'
+            })
+            
+            # Устанавливаем фиксированные значения для новых продуктов
+            new_df['Items_per_Set'] = 1
+            new_df['Status'] = 'новый'
+            
+            
             df = pd.read_excel(file_path, sheet_name=0, dtype=dtype_prod)
             
             required_columns = ['Код', 'Product name', 'Шт в комплекте', 'Единица измерения отчетов']
@@ -227,6 +263,7 @@ class Product(QWidget):
                 'Статус': 'Status'  # Добавляем новую колонку в маппинг
             }
             df = df.rename(columns=column_map)
+            df = pd.concat([df, new_df], ignore_index=True)
             
             # 4. Обработка числовых и текстовых значений
             numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 
@@ -252,30 +289,53 @@ class Product(QWidget):
             return []
 
     def save_TNVED(self, data):
-        """Сохранение данных TNVED"""
+        """Сохранение данных TNVED с правильным приведением типов"""
         if not data:
             return
 
-        # Получаем уникальные коды ТН ВЭД из данных
-        tnved_codes = {row['TNVED'] for row in data if row.get('TNVED')}
-        
-        # Получаем существующие коды из БД
-        existing_tnved = {t.code for t in db.query(TNVED.code).all()}
-        
-        # Находим новые коды для добавления
-        new_tnved_codes = tnved_codes - existing_tnved
-        
-        if new_tnved_codes:
-            try:
-                # Подготавливаем данные для вставки
-                to_insert = [{'code': code} for code in new_tnved_codes]
-                db.bulk_insert_mappings(TNVED, to_insert)
-                db.commit()
-            except SQLAlchemyError as e:
-                db.rollback()
-                raise Exception(f"Ошибка сохранения TNVED: {str(e)}")
-            finally:
-                db.close()
+        try:
+            # Получаем уникальные коды ТН ВЭД из данных (как строки)
+            tnved_codes = {str(row['TNVED']) for row in data if row.get('TNVED') and str(row['TNVED']) != '-'}
+            
+            if not tnved_codes:
+                return
+                
+            # Получаем существующие коды из БД (как строки)
+            existing_tnved = {str(t.code) for t in db.query(TNVED.code).all()}
+            
+            # Находим новые коды для добавления
+            new_tnved_codes = tnved_codes - existing_tnved
+            
+            if new_tnved_codes:
+                try:
+                    # Вставка в вашем стиле с явным приведением типов
+                    to_insert = [{"code": str(code)} for code in new_tnved_codes]
+                    db.bulk_insert_mappings(TNVED, to_insert)
+                    db.commit()
+                    
+                    # Уведомления о новых кодах
+                    for code in new_tnved_codes:
+                        self.show_message(f"Добавлен новый ТН ВЭД {code}. Проверьте таблицу Пошлины и ЭкоСбор")
+                    
+                except SQLAlchemyError as e:
+                    db.rollback()
+                    raise Exception(f"Ошибка сохранения TNVED: {str(e)}")
+
+            # Получаем соответствие кодов и ID (с явным приведением типов)
+            tnved_mapping = {
+                str(t.code): t.id 
+                for t in db.query(TNVED).all()
+            }
+            
+            # Обновляем TNVED_id для всех строк данных
+            for row in data:
+                if row.get('TNVED') and str(row['TNVED']) != '-':
+                    row['TNVED_id'] = tnved_mapping.get(str(row['TNVED']))
+                        
+        except Exception as e:
+            raise Exception(f"Ошибка обработки TNVED: {str(e)}")
+        finally:
+            db.close()
 
     def save_Product_Group(self, data):
         """Сохранение данных Product_Group"""
@@ -285,7 +345,7 @@ class Product(QWidget):
         # Собираем уникальные группы продуктов
         product_groups = {}
         for row in data:
-            if row.get('Код_группы') and row.get('Product_name') and row.get('TNVED'):
+            if row.get('Код_группы') and row.get('Product_name') != '-' and row.get('TNVED'):
                 # Находим ID TNVED для этой группы
                 tnved_id = db.query(TNVED.id).filter(TNVED.code == row['TNVED']).scalar()
                 if tnved_id:
@@ -334,10 +394,11 @@ class Product(QWidget):
         # Собираем уникальные наименования продуктов
         product_names = {}
         for row in data:
-            if row.get('Material_Name') and row.get('Код_группы'):
+            if row.get('Material_Name'):
+                product_group_id = row['Код_группы'] if row.get('Код_группы') and row.get('Product_name') != '-' else None
                 product_names[row['Material_Name']] = {
                     'Product_name': row['Material_Name'], 
-                    'Product_Group_id': row['Код_группы']
+                    'Product_Group_id': product_group_id
                 }
 
         # Получаем существующие наименования из БД
@@ -382,8 +443,19 @@ class Product(QWidget):
             # Получаем существующие материалы из БД
             existing_materials = {m.Code: m for m in db.query(Materials).all()}
             
-            # Получаем mapping наименований продуктов к их ID (используем правильное имя атрибута Product_name)
+            # Получаем mapping наименований продуктов к их ID
             name_to_id = {n.Product_name: n.id for n in db.query(Product_Names).all()}
+            
+            # Получаем список новых продуктов из текущего файла
+            current_new_products = {row['Code'] for row in data if str(row.get('Code', '')).startswith('new')}
+
+            to_delete = [
+                code for code in existing_materials.items() 
+                if str(code).startswith('new') and code not in current_new_products]
+            
+            if to_delete:
+                db.query(Materials).filter(Materials.Code.in_(to_delete)).delete(synchronize_session=False)
+                db.commit()
             
             to_insert = []
             to_update = []
@@ -413,6 +485,7 @@ class Product(QWidget):
                     'Gross_weight': row.get('Gross_weight'),
                     'Density': row.get('Density'),
                     'Excise': row.get('Excise'),
+                    'Status': row.get('Status', 'активный'),  # Добавляем статус
                     'Product_Names_id': product_name_id
                 }
                 

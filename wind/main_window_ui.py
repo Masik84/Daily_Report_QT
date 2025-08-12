@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowJUbsxX.ui'
+## Form generated from reading UI file 'main_windowVVAVeM.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -277,6 +277,21 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_3.addWidget(self.btn_Costs)
 
+        self.btn_Supplier = QPushButton(self.updater_page)
+        self.btn_Supplier.setObjectName(u"btn_Supplier")
+
+        self.verticalLayout_3.addWidget(self.btn_Supplier)
+
+        self.btn_AddCosts = QPushButton(self.updater_page)
+        self.btn_AddCosts.setObjectName(u"btn_AddCosts")
+
+        self.verticalLayout_3.addWidget(self.btn_AddCosts)
+
+        self.btn_CustDelivery = QPushButton(self.updater_page)
+        self.btn_CustDelivery.setObjectName(u"btn_CustDelivery")
+
+        self.verticalLayout_3.addWidget(self.btn_CustDelivery)
+
         self.btn_Price = QPushButton(self.updater_page)
         self.btn_Price.setObjectName(u"btn_Price")
         self.btn_Price.setMinimumSize(QSize(0, 0))
@@ -299,38 +314,48 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.setSpacing(10)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(5, 0, 5, 5)
-        self.btn_Delivery = QPushButton(self.docs_page)
-        self.btn_Delivery.setObjectName(u"btn_Delivery")
-        self.btn_Delivery.setMinimumSize(QSize(0, 30))
-        self.btn_Delivery.setFont(font1)
-        self.btn_Delivery.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_Delivery.setCheckable(True)
+        self.btn_Purchases = QPushButton(self.docs_page)
+        self.btn_Purchases.setObjectName(u"btn_Purchases")
+        self.btn_Purchases.setMinimumSize(QSize(0, 30))
+        self.btn_Purchases.setFont(font1)
+        self.btn_Purchases.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_Purchases.setCheckable(True)
 
-        self.verticalLayout_2.addWidget(self.btn_Delivery)
+        self.verticalLayout_2.addWidget(self.btn_Purchases)
 
-        self.btn_Order = QPushButton(self.docs_page)
-        self.btn_Order.setObjectName(u"btn_Order")
-        self.btn_Order.setMinimumSize(QSize(0, 30))
-        self.btn_Order.setFont(font1)
-        self.btn_Order.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_Order.setCheckable(True)
+        self.btn_Purch_Orders = QPushButton(self.docs_page)
+        self.btn_Purch_Orders.setObjectName(u"btn_Purch_Orders")
+        self.btn_Purch_Orders.setMinimumSize(QSize(0, 30))
+        self.btn_Purch_Orders.setFont(font1)
+        self.btn_Purch_Orders.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_Purch_Orders.setCheckable(True)
 
-        self.verticalLayout_2.addWidget(self.btn_Order)
+        self.verticalLayout_2.addWidget(self.btn_Purch_Orders)
 
-        self.btn_Invoice = QPushButton(self.docs_page)
-        self.btn_Invoice.setObjectName(u"btn_Invoice")
-        self.btn_Invoice.setMinimumSize(QSize(0, 30))
-        self.btn_Invoice.setFont(font1)
-        self.btn_Invoice.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.btn_Invoice.setCheckable(True)
+        self.btn_Sales = QPushButton(self.docs_page)
+        self.btn_Sales.setObjectName(u"btn_Sales")
+        self.btn_Sales.setMinimumSize(QSize(0, 30))
+        self.btn_Sales.setFont(font1)
+        self.btn_Sales.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.btn_Sales.setCheckable(True)
 
-        self.verticalLayout_2.addWidget(self.btn_Invoice)
+        self.verticalLayout_2.addWidget(self.btn_Sales)
 
-        self.btn_Order_Cust = QPushButton(self.docs_page)
-        self.btn_Order_Cust.setObjectName(u"btn_Order_Cust")
-        self.btn_Order_Cust.setFont(font1)
+        self.btn_Cust_Orders = QPushButton(self.docs_page)
+        self.btn_Cust_Orders.setObjectName(u"btn_Cust_Orders")
+        self.btn_Cust_Orders.setFont(font1)
 
-        self.verticalLayout_2.addWidget(self.btn_Order_Cust)
+        self.verticalLayout_2.addWidget(self.btn_Cust_Orders)
+
+        self.btn_MarketPlace = QPushButton(self.docs_page)
+        self.btn_MarketPlace.setObjectName(u"btn_MarketPlace")
+
+        self.verticalLayout_2.addWidget(self.btn_MarketPlace)
+
+        self.btn_Complect = QPushButton(self.docs_page)
+        self.btn_Complect.setObjectName(u"btn_Complect")
+
+        self.verticalLayout_2.addWidget(self.btn_Complect)
 
         self.verticalSpacer_2 = QSpacerItem(20, 350, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
@@ -560,12 +585,17 @@ class Ui_MainWindow(object):
         self.btn_Products.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442\u044b", None))
         self.btn_Plans.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043b\u0430\u043d\u044b", None))
         self.btn_Costs.setText(QCoreApplication.translate("MainWindow", u"Tax / Fees", None))
+        self.btn_Supplier.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0438", None))
+        self.btn_AddCosts.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043f \u0420\u0430\u0441\u0445\u043e\u0434\u044b (\u0417\u0430\u043a\u0443\u043f)", None))
+        self.btn_CustDelivery.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0434\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430", None))
         self.btn_Price.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u0430\u0439\u0441-\u043b\u0438\u0441\u0442\u044b", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.updater_page), QCoreApplication.translate("MainWindow", u"\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438", None))
-        self.btn_Delivery.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0443\u043f\u043a\u0438", None))
-        self.btn_Order.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u0432", None))
-        self.btn_Invoice.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u043e\u0434\u0430\u0436\u0438", None))
-        self.btn_Order_Cust.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432", None))
+        self.btn_Purchases.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0443\u043f\u043a\u0438", None))
+        self.btn_Purch_Orders.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u043e\u0432", None))
+        self.btn_Sales.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u043e\u0434\u0430\u0436\u0438", None))
+        self.btn_Cust_Orders.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432", None))
+        self.btn_MarketPlace.setText(QCoreApplication.translate("MainWindow", u"\u041c\u0430\u0440\u043a\u0435\u0442 \u041f\u043b\u0435\u0439\u0441\u044b", None))
+        self.btn_Complect.setText(QCoreApplication.translate("MainWindow", u"\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0430\u0446\u0438\u0438", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.docs_page), QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b", None))
         self.btn_Scheme.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043e\u0442\u0447\u0435\u0442", None))
         self.btn_Plan.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0417\u041e\u041d", None))

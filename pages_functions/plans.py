@@ -21,8 +21,7 @@ class Plans(QWidget):
         super(Plans, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
-        if not hasattr(self, 'read_company_plans'):
-            raise NotImplementedError("Метод read_company_plans должен быть реализован")
+
         self._setup_ui()
         self._setup_connections()
         
@@ -368,7 +367,7 @@ class Plans(QWidget):
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
             df['Status'] = 'План'
-            df.to_excel("test_plans.xlsx")
+
             return df
 
         except Exception as e:
@@ -668,6 +667,7 @@ class Plans(QWidget):
             records_to_insert = []
             records_to_update = []
             processed_count = 0
+            problem_rows = []
 
             # Получаем ВСЕ существующие записи с их ID
             existing_records = db.query(CustomerPlan).all()
@@ -692,7 +692,15 @@ class Plans(QWidget):
 
                     # Проверяем обязательные поля
                     if None in [year_id, holding_id, manager_id]:
-                        print(f"Пропуск строки {idx}: отсутствуют обязательные данные")
+                        missing = []
+                        if year_id is None: missing.append("Year")
+                        if holding_id is None: missing.append("Holding")
+                        if manager_id is None: missing.append("Manager")
+                        problem_rows.append({
+                            'row_number': idx,
+                            'missing_fields': ', '.join(missing),
+                            'row_data': row.to_dict()
+                        })
                         continue
 
                     # Формируем ключ для проверки дубликатов
@@ -744,6 +752,17 @@ class Plans(QWidget):
             print(f"Обработано строк: {processed_count}/{len(df)}")
             print(f"Добавлено новых: {len(records_to_insert)}")
             print(f"Обновлено существующих: {len(records_to_update)}")
+                                # В конце функции, перед return
+            if problem_rows:
+                problem_df = pd.DataFrame(problem_rows)
+                try:
+                    problem_df.to_excel("problem_rows.xlsx", index=False, encoding="utf-8")  # Попробуйте utf-8
+                except Exception as e:
+                    print(f"Ошибка при записи в Excel: {e}")
+                    problem_df.to_csv("problem_rows.csv", index=False, encoding="utf-8") # Если Excel не удался, сохраняем в CSV
+                    print("Попытка сохранения в CSV-файл.")
+
+                print(f"Сохранено {len(problem_rows)} проблемных строк в файл problem_rows.xlsx")
 
             return len(records_to_insert) + len(records_to_update)
 

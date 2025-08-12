@@ -12,16 +12,18 @@ from PySide6.QtGui import QColor, QIcon
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from db import Base, engine
+from pages_functions.home import Home
 from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
 from pages_functions.plans import Plans
 from pages_functions.cost import Costs
-
+from pages_functions.supplier import SupplierWidget
+from pages_functions.add_costs import AddSupplCosts
 
 from pages_functions.dashboard import Dashboard
-from pages_functions.delivery import Rep_Delivery
-from pages_functions.home import Home
+
+
 from pages_functions.invoice import Rep_Invoices
 from pages_functions.order import Rep_Orders
 
@@ -78,9 +80,11 @@ class MyWindow(QMainWindow):
         self.btn_product = self.ui.btn_Products
         self.btn_plans = self.ui.btn_Plans
         self.btn_cost = self.ui.btn_Costs
+        self.btn_supplier = self.ui.btn_Supplier
+        self.btn_addcosts = self.ui.btn_AddCosts
         
         self.btn_order = self.ui.btn_Order
-        self.btn_delivery = self.ui.btn_Delivery
+        
         self.btn_invoice = self.ui.btn_Invoice
         self.btn_bonus_scheme = self.ui.btn_Scheme
 
@@ -96,9 +100,10 @@ class MyWindow(QMainWindow):
             self.btn_product: Product(),
             self.btn_plans: Plans(),
             self.btn_cost: Costs(),
+            self.btn_supplier: SupplierWidget(),
+            self.btn_addcosts: AddSupplCosts(),
             
             self.btn_order: Rep_Orders(),
-            self.btn_delivery: Rep_Delivery(),
             self.btn_invoice: Rep_Invoices(),
 
         }
@@ -120,9 +125,10 @@ class MyWindow(QMainWindow):
         self.btn_product.clicked.connect(self.show_selected_window)
         self.btn_plans.clicked.connect(self.show_selected_window)
         self.btn_cost.clicked.connect(self.show_selected_window)
+        self.btn_supplier.clicked.connect(self.show_selected_window)
+        self.btn_addcosts.clicked.connect(self.show_selected_window)
         
         self.btn_order.clicked.connect(self.show_selected_window)
-        self.btn_delivery.clicked.connect(self.show_selected_window)
         self.btn_invoice.clicked.connect(self.show_selected_window)
         self.btn_bonus_scheme.clicked.connect(self.show_selected_window)
 
