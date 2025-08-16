@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'marketplaceHWICqY.ui'
+## Form generated from reading UI file 'movesCanmQs.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -318,13 +318,13 @@ class Ui_Form(object):
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.line_marketPl = QComboBox(self.frame_2)
-        self.line_marketPl.setObjectName(u"line_marketPl")
-        self.line_marketPl.setMinimumSize(QSize(0, 25))
-        self.line_marketPl.setMaximumSize(QSize(16777215, 25))
-        self.line_marketPl.setIconSize(QSize(16, 16))
+        self.line_doc_type_2 = QComboBox(self.frame_2)
+        self.line_doc_type_2.setObjectName(u"line_doc_type_2")
+        self.line_doc_type_2.setMinimumSize(QSize(0, 25))
+        self.line_doc_type_2.setMaximumSize(QSize(16777215, 25))
+        self.line_doc_type_2.setIconSize(QSize(16, 16))
 
-        self.verticalLayout_3.addWidget(self.line_marketPl)
+        self.verticalLayout_3.addWidget(self.line_doc_type_2)
 
         self.line_Year = QComboBox(self.frame_2)
         self.line_Year.setObjectName(u"line_Year")
@@ -402,6 +402,11 @@ class Ui_Form(object):
 
         self.verticalLayout_5.addWidget(self.label_6)
 
+        self.label = QLabel(self.frame_4)
+        self.label.setObjectName(u"label")
+
+        self.verticalLayout_5.addWidget(self.label)
+
         self.label_8 = QLabel(self.frame_4)
         self.label_8.setObjectName(u"label_8")
 
@@ -411,11 +416,6 @@ class Ui_Form(object):
         self.label_7.setObjectName(u"label_7")
 
         self.verticalLayout_5.addWidget(self.label_7)
-
-        self.label = QLabel(self.frame_4)
-        self.label.setObjectName(u"label")
-
-        self.verticalLayout_5.addWidget(self.label)
 
 
         self.horizontalLayout_5.addWidget(self.frame_4)
@@ -429,12 +429,18 @@ class Ui_Form(object):
         self.verticalLayout_6 = QVBoxLayout(self.frame_5)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
         self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
-        self.line_doc_type = QComboBox(self.frame_5)
-        self.line_doc_type.setObjectName(u"line_doc_type")
-        self.line_doc_type.setMinimumSize(QSize(0, 25))
-        self.line_doc_type.setMaximumSize(QSize(16777215, 25))
+        self.line_customer = QComboBox(self.frame_5)
+        self.line_customer.setObjectName(u"line_customer")
+        self.line_customer.setMinimumSize(QSize(0, 25))
+        self.line_customer.setMaximumSize(QSize(16777215, 25))
 
-        self.verticalLayout_6.addWidget(self.line_doc_type)
+        self.verticalLayout_6.addWidget(self.line_customer)
+
+        self.line_cust_id = QLineEdit(self.frame_5)
+        self.line_cust_id.setObjectName(u"line_cust_id")
+        self.line_cust_id.setMinimumSize(QSize(0, 25))
+
+        self.verticalLayout_6.addWidget(self.line_cust_id)
 
         self.line_article = QLineEdit(self.frame_5)
         self.line_article.setObjectName(u"line_article")
@@ -449,13 +455,6 @@ class Ui_Form(object):
         self.line_product.setMaximumSize(QSize(16777215, 25))
 
         self.verticalLayout_6.addWidget(self.line_product)
-
-        self.line_pack = QComboBox(self.frame_5)
-        self.line_pack.setObjectName(u"line_pack")
-        self.line_pack.setMinimumSize(QSize(0, 25))
-        self.line_pack.setMaximumSize(QSize(16777215, 25))
-
-        self.verticalLayout_6.addWidget(self.line_pack)
 
 
         self.horizontalLayout_5.addWidget(self.frame_5)
@@ -524,9 +523,9 @@ class Ui_Form(object):
 
         self.horizontalLayout_8.addWidget(self.label_11)
 
-        self.label_Revenue = QLabel(self.frame_Revenue)
-        self.label_Revenue.setObjectName(u"label_Revenue")
-        self.label_Revenue.setStyleSheet(u"QLabel {\n"
+        self.label_qty_pcs = QLabel(self.frame_Revenue)
+        self.label_qty_pcs.setObjectName(u"label_qty_pcs")
+        self.label_qty_pcs.setStyleSheet(u"QLabel {\n"
 "	background-color: #f8f8f2;\n"
 "	border-radius: 5px;\n"
 "	border: 2px solid #f09d54;\n"
@@ -534,9 +533,9 @@ class Ui_Form(object):
 "	color: #964b09;\n"
 "	font: 700 10pt \"Tahoma\";\n"
 "}")
-        self.label_Revenue.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label_qty_pcs.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.horizontalLayout_8.addWidget(self.label_Revenue)
+        self.horizontalLayout_8.addWidget(self.label_qty_pcs)
 
 
         self.horizontalLayout_3.addWidget(self.frame_Revenue)
@@ -601,65 +600,6 @@ class Ui_Form(object):
 
         self.verticalLayout.addWidget(self.table)
 
-        self.frame_9 = QFrame(self.widget)
-        self.frame_9.setObjectName(u"frame_9")
-        self.frame_9.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_9.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_7 = QHBoxLayout(self.frame_9)
-        self.horizontalLayout_7.setSpacing(0)
-        self.horizontalLayout_7.setObjectName(u"horizontalLayout_7")
-        self.horizontalLayout_7.setContentsMargins(12, 0, 0, 0)
-        self.label_plan_File = QLabel(self.frame_9)
-        self.label_plan_File.setObjectName(u"label_plan_File")
-        self.label_plan_File.setMinimumSize(QSize(0, 30))
-        self.label_plan_File.setMaximumSize(QSize(16777215, 30))
-        self.label_plan_File.setStyleSheet(u"QLabel {\n"
-"	background-color: #f8f8f2;\n"
-"	border-radius: 5px;\n"
-"	border: 2px solid #f09d54;\n"
-"	padding-left: 10px;\n"
-"	color: #964b09;\n"
-"	font: 10pt \"Tahoma\";\n"
-"}")
-
-        self.horizontalLayout_7.addWidget(self.label_plan_File)
-
-        self.frame_10 = QFrame(self.frame_9)
-        self.frame_10.setObjectName(u"frame_10")
-        self.frame_10.setMinimumSize(QSize(220, 0))
-        self.frame_10.setMaximumSize(QSize(220, 16777215))
-        self.frame_10.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_10.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_6 = QHBoxLayout(self.frame_10)
-        self.horizontalLayout_6.setSpacing(0)
-        self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
-        self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
-        self.btn_open_file = QPushButton(self.frame_10)
-        self.btn_open_file.setObjectName(u"btn_open_file")
-        self.btn_open_file.setMinimumSize(QSize(90, 30))
-        self.btn_open_file.setMaximumSize(QSize(90, 16777215))
-        icon2 = QIcon()
-        icon2.addFile(u":/icon/icon/folder \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_open_file.setIcon(icon2)
-
-        self.horizontalLayout_6.addWidget(self.btn_open_file)
-
-        self.btn_upload_file = QPushButton(self.frame_10)
-        self.btn_upload_file.setObjectName(u"btn_upload_file")
-        self.btn_upload_file.setMinimumSize(QSize(90, 30))
-        self.btn_upload_file.setMaximumSize(QSize(90, 16777215))
-        icon3 = QIcon()
-        icon3.addFile(u":/icon/icon/upload \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_upload_file.setIcon(icon3)
-
-        self.horizontalLayout_6.addWidget(self.btn_upload_file)
-
-
-        self.horizontalLayout_7.addWidget(self.frame_10)
-
-
-        self.verticalLayout.addWidget(self.frame_9)
-
 
         self.horizontalLayout.addWidget(self.widget)
 
@@ -671,23 +611,20 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QCoreApplication.translate("Form", u"Form", None))
-        self.Title_label.setText(QCoreApplication.translate("Form", u"\u041c\u0430\u0440\u043a\u0435\u0442 \u041f\u043b\u0435\u0439\u0441\u044b", None))
-        self.label_3.setText(QCoreApplication.translate("Form", u"\u041c\u0430\u0440\u043a\u0435\u0442 \u041f\u043b\u0435\u0439\u0441", None))
+        self.Title_label.setText(QCoreApplication.translate("Form", u"\u0414\u0432\u0438\u0436\u0435\u043d\u0438\u044f", None))
+        self.label_3.setText(QCoreApplication.translate("Form", u"\u0422\u0438\u043f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430", None))
         self.label_2.setText(QCoreApplication.translate("Form", u"\u0413\u043e\u0434", None))
         self.label_5.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u0441\u044f\u0446", None))
         self.label_4.setText(QCoreApplication.translate("Form", u"\u0414\u0430\u0442\u0430", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
-        self.label_6.setText(QCoreApplication.translate("Form", u"\u0422\u0438\u043f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430", None))
+        self.label_6.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442", None))
+        self.label.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442.\u041a\u043e\u0434", None))
         self.label_8.setText(QCoreApplication.translate("Form", u"\u0410\u0440\u0442\u0438\u043a\u0443\u043b", None))
         self.label_7.setText(QCoreApplication.translate("Form", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442", None))
-        self.label.setText(QCoreApplication.translate("Form", u"\u0423\u043f\u0430\u043a\u043e\u0432\u043a\u0430", None))
         self.label_9.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u044a\u0435\u043c:", None))
         self.label_Volume.setText("")
-        self.label_11.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0440\u0443\u0447\u043a\u0430:", None))
-        self.label_Revenue.setText("")
-        self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c Excel \u043e\u0442\u0447\u0435\u0442", None))
-        self.label_plan_File.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0431\u0435\u0440\u0438 \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438 Upload, \u0444\u0430\u0439\u043b \u0431\u0443\u0434\u0435\u0442 \u0432\u0437\u044f\u0442 \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0430\u043f\u043a\u0438", None))
-        self.btn_open_file.setText(QCoreApplication.translate("Form", u"Open", None))
-        self.btn_upload_file.setText(QCoreApplication.translate("Form", u"Upload", None))
+        self.label_11.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u0448\u0442", None))
+        self.label_qty_pcs.setText("")
+        self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
     # retranslateUi
 

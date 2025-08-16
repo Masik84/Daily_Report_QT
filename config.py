@@ -38,11 +38,13 @@ Orders_file = MAIN_FOLDER + "Выгрузки\\Счета\\Заказы.xlsx"
 Reserve_file = MAIN_FOLDER + "Выгрузки\\Счета\\Резервы.xlsx"
 Orders_file_new = MAIN_FOLDER + "Выгрузки\\Заказы.xlsx"
 
-OZON_file = MAIN_FOLDER + "ОЗОН.xlsm"
-OZON_folder = MAIN_FOLDER + "OZON\\Отчет по товарам"
-Yandex_file = MAIN_FOLDER + "Яндекс.xlsx"
-WB_file = MAIN_FOLDER + "WB.xlsx"
-cash_file = MAIN_FOLDER + "Реестр заказов СПЕЦ УСЛОВИЯ.xlsx"
+OZON_file = MAIN_FOLDER + "WorkFiles\\ОЗОН.xlsm"
+OZON_folder = MAIN_FOLDER + "WorkFiles\\OZON\\Отчет по товарам_нов"
+Yandex_file = MAIN_FOLDER + "WorkFiles\\Яндекс.xlsx"
+WB_file = MAIN_FOLDER + "WorkFiles\\WB.xlsx"
+Sber_file = MAIN_FOLDER + "WorkFiles\\СберМегаМаркет.xlsx"
+cash_file = MAIN_FOLDER + "WorkFiles\\Реестр заказов СПЕЦ УСЛОВИЯ.xlsx"
+
 BMW_comm = MAIN_FOLDER + "Комиссии BMW дилеры.xlsx"
 production = MAIN_FOLDER + "Приход из пр-ва.xlsx"
 

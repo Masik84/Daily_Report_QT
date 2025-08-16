@@ -21,8 +21,9 @@ from pages_functions.cost import Costs
 from pages_functions.supplier import SupplierWidget
 from pages_functions.add_costs import AddSupplCosts
 
-from pages_functions.dashboard import Dashboard
+from pages_functions.marketplace import MarketplacePage
 
+from pages_functions.dashboard import Dashboard
 
 from pages_functions.invoice import Rep_Invoices
 from pages_functions.order import Rep_Orders
@@ -83,10 +84,11 @@ class MyWindow(QMainWindow):
         self.btn_supplier = self.ui.btn_Supplier
         self.btn_addcosts = self.ui.btn_AddCosts
         
-        self.btn_order = self.ui.btn_Order
+        self.btn_MP = self.ui.btn_MarketPlace
         
-        self.btn_invoice = self.ui.btn_Invoice
-        self.btn_bonus_scheme = self.ui.btn_Scheme
+        self.btn_order = self.ui.btn_Cust_Orders
+        self.btn_sales = self.ui.btn_Sales
+        
 
 
         ## =======================================================================================================
@@ -103,8 +105,10 @@ class MyWindow(QMainWindow):
             self.btn_supplier: SupplierWidget(),
             self.btn_addcosts: AddSupplCosts(),
             
+             self.btn_MP: MarketplacePage(),
+            
             self.btn_order: Rep_Orders(),
-            self.btn_invoice: Rep_Invoices(),
+            self.btn_sales: Rep_Invoices(),
 
         }
 
@@ -128,9 +132,11 @@ class MyWindow(QMainWindow):
         self.btn_supplier.clicked.connect(self.show_selected_window)
         self.btn_addcosts.clicked.connect(self.show_selected_window)
         
+        self.btn_MP.clicked.connect(self.show_selected_window)
+        
         self.btn_order.clicked.connect(self.show_selected_window)
-        self.btn_invoice.clicked.connect(self.show_selected_window)
-        self.btn_bonus_scheme.clicked.connect(self.show_selected_window)
+        self.btn_sales.clicked.connect(self.show_selected_window)
+        
 
 
         ## =======================================================================================================

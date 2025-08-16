@@ -36,6 +36,7 @@ class Manager(Base):
     contracts = relationship("Contract", back_populates="manager")  # мн. число
     hyundai_dealers = relationship("Hyundai_Dealer", back_populates="manager")  # мн. число
     customer_plans = relationship("CustomerPlan", back_populates="manager")
+    marketplace_entries = relationship("Marketplace", back_populates="manager")
 
 class STL(Base):
     __tablename__ = 'stls'
@@ -76,6 +77,7 @@ class Customer(Base):
     sector = relationship("Sector", back_populates="customers")
     holding = relationship("Holding", back_populates="customers")
     contracts = relationship("Contract", back_populates="customer")
+    marketplace_entries = relationship("Marketplace", back_populates="customer")
 
 class Holding(Base):
     __tablename__ = 'holdings'
@@ -85,6 +87,7 @@ class Holding(Base):
 
     customers = relationship("Customer", back_populates="holding")
     customer_plans = relationship("CustomerPlan", back_populates="holding")
+    marketplace_entries = relationship("Marketplace", back_populates="holding")
 
 class Sector(Base):
     __tablename__ = 'sectors'
@@ -94,6 +97,7 @@ class Sector(Base):
 
     customers = relationship("Customer", back_populates="sector")
     customer_plans = relationship("CustomerPlan", back_populates="sector")
+    marketplace_entries = relationship("Marketplace", back_populates="sector")
 
 class Contract(Base):
     __tablename__ = 'contracts'
@@ -110,7 +114,8 @@ class Contract(Base):
 
     # Связи
     customer = relationship("Customer", back_populates="contracts")
-    manager = relationship("Manager", back_populates="contracts")  # ед. число
+    manager = relationship("Manager", back_populates="contracts")
+    marketplace_entries = relationship("Marketplace", back_populates="contract")
 
 class Hyundai_Dealer(Base):
     __tablename__ = 'hyundai_dealers'
@@ -195,6 +200,7 @@ class Materials(Base):
 
     # Связи
     product_name = relationship("Product_Names", back_populates="materials")
+    marketplace_entries = relationship("Marketplace", back_populates="material")
 
 class ABC_list(Base):
     __tablename__ = 'abc_list'
@@ -323,7 +329,7 @@ class Customs_Rate(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     TNVED_id = Column(Integer, ForeignKey('tnved.id', name='fk_customs_rate_tnved'))
-    Cust_rate = Column(Numeric(5, 4))  #  Изменил Numeric(5, 2) на Numeric(5, 4)
+    Cust_rate = Column(Numeric)  #  Изменил Numeric(5, 2) на Numeric(5, 4)
 
     tnved = relationship("TNVED", back_populates="customs_rates")
 
@@ -355,10 +361,12 @@ class DOCType(Base):
     __tablename__ = 'doc_type'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    merge = Column(String)
+    merge = Column(String)  # Вид документа_Вид операции
     Document = Column(String) # Вид документа
     Transaction = Column(String) # Вид операции
     Doc_type = Column(String) # Тип документа
+    
+    marketplace_entries = relationship("Marketplace", back_populates="doc_type")
 
 class Year(Base):
     __tablename__ = 'years'
@@ -412,10 +420,11 @@ class Calendar(Base):
     Week_id = Column(Integer, ForeignKey('weeks.id', name='fk_calendar_Week_id_weeks'), nullable=False)
     NETWORKDAYS = Column(Integer, nullable=False)
 
-    year = relationship("Year", back_populates="calendar_entries")  # строчная 'year'
+    year = relationship("Year", back_populates="calendar_entries")
     quarter = relationship("Quarter", back_populates="calendar_entries")
     month = relationship("Month", back_populates="calendar_entries")
     week = relationship("Week", back_populates="calendar_entries")
+    marketplace_entries = relationship("Marketplace", back_populates="calendar")
 
 class CompanyPlan(Base):
     __tablename__ = 'company_plans'
@@ -481,7 +490,53 @@ class CustomerPlan(Base):
     stl = relationship("STL", back_populates="customer_plans")  # строчная
     team_lead = relationship("TeamLead", back_populates="customer_plans")  # строчная
 
+class Marketplace(Base):
+    __tablename__ = 'marketplace'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Document = Column(String)  # Документ
+    Date = Column(Date)  # Дата
+    Qty = Column(Numeric)  # Количество
+    Amount_1C = Column(Numeric)  # Сумма 1С
+    Price_1C = Column(Numeric)  # Цена 1С (рассчитывается как Amount_1C / Qty)
+    Payment_terms = Column(String)  # Условие оплаты
+    Post_payment = Column(Numeric)  # Постоплата%
+    Plan_pay_Date = Column(sqlalchemy.Date(), nullable=True)  # Плановая дата оплаты
+    Stock = Column(String)  # Склад
+    UoM = Column(String)  # Единица измерения
+    Currency = Column(String)  # Валюта
+    FX_rate = Column(Numeric)  # Курс взаиморасчетов
+    VAT = Column(String)  # % НДС
+    
+    # Внешние ключи
+    Calendar_id = Column(Integer, ForeignKey('calendar.id', name='fk_marketplace_calendar'))
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_marketplace_material'))
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_marketplace_customer'))
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_marketplace_manager'))
+    Contract_id = Column(String, ForeignKey('contracts.id', name='fk_marketplace_contract'))
+    Holding_id = Column(Integer, ForeignKey('holdings.id', name='fk_marketplace_holding'))
+    Sector_id = Column(Integer, ForeignKey('sectors.id', name='fk_marketplace_sector'))
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_marketplace_doctype'))
+    
+    # Связи
+    calendar = relationship("Calendar", back_populates="marketplace_entries")
+    material = relationship("Materials", back_populates="marketplace_entries")
+    customer = relationship("Customer", back_populates="marketplace_entries")
+    manager = relationship("Manager", back_populates="marketplace_entries")
+    contract = relationship("Contract", back_populates="marketplace_entries")
+    holding = relationship("Holding", back_populates="marketplace_entries")
+    sector = relationship("Sector", back_populates="marketplace_entries")
+    doc_type = relationship("DOCType", back_populates="marketplace_entries")
+    
+    __table_args__ = (
+        Index('idx_marketplace_document', 'Document'),
+        Index('idx_marketplace_date', 'Date'),
+        Index('idx_marketplace_material', 'Material_id'),
+        Index('idx_marketplace_holding', 'Holding_id'),
+    )
+
+
+
 
 from sqlalchemy.orm import configure_mappers
-
 configure_mappers()

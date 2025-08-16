@@ -265,6 +265,12 @@ class Product(QWidget):
             df = df.rename(columns=column_map)
             df = pd.concat([df, new_df], ignore_index=True)
             
+            df["Package_type"] = df["Package_type"].replace({"комплект кан": "комплект", "комплект туб": "комплект"})
+            
+            df['TNVED'] = df['TNVED'].fillna('-')
+            df['TNVED'] = df['TNVED'].replace({'': '-', 'nan': '-', 'None': '-', None: '-'})
+            df['TNVED'] = df['TNVED'].astype(str).str.strip()
+            
             # 4. Обработка числовых и текстовых значений
             numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 
                         'Net_weight', 'Gross_weight', 'Density']
