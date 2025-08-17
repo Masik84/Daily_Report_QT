@@ -1,13 +1,13 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QMessageBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QMessageBox, QProgressDialog, QApplication
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
+from datetime import datetime
 from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
 from pages_functions.cost import Costs
 from pages_functions.supplier import Supplier
 from pages_functions.add_costs import AddSupplCosts
-from config import Material_file, All_data_file, Customer_file, Contract_file
 
 class Home(QWidget):
     def __init__(self):
@@ -93,22 +93,101 @@ class Home(QWidget):
         self.btn_send_manager_reports.clicked.connect(self.send_manager_reports)
 
     def update_all_references(self):
-        """Обновление всех справочников"""
+        """Обновляет все справочники в системе"""
+        # Настройка прогресс-бара
+        progress = QProgressDialog("Обновление справочников...", "Отмена", 0, 6, self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        
         try:
-            self.product_module.run_product_func(Material_file)
+            # 1. Обновление товаров
+            progress.setLabelText("Обновление товаров...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            product = Product()
+            if not product.upload_data():
+                raise Exception("Ошибка обновления товаров")
+            progress.setValue(1)
 
-            self.managers_module._process_upload(All_data_file)
-            
-            self.customer_module.run_customer_func(Customer_file, All_data_file)
-            self.customer_module.run_contract_func(Contract_file)
-            
-            self.cost_module.upload_data()
-            self.supplier_module.upload_data()
-            self.addcosts_module.upload_data()
-            
-            self.show_message("Все справочники успешно обновлены!")
+            # 2. Обновление менеджеров
+            progress.setLabelText("Обновление менеджеров...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            managers = Managers()
+            if not managers.upload_data():
+                raise Exception("Ошибка обновления менеджеров")
+            progress.setValue(2)
+
+            # 3. Обновление клиентов
+            progress.setLabelText("Обновление клиентов...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            customer = Customer()
+            if not customer.upload_data():
+                raise Exception("Ошибка обновления клиентов")
+            progress.setValue(3)
+
+            # 4. Обновление себестоимости
+            progress.setLabelText("Обновление себестоимости...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            costs = Costs()
+            if not costs.upload_data():
+                raise Exception("Ошибка обновления себестоимости")
+            progress.setValue(4)
+
+            # 5. Обновление поставщиков
+            progress.setLabelText("Обновление поставщиков...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            supplier = Supplier()
+            if not supplier.upload_data():
+                raise Exception("Ошибка обновления поставщиков")
+            progress.setValue(5)
+
+            # 6. Обновление дополнительных расходов
+            progress.setLabelText("Обновление доп. расходов...")
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                return False
+                
+            add_costs = AddSupplCosts()
+            if not add_costs.upload_data():
+                raise Exception("Ошибка обновления дополнительных расходов")
+            progress.setValue(6)
+
+            # Успешное завершение
+            progress.close()
+            QMessageBox.information(
+                self, 
+                "Готово", 
+                "Все справочники успешно обновлены!",
+                QMessageBox.Ok
+            )
+            return True
+
         except Exception as e:
-            self.show_error_message(f"Ошибка при обновлении справочников: {str(e)}")
+            progress.close()
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка при обновлении:\n{str(e)}",
+                QMessageBox.Ok
+            )
+            # Логирование ошибки
+            with open("update_log.txt", "a") as log_file:
+                log_file.write(f"{datetime.now()}: {str(e)}\n")
+            return False
 
     def update_purchases_sales(self):
         """Обновление данных по закупкам/продажам"""
