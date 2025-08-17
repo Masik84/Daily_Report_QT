@@ -233,7 +233,7 @@ QPushButton:pressed {
            <number>2</number>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>2</number>
           </property>
           <property name="tabSpacing">
            <number>6</number>
@@ -243,7 +243,7 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>206</width>
+             <width>179</width>
              <height>643</height>
             </rect>
            </property>
@@ -356,7 +356,7 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>206</width>
+             <width>179</width>
              <height>643</height>
             </rect>
            </property>
@@ -547,7 +547,7 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>206</width>
+             <width>179</width>
              <height>643</height>
             </rect>
            </property>
@@ -681,9 +681,9 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="btn_Complect">
+             <widget class="QPushButton" name="btn_Moves">
               <property name="text">
-               <string>Комплектации</string>
+               <string>Движения / Комплекты</string>
               </property>
              </widget>
             </item>
@@ -707,7 +707,7 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>206</width>
+             <width>179</width>
              <height>643</height>
             </rect>
            </property>

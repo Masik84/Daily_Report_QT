@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'movesCanmQs.ui'
+## Form generated from reading UI file 'movesRlFmqV.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -16,9 +16,10 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QApplication, QComboBox,
-    QFrame, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QPushButton, QSizePolicy, QSpacerItem,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+    QDateEdit, QFrame, QHBoxLayout, QHeaderView,
+    QLabel, QLineEdit, QPushButton, QSizePolicy,
+    QSpacerItem, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QWidget)
 from wind import resource_rc
 
 class Ui_Form(object):
@@ -238,7 +239,40 @@ class Ui_Form(object):
 "\n"
 " QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {\n"
 "     background: none;\n"
-" }")
+" }\n"
+"\n"
+"QDateEdit {\n"
+""
+                        "    background-color: #f8f8f2;\n"
+"    border-radius: 5px;\n"
+"    border: 2px solid #f09d54;\n"
+"    padding-left: 10px;\n"
+"    color: #262626;\n"
+"    font: 10pt \"Tahoma\";\n"
+"}\n"
+"\n"
+"QDateEdit:hover {\n"
+"    border: 2px solid #f28223;\n"
+"}\n"
+"\n"
+"QDateEdit:focus {\n"
+"    border: 2px solid #f28223;\n"
+"}\n"
+"\n"
+"QDateEdit::drop-down {\n"
+"    subcontrol-origin: padding;\n"
+"    subcontrol-position: top right;\n"
+"    width: 15px;\n"
+"    border-left-width: 1px;\n"
+"    border-left-color: #f8994a;\n"
+"    border-left-style: solid;\n"
+"    border-top-right-radius: 3px;\n"
+"    border-bottom-right-radius: 3px;\n"
+"}\n"
+"\n"
+"QDateEdit::down-arrow {\n"
+"    image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"}")
         self.horizontalLayout = QHBoxLayout(Form)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -279,6 +313,11 @@ class Ui_Form(object):
         self.verticalLayout_2 = QVBoxLayout(self.frame)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 9, 3)
+        self.label_4 = QLabel(self.frame)
+        self.label_4.setObjectName(u"label_4")
+
+        self.verticalLayout_2.addWidget(self.label_4)
+
         self.label_3 = QLabel(self.frame)
         self.label_3.setObjectName(u"label_3")
         font1 = QFont()
@@ -302,11 +341,6 @@ class Ui_Form(object):
 
         self.verticalLayout_2.addWidget(self.label_5)
 
-        self.label_4 = QLabel(self.frame)
-        self.label_4.setObjectName(u"label_4")
-
-        self.verticalLayout_2.addWidget(self.label_4)
-
 
         self.horizontalLayout_5.addWidget(self.frame)
 
@@ -318,13 +352,19 @@ class Ui_Form(object):
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.line_doc_type_2 = QComboBox(self.frame_2)
-        self.line_doc_type_2.setObjectName(u"line_doc_type_2")
-        self.line_doc_type_2.setMinimumSize(QSize(0, 25))
-        self.line_doc_type_2.setMaximumSize(QSize(16777215, 25))
-        self.line_doc_type_2.setIconSize(QSize(16, 16))
+        self.line_table = QComboBox(self.frame_2)
+        self.line_table.setObjectName(u"line_table")
+        self.line_table.setMinimumSize(QSize(0, 25))
 
-        self.verticalLayout_3.addWidget(self.line_doc_type_2)
+        self.verticalLayout_3.addWidget(self.line_table)
+
+        self.line_doc_type = QComboBox(self.frame_2)
+        self.line_doc_type.setObjectName(u"line_doc_type")
+        self.line_doc_type.setMinimumSize(QSize(0, 25))
+        self.line_doc_type.setMaximumSize(QSize(16777215, 25))
+        self.line_doc_type.setIconSize(QSize(16, 16))
+
+        self.verticalLayout_3.addWidget(self.line_doc_type)
 
         self.line_Year = QComboBox(self.frame_2)
         self.line_Year.setObjectName(u"line_Year")
@@ -339,12 +379,6 @@ class Ui_Form(object):
         self.line_Mnth.setMaximumSize(QSize(16777215, 25))
 
         self.verticalLayout_3.addWidget(self.line_Mnth)
-
-        self.line_Date = QComboBox(self.frame_2)
-        self.line_Date.setObjectName(u"line_Date")
-        self.line_Date.setMinimumSize(QSize(0, 25))
-
-        self.verticalLayout_3.addWidget(self.line_Date)
 
 
         self.horizontalLayout_5.addWidget(self.frame_2)
@@ -475,6 +509,39 @@ class Ui_Form(object):
         self.horizontalLayout_3 = QHBoxLayout(self.frame_7)
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.horizontalLayout_3.setContentsMargins(-1, 0, 9, 0)
+        self.frame_pcs = QFrame(self.frame_7)
+        self.frame_pcs.setObjectName(u"frame_pcs")
+        self.frame_pcs.setMinimumSize(QSize(300, 0))
+        self.frame_pcs.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_pcs.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_8 = QHBoxLayout(self.frame_pcs)
+        self.horizontalLayout_8.setSpacing(0)
+        self.horizontalLayout_8.setObjectName(u"horizontalLayout_8")
+        self.horizontalLayout_8.setContentsMargins(0, 0, 0, 0)
+        self.label_11 = QLabel(self.frame_pcs)
+        self.label_11.setObjectName(u"label_11")
+        self.label_11.setMinimumSize(QSize(70, 0))
+        self.label_11.setMaximumSize(QSize(70, 16777215))
+
+        self.horizontalLayout_8.addWidget(self.label_11)
+
+        self.label_qty_pcs = QLabel(self.frame_pcs)
+        self.label_qty_pcs.setObjectName(u"label_qty_pcs")
+        self.label_qty_pcs.setStyleSheet(u"QLabel {\n"
+"	background-color: #f8f8f2;\n"
+"	border-radius: 5px;\n"
+"	border: 2px solid #f09d54;\n"
+"	padding-left: 10px;\n"
+"	color: #964b09;\n"
+"	font: 700 10pt \"Tahoma\";\n"
+"}")
+        self.label_qty_pcs.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.horizontalLayout_8.addWidget(self.label_qty_pcs)
+
+
+        self.horizontalLayout_3.addWidget(self.frame_pcs)
+
         self.frame_Vol = QFrame(self.frame_7)
         self.frame_Vol.setObjectName(u"frame_Vol")
         self.frame_Vol.setMinimumSize(QSize(300, 0))
@@ -485,7 +552,7 @@ class Ui_Form(object):
         self.horizontalLayout_4.setContentsMargins(0, 0, 0, 0)
         self.label_9 = QLabel(self.frame_Vol)
         self.label_9.setObjectName(u"label_9")
-        self.label_9.setMinimumSize(QSize(50, 0))
+        self.label_9.setMinimumSize(QSize(70, 0))
         self.label_9.setMaximumSize(QSize(50, 16777215))
 
         self.horizontalLayout_4.addWidget(self.label_9)
@@ -507,46 +574,21 @@ class Ui_Form(object):
 
         self.horizontalLayout_3.addWidget(self.frame_Vol)
 
-        self.frame_Revenue = QFrame(self.frame_7)
-        self.frame_Revenue.setObjectName(u"frame_Revenue")
-        self.frame_Revenue.setMinimumSize(QSize(300, 0))
-        self.frame_Revenue.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_Revenue.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_8 = QHBoxLayout(self.frame_Revenue)
-        self.horizontalLayout_8.setSpacing(0)
-        self.horizontalLayout_8.setObjectName(u"horizontalLayout_8")
-        self.horizontalLayout_8.setContentsMargins(0, 0, 0, 0)
-        self.label_11 = QLabel(self.frame_Revenue)
-        self.label_11.setObjectName(u"label_11")
-        self.label_11.setMinimumSize(QSize(70, 0))
-        self.label_11.setMaximumSize(QSize(70, 16777215))
-
-        self.horizontalLayout_8.addWidget(self.label_11)
-
-        self.label_qty_pcs = QLabel(self.frame_Revenue)
-        self.label_qty_pcs.setObjectName(u"label_qty_pcs")
-        self.label_qty_pcs.setStyleSheet(u"QLabel {\n"
-"	background-color: #f8f8f2;\n"
-"	border-radius: 5px;\n"
-"	border: 2px solid #f09d54;\n"
-"	padding-left: 10px;\n"
-"	color: #964b09;\n"
-"	font: 700 10pt \"Tahoma\";\n"
-"}")
-        self.label_qty_pcs.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.horizontalLayout_8.addWidget(self.label_qty_pcs)
-
-
-        self.horizontalLayout_3.addWidget(self.frame_Revenue)
-
         self.horizontalSpacer_4 = QSpacerItem(20, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer_4)
 
+        self.date_Start = QDateEdit(self.frame_7)
+        self.date_Start.setObjectName(u"date_Start")
+        self.date_Start.setMinimumSize(QSize(0, 30))
+        self.date_Start.setFont(font1)
+        self.date_Start.setMinimumDate(QDate(2022, 1, 1))
+
+        self.horizontalLayout_3.addWidget(self.date_Start)
+
         self.frame_8 = QFrame(self.frame_7)
         self.frame_8.setObjectName(u"frame_8")
-        self.frame_8.setMinimumSize(QSize(182, 0))
+        self.frame_8.setMinimumSize(QSize(162, 0))
         self.frame_8.setFrameShape(QFrame.Shape.StyledPanel)
         self.frame_8.setFrameShadow(QFrame.Shadow.Raised)
         self.horizontalLayout_9 = QHBoxLayout(self.frame_8)
@@ -555,8 +597,8 @@ class Ui_Form(object):
         self.horizontalLayout_9.setContentsMargins(0, 0, 0, 0)
         self.btn_refresh = QPushButton(self.frame_8)
         self.btn_refresh.setObjectName(u"btn_refresh")
-        self.btn_refresh.setMinimumSize(QSize(180, 30))
-        self.btn_refresh.setMaximumSize(QSize(180, 16777215))
+        self.btn_refresh.setMinimumSize(QSize(160, 30))
+        self.btn_refresh.setMaximumSize(QSize(160, 16777215))
         icon1 = QIcon()
         icon1.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_refresh.setIcon(icon1)
@@ -612,19 +654,19 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         Form.setWindowTitle(QCoreApplication.translate("Form", u"Form", None))
         self.Title_label.setText(QCoreApplication.translate("Form", u"\u0414\u0432\u0438\u0436\u0435\u043d\u0438\u044f", None))
+        self.label_4.setText(QCoreApplication.translate("Form", u"\u0422\u0430\u0431\u043b\u0438\u0446\u0430", None))
         self.label_3.setText(QCoreApplication.translate("Form", u"\u0422\u0438\u043f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430", None))
         self.label_2.setText(QCoreApplication.translate("Form", u"\u0413\u043e\u0434", None))
         self.label_5.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u0441\u044f\u0446", None))
-        self.label_4.setText(QCoreApplication.translate("Form", u"\u0414\u0430\u0442\u0430", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
         self.label_6.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442", None))
         self.label.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442.\u041a\u043e\u0434", None))
         self.label_8.setText(QCoreApplication.translate("Form", u"\u0410\u0440\u0442\u0438\u043a\u0443\u043b", None))
         self.label_7.setText(QCoreApplication.translate("Form", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442", None))
-        self.label_9.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u044a\u0435\u043c:", None))
-        self.label_Volume.setText("")
         self.label_11.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u0448\u0442", None))
         self.label_qty_pcs.setText("")
+        self.label_9.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u043b", None))
+        self.label_Volume.setText("")
         self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
     # retranslateUi
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowVVAVeM.ui'
+## Form generated from reading UI file 'main_windowRrMHxx.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -194,7 +194,7 @@ class Ui_MainWindow(object):
         self.toolBox.setLineWidth(2)
         self.general_page = QWidget()
         self.general_page.setObjectName(u"general_page")
-        self.general_page.setGeometry(QRect(0, 0, 206, 643))
+        self.general_page.setGeometry(QRect(0, 0, 179, 643))
         self.verticalLayout = QVBoxLayout(self.general_page)
         self.verticalLayout.setSpacing(10)
         self.verticalLayout.setObjectName(u"verticalLayout")
@@ -235,7 +235,7 @@ class Ui_MainWindow(object):
         self.toolBox.addItem(self.general_page, icon1, u"General")
         self.updater_page = QWidget()
         self.updater_page.setObjectName(u"updater_page")
-        self.updater_page.setGeometry(QRect(0, 0, 206, 643))
+        self.updater_page.setGeometry(QRect(0, 0, 179, 643))
         self.verticalLayout_3 = QVBoxLayout(self.updater_page)
         self.verticalLayout_3.setSpacing(10)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
@@ -308,7 +308,7 @@ class Ui_MainWindow(object):
         self.toolBox.addItem(self.updater_page, icon2, u"\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438")
         self.docs_page = QWidget()
         self.docs_page.setObjectName(u"docs_page")
-        self.docs_page.setGeometry(QRect(0, 0, 206, 643))
+        self.docs_page.setGeometry(QRect(0, 0, 179, 643))
         self.docs_page.setStyleSheet(u"")
         self.verticalLayout_2 = QVBoxLayout(self.docs_page)
         self.verticalLayout_2.setSpacing(10)
@@ -352,10 +352,10 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_2.addWidget(self.btn_MarketPlace)
 
-        self.btn_Complect = QPushButton(self.docs_page)
-        self.btn_Complect.setObjectName(u"btn_Complect")
+        self.btn_Moves = QPushButton(self.docs_page)
+        self.btn_Moves.setObjectName(u"btn_Moves")
 
-        self.verticalLayout_2.addWidget(self.btn_Complect)
+        self.verticalLayout_2.addWidget(self.btn_Moves)
 
         self.verticalSpacer_2 = QSpacerItem(20, 350, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
@@ -366,7 +366,7 @@ class Ui_MainWindow(object):
         self.toolBox.addItem(self.docs_page, icon3, u"\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b")
         self.bonus_page = QWidget()
         self.bonus_page.setObjectName(u"bonus_page")
-        self.bonus_page.setGeometry(QRect(0, 0, 206, 643))
+        self.bonus_page.setGeometry(QRect(0, 0, 179, 643))
         font2 = QFont()
         font2.setFamilies([u"Tahoma"])
         self.bonus_page.setFont(font2)
@@ -568,7 +568,7 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         self.toggleButton.toggled.connect(self.menu_widget.setHidden)
 
-        self.toolBox.setCurrentIndex(0)
+        self.toolBox.setCurrentIndex(2)
         self.toolBox.layout().setSpacing(6)
         self.tabWidget.setCurrentIndex(-1)
 
@@ -595,7 +595,7 @@ class Ui_MainWindow(object):
         self.btn_Sales.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u043e\u0434\u0430\u0436\u0438", None))
         self.btn_Cust_Orders.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432", None))
         self.btn_MarketPlace.setText(QCoreApplication.translate("MainWindow", u"\u041c\u0430\u0440\u043a\u0435\u0442 \u041f\u043b\u0435\u0439\u0441\u044b", None))
-        self.btn_Complect.setText(QCoreApplication.translate("MainWindow", u"\u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u0430\u0446\u0438\u0438", None))
+        self.btn_Moves.setText(QCoreApplication.translate("MainWindow", u"\u0414\u0432\u0438\u0436\u0435\u043d\u0438\u044f / \u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u044b", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.docs_page), QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b", None))
         self.btn_Scheme.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043e\u0442\u0447\u0435\u0442", None))
         self.btn_Plan.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0417\u041e\u041d", None))

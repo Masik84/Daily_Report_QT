@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from functools import lru_cache
 import traceback
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -927,207 +928,225 @@ class MarketplacePage(QWidget):
             traceback.print_exc()
             self.show_error_message(error_msg)
     
+    def write_ozon_product_errors(self, df):
+        """Проверка отсутствующих продуктов и вывод сообщения пользователю"""
+        error_find = df[(df["НАЗВАНИЕ"] == "-") & (df["Ozon SKU"] != "-")].drop_duplicates(subset=["Артикул", "Ozon SKU"])
+        if not error_find.empty:
+            error_msg = "В ОЗОН не найдены следующие продукты:\n\n"
+            error_find = error_find[["Ozon SKU", "Артикул", "Название товара"]].drop_duplicates()
+            
+            # Сохраняем ошибки в файл
+            error_find.to_excel("ERRORs_OZON_Products.xlsx", index=False, engine="openpyxl")
+            
+            # Формируем сообщение для пользователя
+            error_msg += "\n".join(f"SKU: {row['Ozon SKU']}, Артикул: {row['Артикул']}, Название: {row['Название товара']}" 
+                                for _, row in error_find.iterrows())
+            error_msg += "\n\nПодробности сохранены в файл ERRORs_OZON_Products.xlsx"
+            
+            # Показываем сообщение пользователю
+            self.show_error_message(error_msg)
+            return True  # Возвращаем флаг ошибки
+        return False  # Ошибок не обнаружено
+
     def OZON_excel_update(self):
         """Обновление Excel файла для OZON"""
-        
-        dtypes_folder = {
-            "ID начисления": str, "Ozon SKU": str, "SKU": str, "Артикул": str, 
-            "Название товара": str, "Количество": float, "Цена продавца": float, 
-            "Вознаграждение Ozon, %": str, "Индекс локализации, %": float,
-            "Сумма итого, руб": float
-        }
+        try:
+            dtypes_folder = {"ID начисления": str, "Ozon SKU": str, "SKU": str, "Артикул": str, "Название товара": str, "Количество": float,
+                            "Цена продавца": float, "Вознаграждение Ozon, %": str, "Индекс локализации, %": float,
+                            "Сумма итого, руб": float, "Сумма итого, руб.": float }
 
-        dtypes_codes = {"Код товара OZON": str, "Артикул": str, "TRIM code": str}
+            dtypes_codes = {"Код товара OZON": str, "Артикул": str, "TRIM code": str}
 
-        # Чтение файла с кодами
-        ozon_codes = pd.read_excel(OZON_file, sheet_name="Коды", dtype=dtypes_codes)
-        ozon_codes["merge"] = ozon_codes["Код товара OZON"].astype(str) + "_" + ozon_codes["Артикул"].astype(str)
-        ozon_codes = ozon_codes[["merge", "НАЗВАНИЕ"]].drop_duplicates(subset=["merge"])
+            # Чтение файла с кодами
+            ozon_codes = pd.read_excel(OZON_file, sheet_name="Коды", dtype=dtypes_codes)
+            ozon_codes["merge"] = ozon_codes["Код товара OZON"].astype(str) + "_" + ozon_codes["Артикул"].astype(str)
+            ozon_codes = ozon_codes[["merge", "НАЗВАНИЕ"]].drop_duplicates(subset=["merge"])
 
-        # Установка даты для фильтрации
-        date_remove_comp = datetime.strptime("01.11.2024", "%d.%m.%Y")
+            # Установка даты для фильтрации
+            date_remove_comp = datetime.strptime("01.11.2024", "%d.%m.%Y")
 
-        # Чтение и объединение данных из файлов
-        frames = []
-        for root, dirs, files in os.walk(OZON_folder):
-            for name in files:
-                fpath = os.path.join(root, name)
-                print(name)
-                data = pd.read_excel(fpath, sheet_name="Начисления", dtype=dtypes_folder, skiprows=1)
-                if "SKU" in data.columns:
-                    data = data.rename(columns={"SKU": "Ozon SKU"})
-                data["file_name"] = name
-                frames.append(data)
+            # Чтение и объединение данных из файлов
+            frames = []
+            for root, dirs, files in os.walk(OZON_folder):
+                for name in files:
+                    fpath = os.path.join(root, name)
+                    print(name)
+                    data = pd.read_excel(fpath, sheet_name="Начисления", dtype=dtypes_folder, skiprows=1)
+                    
+                    # Переименовываем колонки по регулярному выражению
+                    data = data.rename(columns=lambda x: "Итого" if re.match(r'Сумма итого, руб\.?', str(x)) else x)
+                    
+                    if "SKU" in data.columns:
+                        data = data.rename(columns={"SKU": "Ozon SKU"})
+                    
+                    data["file_name"] = name
+                    frames.append(data)
 
-        ozon_df = pd.concat(frames, ignore_index=True)
-        
-        ozon_df = ozon_df.fillna({"ID начисления": "-", "Ozon SKU": "-", "Артикул": "-"})
-        ozon_df = ozon_df.rename(columns={"ID начисления": "Номер заказа"})
+            ozon_df = pd.concat(frames, ignore_index=True)
 
-        ozon_df["Номер заказа"] = ozon_df["Номер заказа"].where(~ozon_df["Номер заказа"].str.startswith("bx", na=False), None)
+            ozon_df = ozon_df.fillna({"ID начисления": "-", "Ozon SKU": "-", "Артикул": "-",  })
+            ozon_df = ozon_df.rename(columns={"ID начисления": "Номер заказа"})
 
-        date_pattern = r"(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})"
-        ozon_df[["start_date", "Дата"]] = ozon_df["file_name"].str.extract(date_pattern)
+            ozon_df["Номер заказа"] = ozon_df["Номер заказа"].where(~ozon_df["Номер заказа"].str.startswith("bx", na=False), None)
 
-        ozon_df["Дата"] = pd.to_datetime(ozon_df["Дата"], format="%Y-%m-%d")
+            date_pattern = r"(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})"
+            ozon_df[["start_date", "Дата"]] = ozon_df["file_name"].str.extract(date_pattern)
 
-        # Фильтрация и расчет итогов
-        ozon_df["Итого"] = ozon_df["Сумма итого, руб"]
-        ozon_df.loc[(ozon_df["Дата"] >= date_remove_comp) & (ozon_df["Группа услуг"] == "Компенсации и декомпенсации"), "Итого"] = 0
-        ozon_df["merge"] = ozon_df["Ozon SKU"].astype(str) + "_" + ozon_df["Артикул"].astype(str)
-        
-        ozon_df = ozon_df.merge(ozon_codes, on="merge", how="left").drop(columns=["merge"])
-        ozon_df["НАЗВАНИЕ"] = ozon_df["НАЗВАНИЕ"].fillna("-")
+            ozon_df["Дата"] = pd.to_datetime(ozon_df["Дата"], format="%Y-%m-%d")
 
-        # Функция для записи ошибок
-        def write_product_errors(ozon_df):
-            error_find = ozon_df[(ozon_df["НАЗВАНИЕ"] == "-") & (ozon_df["Ozon SKU"] != "-")].drop_duplicates(subset=["Артикул", "Ozon SKU"])
-            if not error_find.empty:
-                print("\n!! ОШИБКА !! в ОЗОН не найден продукт\n")
-                error_find = error_find[["Ozon SKU", "Артикул", "Название товара"]].drop_duplicates()
-                error_find.to_excel("ERRORs_OZON_Products.xlsx", index=False, engine="openpyxl")
-                sys.exit(0)
-
-        write_product_errors(ozon_df)
-
-        # Преобразование условий для колонки "Кол-во"
-        conditions = [
-            (ozon_df["Группа услуг"] == "Возвраты") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг"),
-            (ozon_df["Группа услуг"] == "Возвраты") & (ozon_df["Тип начисления"] == "Возврат выручки"),
-            (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг") & (ozon_df["Цена продавца"] > 0),
-            (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг") & (ozon_df["Цена продавца"] < 0),
-            (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "Выручка") & (ozon_df["Цена продавца"] > 0),
-            (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "Выручка") & (ozon_df["Цена продавца"] < 0)
-        ]
-
-        choices = [
-            ozon_df["Количество"] * (-1),
-            ozon_df["Количество"] * (-1),
-            ozon_df["Количество"],
-            ozon_df["Количество"] * (-1),
-            ozon_df["Количество"],
-            ozon_df["Количество"] * (-1)
-        ]
-
-        ozon_df["Кол-во"] = pd.Series(np.select(conditions, choices, default=0.0))
-
-        # Разделение колонки "Номер заказа"
-        ozon_df[["field_0", "field_1", "field_2"]] = ozon_df["Номер заказа"].str.split("-", expand=True, n=2)
-        ozon_df["Номер заказа_сокр"] = np.where(ozon_df["field_0"] != "-", ozon_df["field_0"] + "-" + ozon_df["field_1"], ozon_df["field_0"])
-
-        # Добавление колонок "Year" и "Month"
-        ozon_df["Year"] = ozon_df["Дата"].dt.year
-        ozon_df["Month"] = ozon_df["Дата"].dt.month
-        ozon_df["Номер заказа"] = ozon_df["Номер заказа"].fillna("-")
-
-        # Группировка и агрегация данных
-        ozon_df = ozon_df[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Кол-во", "Итого"]]
-        ozon_df = ozon_df.groupby(["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ"]).sum().reset_index()
-
-        # Фильтрация данных
-        ozon_wo_blanks = ozon_df[ozon_df["Ozon SKU"] != "-"]
-        ozon_qty_by_order = ozon_wo_blanks.groupby(["Дата", "Номер заказа"])["Кол-во"].sum().reset_index()
-        ozon_full_qty = ozon_wo_blanks.groupby(["Дата"])["Кол-во"].sum().reset_index()
-
-        ozon_blank = ozon_df[ozon_df["Ozon SKU"] == "-"][["Дата", "Номер заказа", "Итого"]]
-
-        # Обработка данных с пустыми "Ozon SKU"
-        ozon_blank_w_order = ozon_blank[ozon_blank["Номер заказа"] != "-"]
-        ozon_blank_w_order = ozon_blank_w_order.merge(ozon_qty_by_order, on=["Дата", "Номер заказа"], how="left")
-        ozon_blank_w_order["Кол-во"] = ozon_blank_w_order["Кол-во"].fillna("-")
-
-        move_to_blank = ozon_blank_w_order[ozon_blank_w_order["Кол-во"] == "-"].drop(columns=["Кол-во", "Номер заказа"])
-        ozon_blank_w_order = ozon_blank_w_order[ozon_blank_w_order["Кол-во"] != "-"].drop(columns=["Кол-во"])
-
-        ozon_blank_w_order = ozon_blank_w_order.groupby(["Дата", "Номер заказа"]).sum().reset_index()
-        ozon_blank_w_order = ozon_blank_w_order.merge(ozon_qty_by_order, on=["Дата", "Номер заказа"], how="left")
-        ozon_blank_w_order["amount_by_order"] = ozon_blank_w_order["Итого"] / ozon_blank_w_order["Кол-во"]
-        ozon_blank_w_order = ozon_blank_w_order[["Дата", "Номер заказа", "amount_by_order"]]
-
-        ozon_blank_wo_order = ozon_blank[ozon_blank["Номер заказа"] == "-"].drop(columns=["Номер заказа"])
-        ozon_blank_wo_order = pd.concat([ozon_blank_wo_order, move_to_blank], ignore_index=True).groupby(["Дата"]).sum().reset_index()
-
-        ozon_blank_wo_order = ozon_blank_wo_order.merge(ozon_full_qty, on=["Дата"], how="left")
-        ozon_blank_wo_order["amount_by_date"] = ozon_blank_wo_order["Итого"] / ozon_blank_wo_order["Кол-во"]
-        ozon_blank_wo_order = ozon_blank_wo_order[["Дата", "amount_by_date"]]
-
-        ozon_df = ozon_wo_blanks.merge(ozon_blank_w_order, on=["Дата", "Номер заказа"], how="left")
-        ozon_df = ozon_df.merge(ozon_blank_wo_order, on=["Дата"], how="left")
-
-        # Вычисление итоговых сумм
-        ozon_df["amount_by_order"] = (ozon_df["amount_by_order"] * ozon_df["Кол-во"]).fillna(0.0).astype(float)
-        ozon_df["amount_by_date"] = (ozon_df["amount_by_date"] * ozon_df["Кол-во"]).fillna(0.0).astype(float)
-        ozon_df["Фин. Сумма без НДС"] = ((ozon_df["Итого"] + ozon_df["amount_by_order"] + ozon_df["amount_by_date"]) / 1.2)
-        ozon_df["Фин. Сумма без НДС"] = np.round(ozon_df["Фин. Сумма без НДС"], decimals = 2)  
-
-        ozon_df = ozon_df.sort_values(by=["Дата", "НАЗВАНИЕ", "Ozon SKU"], ascending=[True, True, True])
-        ozon_df = ozon_df[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
-        
-        ozon_wo_order = ozon_df.drop(columns=["Номер заказа"])
-        ozon_wo_order = ozon_wo_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
-        ozon_wo_order = ozon_wo_order[["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
-        ozon_wo_order = ozon_wo_order.groupby(["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ"]).sum().reset_index()
-
-        ozon_w_order = ozon_df.copy()
-        ozon_w_order["Фин. Сумма без НДС"] = np.round(ozon_w_order['Фин. Сумма без НДС'], decimals=2)
-        ozon_wo_order = ozon_wo_order.copy()
-        ozon_wo_order["Фин. Сумма без НДС"] = np.round(ozon_wo_order['Фин. Сумма без НДС'], decimals=2)
-        
-        dtypes_ozonfile = {"Year": int, "Month": int, "Ozon SKU": str, "Артикул": str}
-        ozon_w_order_old = pd.read_excel(OZON_file, sheet_name="Отчет_сокр (с заказом)", dtype=dtypes_ozonfile)
-        ozon_wo_order_old = pd.read_excel(OZON_file, sheet_name="Отчет_сокр", dtype=dtypes_ozonfile)
-        
-        unique_dates = ozon_w_order["Дата"].unique()
-        ozon_w_order_old = ozon_w_order_old[~ozon_w_order_old["Дата"].isin(unique_dates)]
-        ozon_w_order = pd.concat([ozon_w_order_old, ozon_w_order], ignore_index=True)
-        ozon_w_order = ozon_w_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
-        ozon_w_order = ozon_w_order[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
-
-        ozon_wo_order_old = ozon_wo_order_old[~ozon_wo_order_old["Дата"].isin(unique_dates)]
-        ozon_wo_order = pd.concat([ozon_wo_order_old, ozon_wo_order], ignore_index=True)
-        ozon_wo_order = ozon_wo_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
-        ozon_wo_order = ozon_wo_order[["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
-        
-        ozon_ord_rep = "Отчет_сокр (с заказом)"
-        ozon_wo_ord_rep = "Отчет_сокр"
-
-        with xw.App(add_book=False, visible=False) as app:
-            wb = app.books.open(OZON_file, update_links=False, read_only=False)
+            # Фильтрация и расчет итогов
+            ozon_df.loc[(ozon_df["Дата"] >= date_remove_comp) & (ozon_df["Группа услуг"] == "Компенсации и декомпенсации"), "Итого"] = 0
+            ozon_df["merge"] = ozon_df["Ozon SKU"].astype(str) + "_" + ozon_df["Артикул"].astype(str)
             
-            ws = wb.sheets[ozon_ord_rep]
-            ord_num_col = ws.range("A2").end("right").column
-            ord_num_row = ws.range("A" + str(wb.sheets[ws].cells.last_cell.row)).end("up").row
-            ws.range("A2:J" + str(ord_num_row)).delete()
+            ozon_df = ozon_df.merge(ozon_codes, on="merge", how="left").drop(columns=["merge"])
+            ozon_df["НАЗВАНИЕ"] = ozon_df["НАЗВАНИЕ"].fillna("-")
 
-            ord_cells_num = ozon_w_order.shape[0] + 1
-            ws.range("A2:B" + str(ord_cells_num)).number_format = "0"
-            ws.range("C3:C" + str(ord_cells_num)).number_format = "ДД.ММ.ГГГГ"
-            ws.range("D2:G" + str(ord_cells_num)).number_format = "@"
-            ws.range("H3:J" + str(ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+            # Проверка ошибок в продуктах
+            if self.write_ozon_product_errors(ozon_df):
+                return
 
-            ws.range((2, 1), (ord_cells_num, ord_num_col)).options(index=False, header=False).value = ozon_w_order
-            
-            ws2 = wb.sheets[ozon_wo_ord_rep]
-            ws2.api.AutoFilter.ShowAllData()
-            wo_ord_num_col = ws2.range("A2").end("right").column
-            wo_ord_num_row = ws2.range("A" + str(wb.sheets[ws2].cells.last_cell.row)).end("up").row
-            ws2.range("A2:I" + str(wo_ord_num_row)).delete()
-            
-            wo_ord_cells_num = ozon_wo_order.shape[0] + 1
-            ws2.range("A2:B" + str(wo_ord_cells_num)).number_format = "0"
-            ws2.range("C2:C" + str(wo_ord_cells_num)).number_format = "ДД.ММ.ГГГГ"
-            ws2.range("D2:F" + str(wo_ord_cells_num)).number_format = "@"
-            ws2.range("G2:I" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
-            ws2.range("K2:K" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
-            ws2.range("M2:M" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+            # Преобразование условий для колонки "Кол-во"
+            conditions = [
+                (ozon_df["Группа услуг"] == "Возвраты") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг"),
+                (ozon_df["Группа услуг"] == "Возвраты") & (ozon_df["Тип начисления"] == "Возврат выручки"),
+                (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг") & (ozon_df["Цена продавца"] > 0),
+                (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "За продажу или возврат до вычета комиссий и услуг") & (ozon_df["Цена продавца"] < 0),
+                (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "Выручка") & (ozon_df["Цена продавца"] > 0),
+                (ozon_df["Группа услуг"] == "Продажи") & (ozon_df["Тип начисления"] == "Выручка") & (ozon_df["Цена продавца"] < 0)
+            ]
 
-            ws2.range((2, 1), (wo_ord_cells_num, wo_ord_num_col)).options(index=False, header=False).value = ozon_wo_order
+            choices = [
+                ozon_df["Количество"] * (-1),
+                ozon_df["Количество"] * (-1),
+                ozon_df["Количество"],
+                ozon_df["Количество"] * (-1),
+                ozon_df["Количество"],
+                ozon_df["Количество"] * (-1)
+            ]
+
+            ozon_df["Кол-во"] = pd.Series(np.select(conditions, choices, default=0.0))
+
+            # Разделение колонки "Номер заказа"
+            ozon_df[["field_0", "field_1", "field_2"]] = ozon_df["Номер заказа"].str.split("-", expand=True, n=2)
+            ozon_df["Номер заказа_сокр"] = np.where(ozon_df["field_0"] != "-", ozon_df["field_0"] + "-" + ozon_df["field_1"], ozon_df["field_0"])
+
+            # Добавление колонок "Year" и "Month"
+            ozon_df["Year"] = ozon_df["Дата"].dt.year
+            ozon_df["Month"] = ozon_df["Дата"].dt.month
+            ozon_df["Номер заказа"] = ozon_df["Номер заказа"].fillna("-")
+
+            # Группировка и агрегация данных
+            ozon_df = ozon_df[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Кол-во", "Итого"]]
+            ozon_df = ozon_df.groupby(["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ"]).sum().reset_index()
+
+            # Фильтрация данных
+            ozon_wo_blanks = ozon_df[ozon_df["Ozon SKU"] != "-"]
+            ozon_qty_by_order = ozon_wo_blanks.groupby(["Дата", "Номер заказа"])["Кол-во"].sum().reset_index()
+            ozon_full_qty = ozon_wo_blanks.groupby(["Дата"])["Кол-во"].sum().reset_index()
+
+            ozon_blank = ozon_df[ozon_df["Ozon SKU"] == "-"][["Дата", "Номер заказа", "Итого"]]
+
+            # Обработка данных с пустыми "Ozon SKU"
+            ozon_blank_w_order = ozon_blank[ozon_blank["Номер заказа"] != "-"]
+            ozon_blank_w_order = ozon_blank_w_order.merge(ozon_qty_by_order, on=["Дата", "Номер заказа"], how="left")
+            ozon_blank_w_order["Кол-во"] = ozon_blank_w_order["Кол-во"].fillna("-")
+
+            move_to_blank = ozon_blank_w_order[ozon_blank_w_order["Кол-во"] == "-"].drop(columns=["Кол-во", "Номер заказа"])
+            ozon_blank_w_order = ozon_blank_w_order[ozon_blank_w_order["Кол-во"] != "-"].drop(columns=["Кол-во"])
+
+            ozon_blank_w_order = ozon_blank_w_order.groupby(["Дата", "Номер заказа"]).sum().reset_index()
+            ozon_blank_w_order = ozon_blank_w_order.merge(ozon_qty_by_order, on=["Дата", "Номер заказа"], how="left")
+            ozon_blank_w_order["amount_by_order"] = ozon_blank_w_order["Итого"] / ozon_blank_w_order["Кол-во"]
+            ozon_blank_w_order = ozon_blank_w_order[["Дата", "Номер заказа", "amount_by_order"]]
+
+            ozon_blank_wo_order = ozon_blank[ozon_blank["Номер заказа"] == "-"].drop(columns=["Номер заказа"])
+            ozon_blank_wo_order = pd.concat([ozon_blank_wo_order, move_to_blank], ignore_index=True).groupby(["Дата"]).sum().reset_index()
+
+            ozon_blank_wo_order = ozon_blank_wo_order.merge(ozon_full_qty, on=["Дата"], how="left")
+            ozon_blank_wo_order["amount_by_date"] = ozon_blank_wo_order["Итого"] / ozon_blank_wo_order["Кол-во"]
+            ozon_blank_wo_order = ozon_blank_wo_order[["Дата", "amount_by_date"]]
+
+            ozon_df = ozon_wo_blanks.merge(ozon_blank_w_order, on=["Дата", "Номер заказа"], how="left")
+            ozon_df = ozon_df.merge(ozon_blank_wo_order, on=["Дата"], how="left")
+
+            # Вычисление итоговых сумм
+            ozon_df["amount_by_order"] = (ozon_df["amount_by_order"] * ozon_df["Кол-во"]).fillna(0.0).astype(float)
+            ozon_df["amount_by_date"] = (ozon_df["amount_by_date"] * ozon_df["Кол-во"]).fillna(0.0).astype(float)
+            ozon_df["Фин. Сумма без НДС"] = ((ozon_df["Итого"] + ozon_df["amount_by_order"] + ozon_df["amount_by_date"]) / 1.2)
+            ozon_df["Фин. Сумма без НДС"] = np.round(ozon_df["Фин. Сумма без НДС"], decimals = 2)  
+
+            ozon_df = ozon_df.sort_values(by=["Дата", "НАЗВАНИЕ", "Ozon SKU"], ascending=[True, True, True])
+            ozon_df = ozon_df[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
             
-            macro_name = wb.app.macro("Ckeck_Vol_macro")
-            macro_name()
+            ozon_wo_order = ozon_df.drop(columns=["Номер заказа"])
+            ozon_wo_order = ozon_wo_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
+            ozon_wo_order = ozon_wo_order[["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
+            ozon_wo_order = ozon_wo_order.groupby(["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ"]).sum().reset_index()
+
+            ozon_w_order = ozon_df.copy()
+            ozon_w_order["Фин. Сумма без НДС"] = np.round(ozon_w_order['Фин. Сумма без НДС'], decimals=2)
+            ozon_wo_order = ozon_wo_order.copy()
+            ozon_wo_order["Фин. Сумма без НДС"] = np.round(ozon_wo_order['Фин. Сумма без НДС'], decimals=2)
             
-            wb.save()
-            wb.close()
+            dtypes_ozonfile = {"Year": int, "Month": int, "Ozon SKU": str, "Артикул": str}
+            ozon_w_order_old = pd.read_excel(OZON_file, sheet_name="Отчет_сокр (с заказом)", dtype=dtypes_ozonfile)
+            ozon_wo_order_old = pd.read_excel(OZON_file, sheet_name="Отчет_сокр", dtype=dtypes_ozonfile)
+            
+            unique_dates = ozon_w_order["Дата"].unique()
+            ozon_w_order_old = ozon_w_order_old[~ozon_w_order_old["Дата"].isin(unique_dates)]
+            ozon_w_order = pd.concat([ozon_w_order_old, ozon_w_order], ignore_index=True)
+            ozon_w_order = ozon_w_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
+            ozon_w_order = ozon_w_order[["Year", "Month", "Дата", "Номер заказа", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
+
+            ozon_wo_order_old = ozon_wo_order_old[~ozon_wo_order_old["Дата"].isin(unique_dates)]
+            ozon_wo_order = pd.concat([ozon_wo_order_old, ozon_wo_order], ignore_index=True)
+            ozon_wo_order = ozon_wo_order.sort_values(by=["Дата", "НАЗВАНИЕ"], ascending=[True, True])
+            ozon_wo_order = ozon_wo_order[["Year", "Month", "Дата", "Ozon SKU", "Артикул", "НАЗВАНИЕ", "Итого", "Кол-во", "Фин. Сумма без НДС"]]
+            
+            ozon_ord_rep = "Отчет_сокр (с заказом)"
+            ozon_wo_ord_rep = "Отчет_сокр"
+
+            with xw.App(add_book=False, visible=False) as app:
+                wb = app.books.open(OZON_file, update_links=False, read_only=False)
+                
+                ws = wb.sheets[ozon_ord_rep]
+                ord_num_col = ws.range("A2").end("right").column
+                ord_num_row = ws.range("A" + str(wb.sheets[ws].cells.last_cell.row)).end("up").row
+                ws.range("A2:J" + str(ord_num_row)).delete()
+
+                ord_cells_num = ozon_w_order.shape[0] + 1
+                ws.range("A2:B" + str(ord_cells_num)).number_format = "0"
+                ws.range("C3:C" + str(ord_cells_num)).number_format = "ДД.ММ.ГГГГ"
+                ws.range("D2:G" + str(ord_cells_num)).number_format = "@"
+                ws.range("H3:J" + str(ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+
+                ws.range((2, 1), (ord_cells_num, ord_num_col)).options(index=False, header=False).value = ozon_w_order
+                
+                ws2 = wb.sheets[ozon_wo_ord_rep]
+                ws2.api.AutoFilter.ShowAllData()
+                wo_ord_num_col = ws2.range("A2").end("right").column
+                wo_ord_num_row = ws2.range("A" + str(wb.sheets[ws2].cells.last_cell.row)).end("up").row
+                ws2.range("A2:I" + str(wo_ord_num_row)).delete()
+                
+                wo_ord_cells_num = ozon_wo_order.shape[0] + 1
+                ws2.range("A2:B" + str(wo_ord_cells_num)).number_format = "0"
+                ws2.range("C2:C" + str(wo_ord_cells_num)).number_format = "ДД.ММ.ГГГГ"
+                ws2.range("D2:F" + str(wo_ord_cells_num)).number_format = "@"
+                ws2.range("G2:I" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+                ws2.range("K2:K" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+                ws2.range("M2:M" + str(wo_ord_cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
+
+                ws2.range((2, 1), (wo_ord_cells_num, wo_ord_num_col)).options(index=False, header=False).value = ozon_wo_order
+                
+                macro_name = wb.app.macro("Ckeck_Vol_macro")
+                macro_name()
+                
+                wb.save()
+                wb.close()
+
+        except Exception as e:
+            self.show_error_message(f"Ошибка при обновлении файла OZON: {str(e)}")
+            traceback.print_exc()
 
     def WB_excel_update(self):
         """Обновление Excel файла для Wildberries (заглушка)"""

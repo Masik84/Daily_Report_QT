@@ -78,6 +78,7 @@ class Customer(Base):
     holding = relationship("Holding", back_populates="customers")
     contracts = relationship("Contract", back_populates="customer")
     marketplace_entries = relationship("Marketplace", back_populates="customer")
+    movements = relationship("Movements", back_populates="customer")
 
 class Holding(Base):
     __tablename__ = 'holdings'
@@ -201,6 +202,10 @@ class Materials(Base):
     # Связи
     product_name = relationship("Product_Names", back_populates="materials")
     marketplace_entries = relationship("Marketplace", back_populates="material")
+    movements = relationship("Movements", back_populates="material")
+    complects_manual = relationship("Complects_manual", back_populates="material")
+    write_off = relationship("WriteOff", back_populates="material")
+    complects = relationship("Complects", back_populates="material")
 
 class ABC_list(Base):
     __tablename__ = 'abc_list'
@@ -239,6 +244,8 @@ class Supplier(Base):
     # Связи
     schemes = relationship("SupplScheme", back_populates="supplier", cascade="all, delete-orphan")
     add_suppl_costs = relationship("AddSupplCost", back_populates="supplier")
+    movements = relationship("Movements", back_populates="supplier")
+    write_off = relationship("WriteOff", back_populates="supplier")
 
 class SupplScheme(Base):
     __tablename__ = 'suppl_schemes'
@@ -367,6 +374,10 @@ class DOCType(Base):
     Doc_type = Column(String) # Тип документа
     
     marketplace_entries = relationship("Marketplace", back_populates="doc_type")
+    movements = relationship("Movements", back_populates="doc_type")
+    complects_manual = relationship("Complects_manual", back_populates="doc_type")
+    write_off = relationship("WriteOff", back_populates="doc_type")
+    complects = relationship("Complects", back_populates="doc_type")
 
 class Year(Base):
     __tablename__ = 'years'
@@ -535,6 +546,100 @@ class Marketplace(Base):
         Index('idx_marketplace_holding', 'Holding_id'),
     )
 
+class Movements(Base):
+    __tablename__ = 'movements'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Date_Time = Column(Date)  # Дата_Время
+    Document = Column(String)  # Документ
+    Date = Column(Date)  # Дата
+    Doc_based = Column(String)  # ДокОсн
+    Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)  # Дата ДокОсн
+    Stock = Column(String)  # Склад
+    Qty = Column(Numeric)  # Количество
+    Recipient_code = Column(String)  # Грузополучатель.Код
+    Recipient = Column(String)  # Грузополучатель
+    Bill = Column(String)  # Счет
+    Bill_date = Column(sqlalchemy.Date(), nullable=True)  # Дата счета
+    
+    # Внешние ключи
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_movements_doctype'))  # Тип документа
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_movements_material'))  # Код материала
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_movements_customer'), nullable=True)  # Контрагент.Код (Customer)
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_movements_supplier'), nullable=True)  # Контрагент.Код (Supplier)
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="movements")
+    material = relationship("Materials", back_populates="movements")
+    customer = relationship("Customer", back_populates="movements")
+    supplier = relationship("Supplier", back_populates="movements")
+
+class Complects_manual(Base):
+    __tablename__ = 'complects_manual'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Date_Time = Column(Date)  # Дата_Время
+    Document = Column(String)  # Документ
+    Date = Column(Date)  # Дата
+    Stock = Column(String)  # Склад
+    Qty = Column(Numeric)  # Количество
+    
+    # Внешние ключи
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_complects_doctype'))  # Тип документа
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_complects_material'))  # Код материала
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="complects_manual")
+    material = relationship("Materials", back_populates="complects_manual")
+
+class Complects(Base):
+    __tablename__ = 'complects'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Date_Time = Column(Date)  # Дата_Время
+    Document = Column(String)  # Документ
+    Date = Column(Date)  # Дата
+    Stock = Column(String)  # Склад
+    Qty = Column(Numeric)  # Количество
+    
+    # Внешние ключи
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_complects_doctype'))  # Тип документа
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_complects_material'))  # Код материала
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="complects")
+    material = relationship("Materials", back_populates="complects")
+    
+class WriteOff(Base):
+    __tablename__ = 'write_off'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Date_Time = Column(Date)  # Дата_Время
+    Document = Column(String)  # Документ
+    Date = Column(Date)  # Дата
+    Stock = Column(String)  # Склад
+    Comment = Column(String)  # Комментарий
+    inComing = Column(Numeric)  # Приход
+    outComing = Column(Numeric)  # Расход
+    Qty = Column(Numeric)  # Количество
+    Reporting = Column(String)  # Отчет
+    Doc_based = Column(String)  # ДокОсн
+    Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)  # Дата ДокОсн
+    Order = Column(String)  # Order N
+    Shipment = Column(String)  # Shipment #
+    Suppl_Inv_N = Column(String)  # Вход. док-т
+    Bill = Column(String)  # Счет
+    Bill_date = Column(sqlalchemy.Date(), nullable=True)  # Дата счета
+    
+    # Внешние ключи
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_writeoff_doctype'))  # Тип документа
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_writeoff_material'))  # Код материала
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_writeoff_supplier'))  # Контрагент.Код
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="write_off")
+    material = relationship("Materials", back_populates="write_off")
+    supplier = relationship("Supplier", back_populates="write_off")
 
 
 

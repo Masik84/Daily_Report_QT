@@ -1,10 +1,3 @@
-# В начале main.py
-# from logger_config import setup_logging
-
-# # Настройка логирования
-# logger = setup_logging()
-# logger.info("Приложение запущено")
-
 import os
 import pandas as pd
 from PySide6.QtWidgets import QApplication, QMainWindow, QApplication, QGraphicsDropShadowEffect, QSizeGrip
@@ -21,6 +14,7 @@ from pages_functions.cost import Costs
 from pages_functions.supplier import SupplierWidget
 from pages_functions.add_costs import AddSupplCosts
 
+from pages_functions.move import MovesPage
 from pages_functions.marketplace import MarketplacePage
 
 from pages_functions.dashboard import Dashboard
@@ -84,6 +78,7 @@ class MyWindow(QMainWindow):
         self.btn_supplier = self.ui.btn_Supplier
         self.btn_addcosts = self.ui.btn_AddCosts
         
+        self.btn_moves = self.ui.btn_Moves
         self.btn_MP = self.ui.btn_MarketPlace
         
         self.btn_order = self.ui.btn_Cust_Orders
@@ -105,7 +100,8 @@ class MyWindow(QMainWindow):
             self.btn_supplier: SupplierWidget(),
             self.btn_addcosts: AddSupplCosts(),
             
-             self.btn_MP: MarketplacePage(),
+            self.btn_moves: MovesPage(),
+            self.btn_MP: MarketplacePage(),
             
             self.btn_order: Rep_Orders(),
             self.btn_sales: Rep_Invoices(),
@@ -132,6 +128,7 @@ class MyWindow(QMainWindow):
         self.btn_supplier.clicked.connect(self.show_selected_window)
         self.btn_addcosts.clicked.connect(self.show_selected_window)
         
+        self.btn_moves.clicked.connect(self.show_selected_window)
         self.btn_MP.clicked.connect(self.show_selected_window)
         
         self.btn_order.clicked.connect(self.show_selected_window)

@@ -44,9 +44,13 @@ Yandex_file = MAIN_FOLDER + "WorkFiles\\Яндекс.xlsx"
 WB_file = MAIN_FOLDER + "WorkFiles\\WB.xlsx"
 Sber_file = MAIN_FOLDER + "WorkFiles\\СберМегаМаркет.xlsx"
 cash_file = MAIN_FOLDER + "WorkFiles\\Реестр заказов СПЕЦ УСЛОВИЯ.xlsx"
+BMW_comm = MAIN_FOLDER + "WorkFiles\\Комиссии BMW дилеры.xlsx"
 
-BMW_comm = MAIN_FOLDER + "Комиссии BMW дилеры.xlsx"
-production = MAIN_FOLDER + "Приход из пр-ва.xlsx"
+
+
+
+
+
 
 Final_Report_file = MAIN_FOLDER + "Daily_Report.xlsb"
 
