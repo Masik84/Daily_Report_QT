@@ -6,9 +6,8 @@ import sys
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
-from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QMenu, QDate,
-                              QApplication, QTableWidgetItem, QWidget)
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget
+from PySide6.QtCore import Qt, QDate
 from functools import lru_cache
 import traceback
 

@@ -5,6 +5,8 @@ from pages_functions.product import Product
 from pages_functions.managers import Managers
 from pages_functions.customer import Customer
 from pages_functions.cost import Costs
+from pages_functions.supplier import Supplier
+from pages_functions.add_costs import AddSupplCosts
 from config import Material_file, All_data_file, Customer_file, Contract_file
 
 class Home(QWidget):
@@ -17,10 +19,14 @@ class Home(QWidget):
         self.setup_connections()
         
         # Создаем экземпляры классов справочников
-        self.product_module = Product()
+        
         self.managers_module = Managers()
         self.customer_module = Customer()
+        self.product_module = Product()
         self.cost_module = Costs()
+        self.supplier_module = Supplier()
+        self.addcosts_module = AddSupplCosts()
+        
 
     def setup_ui(self):
         """Настройка интерфейса с кнопками"""
@@ -89,18 +95,16 @@ class Home(QWidget):
     def update_all_references(self):
         """Обновление всех справочников"""
         try:
-            # Обновляем справочник продуктов
             self.product_module.run_product_func(Material_file)
-            
-            # Обновляем справочник менеджеров
+
             self.managers_module._process_upload(All_data_file)
             
-            # Обновляем справочник клиентов и договоров
             self.customer_module.run_customer_func(Customer_file, All_data_file)
             self.customer_module.run_contract_func(Contract_file)
             
-            # Обновляем справочник затрат (Costs)
-            self.cost_module.run_cost_func()
+            self.cost_module.upload_data()
+            self.supplier_module.upload_data()
+            self.addcosts_module.upload_data()
             
             self.show_message("Все справочники успешно обновлены!")
         except Exception as e:

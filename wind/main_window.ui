@@ -233,7 +233,7 @@ QPushButton:pressed {
            <number>2</number>
           </property>
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <property name="tabSpacing">
            <number>6</number>
