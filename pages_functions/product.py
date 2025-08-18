@@ -96,7 +96,6 @@ class ProductsPage(QWidget):
         self.ui.btn_open_file.clicked.connect(self.get_file)
         self.ui.btn_upload_file.clicked.connect(self.upload_data)
         self.ui.btn_find.clicked.connect(self.find_Product)
-        self.ui.btn_upd_ABCD.clicked.connect(self.update_ABC_cat)
         
     def get_file(self):
         """Выбор файла через диалоговое окно"""
@@ -129,6 +128,7 @@ class ProductsPage(QWidget):
                     self.save_Product_Group(data)
                     self.save_Product_Names(data)
                     self.save_Materials(data)
+                    self.update_ABC_cat()
                     
                     # Финализируем транзакцию
                     db.commit()
@@ -164,15 +164,6 @@ class ProductsPage(QWidget):
         else:
             msg = f"Ошибка загрузки данных продуктов: {str(error)}"
         self.show_error_message(msg)
-
-    def run_product_func(self, data_file_xls):
-        """Основная функция обработки данных"""
-        data = self.read_product_file(data_file_xls)
-        self.save_TNVED(data)
-        self.save_Product_Group(data)
-        self.save_Product_Names(data)
-        self.save_Materials(data)
-        self.refresh_all_comboboxes()
 
     def read_product_file(self, file_path):
         """Чтение данных из Excel с фильтрацией и обработкой значений"""
@@ -511,68 +502,23 @@ class ProductsPage(QWidget):
             raise Exception(f"Ошибка сохранения Materials: {str(e)}")
         finally:
             db.close()
-
-    def _read_abc_file(self):
-        """Чтение файла ABC (общая функция для всех методов)"""
-        file_path = All_data_file
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
-
-        with pd.ExcelFile(file_path) as excel:
-            df = pd.read_excel(excel, sheet_name="ABC")
-
-        if 'Категория ABCD' not in df.columns:
-            raise ValueError("Файл не содержит обязательной колонки 'Категория ABCD'")
-        
-        df["Дата изм"] = pd.to_datetime(df["Дата изм"], format="%d.%m.%Y", errors="coerce")
-        df["Дата оконч"] = pd.to_datetime(df["Дата оконч"], format="%d.%m.%Y", errors="coerce")
-
-        return df
     
-    def save_ABC_list(self):
-        """Загрузка всех уникальных категорий из файла в таблицу ABC_list"""
-        try:
-            df = self._read_abc_file()
-            
-            # Получаем все уникальные категории (игнорируем пустые и '-')
-            abc_categories = set(
-                str(c).strip() 
-                for c in df['Категория ABCD'].unique() 
-                if pd.notna(c) and str(c).strip() not in ('', '-')
-            )
-            
-            if not abc_categories:
-                self.show_message("Нет категорий для загрузки в файле ABC")
-                return
-            
-            # Получаем существующие категории из БД
-            existing_categories = {c.ABC_category for c in db.query(ABC_list).all()}
-            
-            # Добавляем только новые категории
-            new_categories = [
-                ABC_list(ABC_category=cat) 
-                for cat in abc_categories 
-                if cat not in existing_categories
-            ]
-            
-            if new_categories:
-                db.add_all(new_categories)
-                db.commit()
-                self.show_message(f"Добавлено новых категорий: {len(new_categories)}")
-            else:
-                self.show_message("Все категории уже существуют в БД")
-                
-        except Exception as e:
-            db.rollback()
-            self.show_error_message(f"Ошибка загрузки категорий: {str(e)}")
-        finally:
-            db.close()
-
     def update_ABC_cat(self):
         """Обновление ABC категорий для продуктов с улучшенной обработкой"""
         try:
             # Чтение файла
-            df = self._read_abc_file()
+            file_path = All_data_file
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
+
+            with pd.ExcelFile(file_path) as excel:
+                df = pd.read_excel(excel, sheet_name="ABC")
+
+            if 'Категория ABCD' not in df.columns:
+                raise ValueError("Файл не содержит обязательной колонки 'Категория ABCD'")
+            
+            df["Дата изм"] = pd.to_datetime(df["Дата изм"], format="%d.%m.%Y", errors="coerce")
+            df["Дата оконч"] = pd.to_datetime(df["Дата оконч"], format="%d.%m.%Y", errors="coerce")
             
             # Переименование колонок
             df = df.rename(columns={
