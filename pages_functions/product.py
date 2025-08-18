@@ -14,9 +14,9 @@ from models import ABC_cat, TNVED, Product_Group, Product_Names, Materials, ABC_
 from db import db
 
 
-class Product(QWidget):
+class ProductsPage(QWidget):
     def __init__(self):
-        super(Product, self).__init__()
+        super(ProductsPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

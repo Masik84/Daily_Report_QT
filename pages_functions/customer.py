@@ -15,9 +15,9 @@ from wind.pages.customers_ui import Ui_Form
 from config import All_data_file, Customer_file, Contract_file
 
 
-class Customer(QWidget):
+class CustomerPage(QWidget):
     def __init__(self):
-        super(Customer, self).__init__()
+        super(CustomerPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

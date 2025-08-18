@@ -13,9 +13,9 @@ from wind.pages.managers_ui import Ui_Form
 from config import All_data_file
 
 
-class Managers(QWidget):
+class ManagersPage(QWidget):
     def __init__(self):
-        super(Managers, self).__init__()
+        super(ManagersPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

@@ -14,9 +14,9 @@ from models import Supplier, SupplScheme, AddSupplCost
 from db import db
 
 
-class AddSupplCosts(QWidget):
+class AddSupplCostsPage(QWidget):
     def __init__(self):
-        super(AddSupplCosts, self).__init__()
+        super(AddSupplCostsPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

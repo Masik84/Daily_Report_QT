@@ -16,7 +16,7 @@ from models import (Movements, Complects_manual, WriteOff, Complects, AddSupplCo
 
 from config import Movement_folder, Complectation_file
 from wind.pages.moves_ui import Ui_Form
-from pages_functions.product import Product
+from pages_functions.product import ProductsPage
 
 class MovesPage(QWidget):
     def __init__(self):
@@ -881,7 +881,7 @@ class MovesPage(QWidget):
         if reply == QMessageBox.Yes:
             # Запускаем обновление продуктов
             try:
-                product_updater = Product()
+                product_updater = ProductsPage()
                 product_updater.upload_data()
                 
                 # Повторно проверяем наличие продуктов после обновления

@@ -1,13 +1,14 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QMessageBox, QProgressDialog, QApplication
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt
-from datetime import datetime
-from pages_functions.product import Product
-from pages_functions.managers import Managers
-from pages_functions.customer import Customer
-from pages_functions.cost import Costs
-from pages_functions.supplier import Supplier
-from pages_functions.add_costs import AddSupplCosts
+from PySide6.QtCore import Qt, QTimer
+import logging
+import datetime
+from pages_functions.product import ProductsPage
+from pages_functions.managers import ManagersPage
+from pages_functions.customer import CustomerPage
+from pages_functions.cost import CostsPage
+from pages_functions.supplier import SupplierPage
+from pages_functions.add_costs import AddSupplCostsPage
 
 class Home(QWidget):
     def __init__(self):
@@ -20,12 +21,12 @@ class Home(QWidget):
         
         # Создаем экземпляры классов справочников
         
-        self.managers_module = Managers()
-        self.customer_module = Customer()
-        self.product_module = Product()
-        self.cost_module = Costs()
-        self.supplier_module = Supplier()
-        self.addcosts_module = AddSupplCosts()
+        self.managers_module = ManagersPage()
+        self.customer_module = CustomerPage()
+        self.product_module = ProductsPage()
+        self.cost_module = CostsPage()
+        self.supplier_module = SupplierPage()
+        self.addcosts_module = AddSupplCostsPage()
         
 
     def setup_ui(self):
@@ -34,12 +35,13 @@ class Home(QWidget):
         self.layout.setAlignment(Qt.AlignTop)
         
         # Создаем кнопки
-        self.btn_update_all = QPushButton("1. Обновить все Справочники")
-        self.btn_update_purchases = QPushButton("2. Запустить обновление данных по Закупкам/Продажам")
-        self.btn_update_main_report = QPushButton("3. Запустить обновление основного Отчета")
-        self.btn_create_manager_files = QPushButton("4. Запустить формирование файлов для Менеджеров")
-        self.btn_send_main_report = QPushButton("5. Отправить Основной Отчет")
-        self.btn_send_manager_reports = QPushButton("6. Отправить Отчеты для Менеджеров")
+        self.btn_update_all = QPushButton("Обновить все Справочники")
+        self.btn_update_marketplace = QPushButton("Обновить Данные по МакетПлейсам")
+        self.btn_update_purchases = QPushButton("Запустить обновление Закупок/Продаж")
+        self.btn_update_main_report = QPushButton("Запустить обновление основного Отчета")
+        self.btn_create_manager_files = QPushButton("Запустить формирование файлов для Менеджеров")
+        self.btn_send_main_report = QPushButton("Отправить Основной Отчет")
+        self.btn_send_manager_reports = QPushButton("Отправить Отчеты для Менеджеров")
         
         # Добавляем кнопки в layout
         self.layout.addWidget(self.btn_update_all)
@@ -93,101 +95,28 @@ class Home(QWidget):
         self.btn_send_manager_reports.clicked.connect(self.send_manager_reports)
 
     def update_all_references(self):
-        """Обновляет все справочники в системе"""
-        # Настройка прогресс-бара
-        progress = QProgressDialog("Обновление справочников...", "Отмена", 0, 6, self)
-        progress.setWindowModality(Qt.WindowModal)
-        progress.setMinimumDuration(0)
-        
+        """Обновление всех справочников"""
         try:
-            # 1. Обновление товаров
-            progress.setLabelText("Обновление товаров...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            product = Product()
-            if not product.upload_data():
-                raise Exception("Ошибка обновления товаров")
-            progress.setValue(1)
+            # Обновляем справочник продуктов
+            self.product_module.upload_data()
+            
+            # Обновляем справочник менеджеров
 
-            # 2. Обновление менеджеров
-            progress.setLabelText("Обновление менеджеров...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            managers = Managers()
-            if not managers.upload_data():
-                raise Exception("Ошибка обновления менеджеров")
-            progress.setValue(2)
+            self.managers_module.upload_data()
 
-            # 3. Обновление клиентов
-            progress.setLabelText("Обновление клиентов...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            customer = Customer()
-            if not customer.upload_data():
-                raise Exception("Ошибка обновления клиентов")
-            progress.setValue(3)
+            # Обновляем справочник клиентов и договоров
+            self.customer_module.upload_data()
+            self.customer_module.upload_data()
 
-            # 4. Обновление себестоимости
-            progress.setLabelText("Обновление себестоимости...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            costs = Costs()
-            if not costs.upload_data():
-                raise Exception("Ошибка обновления себестоимости")
-            progress.setValue(4)
+            # Обновляем справочник затрат (Costs)
+            self.cost_module.upload_data()
+            
+            self.supplier_module.upload_data()
+            self.addcosts_module.upload_data()
 
-            # 5. Обновление поставщиков
-            progress.setLabelText("Обновление поставщиков...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            supplier = Supplier()
-            if not supplier.upload_data():
-                raise Exception("Ошибка обновления поставщиков")
-            progress.setValue(5)
-
-            # 6. Обновление дополнительных расходов
-            progress.setLabelText("Обновление доп. расходов...")
-            QApplication.processEvents()
-            if progress.wasCanceled():
-                return False
-                
-            add_costs = AddSupplCosts()
-            if not add_costs.upload_data():
-                raise Exception("Ошибка обновления дополнительных расходов")
-            progress.setValue(6)
-
-            # Успешное завершение
-            progress.close()
-            QMessageBox.information(
-                self, 
-                "Готово", 
-                "Все справочники успешно обновлены!",
-                QMessageBox.Ok
-            )
-            return True
-
+            self.show_message("Все справочники успешно обновлены!")
         except Exception as e:
-            progress.close()
-            QMessageBox.critical(
-                self,
-                "Ошибка",
-                f"Ошибка при обновлении:\n{str(e)}",
-                QMessageBox.Ok
-            )
-            # Логирование ошибки
-            with open("update_log.txt", "a") as log_file:
-                log_file.write(f"{datetime.now()}: {str(e)}\n")
-            return False
+            self.show_error_message(f"Ошибка при обновлении справочников: {str(e)}")
 
     def update_purchases_sales(self):
         """Обновление данных по закупкам/продажам"""
@@ -233,4 +162,5 @@ class Home(QWidget):
             color: #ff0000;
         """)
         msg.setIcon(QMessageBox.Critical)
-        msg.exec_()
+
+

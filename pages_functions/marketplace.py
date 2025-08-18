@@ -19,11 +19,11 @@ from models import (Marketplace, Calendar, Materials, Customer, Manager, Contrac
 
 from config import OZON_file, OZON_folder, Yandex_file, WB_file, Sber_file, cash_file
 from wind.pages.marketplace_ui import Ui_Form
-from pages_functions.product import Product
+from pages_functions.product import ProductsPage
 
 class MarketplacePage(QWidget):
     def __init__(self):
-        super().__init__()
+        super(MarketplacePage).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
@@ -633,7 +633,7 @@ class MarketplacePage(QWidget):
         
         if reply == QMessageBox.Yes:
             # Запускаем обновление продуктов
-            product_updater = Product()
+            product_updater = ProductsPage()
             product_updater.upload_data()
             
             # Повторно проверяем наличие продуктов после обновления

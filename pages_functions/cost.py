@@ -14,9 +14,9 @@ from models import Fees, EcoFee_amount, EcoFee_standard, TNVED, Year, Month, Cus
 from config import All_data_file
 from wind.pages.taxfees_ui import Ui_Form
 
-class Costs(QWidget):
+class CostsPage(QWidget):
     def __init__(self):
-        super(Costs, self).__init__()
+        super(CostsPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         

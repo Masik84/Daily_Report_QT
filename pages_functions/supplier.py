@@ -14,9 +14,9 @@ from wind.pages.supplier_ui import Ui_Form
 from config import All_data_file, AddCosts_File
 
 
-class SupplierWidget(QWidget):
+class SupplierPage(QWidget):
     def __init__(self):
-        super(SupplierWidget, self).__init__()
+        super(SupplierPage, self).__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
