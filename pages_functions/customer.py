@@ -17,7 +17,7 @@ from config import All_data_file, Customer_file, Contract_file
 
 class CustomerPage(QWidget):
     def __init__(self):
-        super(CustomerPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
@@ -235,8 +235,7 @@ class CustomerPage(QWidget):
                     # Формирование отчета только по проверенным данным
                     result_df = merged[merged['Несоответствия'] != ""]
                     if not result_df.empty:
-                        output_df = result_df[['id', 'Customer_name', 'INN', 'Sector', 'Holding', 
-                                            'Price_type', 'Несоответствия'] + 
+                        output_df = result_df[['id', 'Customer_name', 'INN', 'Sector', 'Holding', 'Price_type', 'Несоответствия'] + 
                                     [f"{col}_1C" for col in field_names.keys()]]
                         output_file = "mismatches_report.xlsx"
                         output_df.to_excel(output_file, index=False)
@@ -286,8 +285,7 @@ class CustomerPage(QWidget):
             df = pd.read_excel(file_path, sheet_name='HYUNDAI', dtype={
                 'ИНН': str,
                 'Код дилера HYUNDAI': str,
-                'Код в HYUNDAI': str
-            })
+                'Код в HYUNDAI': str})
 
             # Проверка обязательных колонок
             required_columns = [
@@ -296,8 +294,7 @@ class CustomerPage(QWidget):
                 'Код в HYUNDAI',
                 'Город',
                 'ИНН',
-                'SALES'  # Это колонка с менеджером
-            ]
+                'SALES']
 
             if not all(col in df.columns for col in required_columns):
                 missing = set(required_columns) - set(df.columns)
@@ -310,15 +307,14 @@ class CustomerPage(QWidget):
                 'Код в HYUNDAI': 'Hyundai_code',
                 'Город': 'City',
                 'ИНН': 'INN',
-                'SALES': 'Manager_name'  # Колонка с именем менеджера
-            }
+                'SALES': 'Manager_name'}
 
             # Преобразование и очистка данных
             df = df.rename(columns=column_map)
             df = df[list(column_map.values())]  # Только нужные колонки
 
             # Обработка пустых значений
-            df['Dealer_code'] = df['Dealer_code'].replace(['', ' ', '-'], None)
+            df = df[df['Dealer_code'] != "-"]
             df['INN'] = df['INN'].str.strip()
 
             return df.to_dict('records')

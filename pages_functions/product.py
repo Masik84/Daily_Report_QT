@@ -16,7 +16,7 @@ from db import db
 
 class ProductsPage(QWidget):
     def __init__(self):
-        super(ProductsPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
@@ -229,6 +229,8 @@ class ProductsPage(QWidget):
             if 'Наименование' in df.columns:
                 df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
             
+            
+    
             # 3. Переименование колонок
             column_map = {
                 'Код': 'Code', 
@@ -257,6 +259,9 @@ class ProductsPage(QWidget):
             df = pd.concat([df, new_df], ignore_index=True)
             
             df["Package_type"] = df["Package_type"].replace({"комплект кан": "комплект", "комплект туб": "комплект"})
+            
+            for_replace = {"Канистра": "шт", "бочка": "шт", "Туба": "шт", "банка": "шт", "л ": "л"}
+            df["UoM"] = df["UoM"].replace(for_replace)
             
             df['TNVED'] = df['TNVED'].fillna('-')
             df['TNVED'] = df['TNVED'].replace({'': '-', 'nan': '-', 'None': '-', None: '-'})

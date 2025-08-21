@@ -12,7 +12,7 @@ from pages_functions.add_costs import AddSupplCostsPage
 
 class Home(QWidget):
     def __init__(self):
-        super(Home, self).__init__()
+        super().__init__()
         
         self.setWindowIcon(QIcon(":/image/logo/лого_капля.ico"))
         

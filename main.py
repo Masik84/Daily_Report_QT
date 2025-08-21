@@ -6,13 +6,13 @@ from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
 from db import Base, engine
 from pages_functions.home import Home
-from pages_functions.product import Product
-from pages_functions.managers import Managers
-from pages_functions.customer import Customer
-from pages_functions.plans import Plans
-from pages_functions.cost import Costs
-from pages_functions.supplier import SupplierWidget
-from pages_functions.add_costs import AddSupplCosts
+from pages_functions.product import ProductsPage
+from pages_functions.managers import ManagersPage
+from pages_functions.customer import CustomerPage
+from pages_functions.plans import PlansPage
+from pages_functions.cost import CostsPage
+from pages_functions.supplier import SupplierPage
+from pages_functions.add_costs import AddSupplCostsPage
 
 from pages_functions.move import MovesPage
 from pages_functions.marketplace import MarketplacePage
@@ -92,13 +92,13 @@ class MyWindow(QMainWindow):
         self.menu_btns_list = {
             self.home_btn: Home(),
             self.dashboard_btn: Dashboard(),
-            self.btn_managers: Managers(),
-            self.btn_customer: Customer(),
-            self.btn_product: Product(),
-            self.btn_plans: Plans(),
-            self.btn_cost: Costs(),
-            self.btn_supplier: SupplierWidget(),
-            self.btn_addcosts: AddSupplCosts(),
+            self.btn_managers: ManagersPage(),
+            self.btn_customer: CustomerPage(),
+            self.btn_product: ProductsPage(),
+            self.btn_plans: PlansPage(),
+            self.btn_cost: CostsPage(),
+            self.btn_supplier: SupplierPage(),
+            self.btn_addcosts: AddSupplCostsPage(),
             
             self.btn_moves: MovesPage(),
             self.btn_MP: MarketplacePage(),

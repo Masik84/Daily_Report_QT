@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'main_windowczvrFk.ui'
+## Form generated from reading UI file 'main_windowfzWxXs.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
     QSpacerItem, QSplitter, QTabWidget, QToolBox,
     QVBoxLayout, QWidget)
-from wind import resource_rc
+import resource_rc
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -54,6 +54,7 @@ class Ui_MainWindow(object):
 "\n"
 "#main_widget {\n"
 "	background-color: #f8f8f2; \n"
+"	border: 3px solid #f28223;\n"
 "}\n"
 "\n"
 "#search_widget {\n"
@@ -78,9 +79,9 @@ class Ui_MainWindow(object):
 "\n"
 "QPushButton {\n"
 "	border: 2px solid #f09d54;\n"
-"	border-radius: 5px;\n"
-"	background-color: #f8f8f2"
+"	border-radius: 5px"
                         ";\n"
+"	background-color: #f8f8f2;\n"
 "	color: #262626;\n"
 "	font: 10pt \"Tahoma\";\n"
 "}\n"
@@ -134,11 +135,11 @@ class Ui_MainWindow(object):
 "	border: 3px solid #f28223;\n"
 "	border-radius: 5px;\n"
 "	background-color: #ffb472;\n"
-"	color: #262626;\n"
+"	color"
+                        ": #262626;\n"
 "}\n"
 "\n"
-"#toolB"
-                        "ox::tab {\n"
+"#toolBox::tab {\n"
 "	padding-left:5px;\n"
 "	border-radius: 3px;\n"
 "	text-align: left;\n"
@@ -282,16 +283,6 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_3.addWidget(self.btn_Supplier)
 
-        self.btn_AddCosts = QPushButton(self.updater_page)
-        self.btn_AddCosts.setObjectName(u"btn_AddCosts")
-
-        self.verticalLayout_3.addWidget(self.btn_AddCosts)
-
-        self.btn_CustDelivery = QPushButton(self.updater_page)
-        self.btn_CustDelivery.setObjectName(u"btn_CustDelivery")
-
-        self.verticalLayout_3.addWidget(self.btn_CustDelivery)
-
         self.btn_Price = QPushButton(self.updater_page)
         self.btn_Price.setObjectName(u"btn_Price")
         self.btn_Price.setMinimumSize(QSize(0, 0))
@@ -356,6 +347,21 @@ class Ui_MainWindow(object):
         self.btn_Moves.setObjectName(u"btn_Moves")
 
         self.verticalLayout_2.addWidget(self.btn_Moves)
+
+        self.btn_AddCosts = QPushButton(self.docs_page)
+        self.btn_AddCosts.setObjectName(u"btn_AddCosts")
+
+        self.verticalLayout_2.addWidget(self.btn_AddCosts)
+
+        self.btn_CustDelivery = QPushButton(self.docs_page)
+        self.btn_CustDelivery.setObjectName(u"btn_CustDelivery")
+
+        self.verticalLayout_2.addWidget(self.btn_CustDelivery)
+
+        self.btn_TempTable = QPushButton(self.docs_page)
+        self.btn_TempTable.setObjectName(u"btn_TempTable")
+
+        self.verticalLayout_2.addWidget(self.btn_TempTable)
 
         self.verticalSpacer_2 = QSpacerItem(20, 350, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
@@ -516,6 +522,7 @@ class Ui_MainWindow(object):
         self.tabWidget.setStyleSheet(u"\n"
 "#tabWidget {\n"
 "	background-color: #f8f8f2;\n"
+"	border: 2px solid #f28223;\n"
 "}\n"
 "\n"
 "QTabBar::close-button {\n"
@@ -586,8 +593,6 @@ class Ui_MainWindow(object):
         self.btn_Plans.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043b\u0430\u043d\u044b", None))
         self.btn_Costs.setText(QCoreApplication.translate("MainWindow", u"Tax / Fees", None))
         self.btn_Supplier.setText(QCoreApplication.translate("MainWindow", u"\u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0438", None))
-        self.btn_AddCosts.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043f \u0420\u0430\u0441\u0445\u043e\u0434\u044b (\u0417\u0430\u043a\u0443\u043f)", None))
-        self.btn_CustDelivery.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0434\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430", None))
         self.btn_Price.setText(QCoreApplication.translate("MainWindow", u"\u041f\u0440\u0430\u0439\u0441-\u043b\u0438\u0441\u0442\u044b", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.updater_page), QCoreApplication.translate("MainWindow", u"\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a\u0438", None))
         self.btn_Purchases.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0443\u043f\u043a\u0438", None))
@@ -596,6 +601,9 @@ class Ui_MainWindow(object):
         self.btn_Cust_Orders.setText(QCoreApplication.translate("MainWindow", u"\u0417\u0430\u043a\u0430\u0437\u044b \u043a\u043b\u0438\u0435\u043d\u0442\u043e\u0432", None))
         self.btn_MarketPlace.setText(QCoreApplication.translate("MainWindow", u"\u041c\u0430\u0440\u043a\u0435\u0442 \u041f\u043b\u0435\u0439\u0441\u044b", None))
         self.btn_Moves.setText(QCoreApplication.translate("MainWindow", u"\u0414\u0432\u0438\u0436\u0435\u043d\u0438\u044f / \u041a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u044b", None))
+        self.btn_AddCosts.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043f \u0420\u0430\u0441\u0445\u043e\u0434\u044b (\u0417\u0430\u043a\u0443\u043f)", None))
+        self.btn_CustDelivery.setText(QCoreApplication.translate("MainWindow", u"\u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u0434\u043e \u043a\u043b\u0438\u0435\u043d\u0442\u0430", None))
+        self.btn_TempTable.setText(QCoreApplication.translate("MainWindow", u"\u0412\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0435 \u0442\u0430\u0431\u043b\u0438\u0446\u044b", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.docs_page), QCoreApplication.translate("MainWindow", u"\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b", None))
         self.btn_Scheme.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043e\u0442\u0447\u0435\u0442", None))
         self.btn_Plan.setText(QCoreApplication.translate("MainWindow", u"\u041e\u0417\u041e\u041d", None))

@@ -16,7 +16,7 @@ from db import db
 
 class AddSupplCostsPage(QWidget):
     def __init__(self):
-        super(AddSupplCostsPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
@@ -499,8 +499,13 @@ class AddSupplCostsPage(QWidget):
     def get_AddSupplCosts_from_db(self):
         """Получение данных из таблицы AddSupplCost с фильтрацией"""
         try:
-            # Базовый запрос с JOIN к SupplScheme и Supplier
-            query = db.query(AddSupplCost)
+            # Базовый запрос с JOIN к Supplier и SupplScheme
+            query = db.query(
+                AddSupplCost,
+                Supplier.Supplier_Name.label('Supplier_Name_report')
+            ).join(Supplier, AddSupplCost.Supplier_id == Supplier.id
+            ).join(SupplScheme, Supplier.id == SupplScheme.Supplier_id
+            ).distinct()
         
             # Применяем фильтры из выпадающих списков
             suppl1 = self.ui.line_Suppl1.currentText()
@@ -510,24 +515,22 @@ class AddSupplCostsPage(QWidget):
             shipp = self.ui.line_Shipp.currentText()
             container = self.ui.line_Container.text()
             
-            if suppl1 != '-':
+            if suppl1 and suppl1 != '-':
                 query = query.filter(AddSupplCost.Supplier1 == suppl1)
-            if suppl2 != '-':
+            if suppl2 and suppl2 != '-':
                 query = query.filter(AddSupplCost.Supplier2 == suppl2)
-            if order != '-':
+            if order and order != '-':
                 query = query.filter(AddSupplCost.Order == order)
-            if shipp != '-':
+            if shipp and shipp != '-':
                 query = query.filter(AddSupplCost.Shipment == shipp)
-            if container != '-':
+            if container and container != '-':
                 query = query.filter(AddSupplCost.Container == container)
             
-            # Для фильтрации по Supplier_Name_report делаем отдельный подзапрос
-            if suppl_rep != '-':
-                suppl_ids = db.query(Supplier.id).join(SupplScheme).filter(
-                    SupplScheme.Supplier_Name_report == suppl_rep
-                ).distinct()
-                query = query.filter(AddSupplCost.Supplier_id.in_(suppl_ids))
+            # Фильтрация по Supplier_Name_report
+            if suppl_rep and suppl_rep != '-':
+                query = query.filter(SupplScheme.Supplier_Name_report == suppl_rep)
             
+            query = query.order_by(AddSupplCost.Date, AddSupplCost.Document, AddSupplCost.Order)
             # Получаем данные в DataFrame
             df = pd.read_sql(query.statement, db.bind)
             
@@ -569,6 +572,7 @@ class AddSupplCostsPage(QWidget):
             }
             
             df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+            df = df.drop(columns=['Склад', 'merge_id', 'Контрагент'], errors='ignore')
             
             return df.where(pd.notnull(df), None)
             
@@ -580,88 +584,87 @@ class AddSupplCostsPage(QWidget):
 
     def find_AddSupplCosts(self):
         """Поиск и отображение данных в таблице"""
-        self.table.clearContents()
-        self.table.setRowCount(0)
+        try:
+            self.table.clearContents()
+            self.table.setRowCount(0)
 
-        add_suppl_df = self.get_AddSupplCosts_from_db()
+            add_suppl_df = self.get_AddSupplCosts_from_db()
 
-        if not add_suppl_df.empty:
-            self._display_data(add_suppl_df)
-        else:
-            self.show_error_message("Нет данных для отображения")
+            if not add_suppl_df.empty:
+                self._display_data(add_suppl_df)
+            else:
+                self.show_error_message("Нет данных для отображения")
+        except Exception as e:
+            self.show_error_message(f"Ошибка при поиске данных: {str(e)}")
 
     def _display_data(self, df):
         """Отображение данных с русским форматированием чисел"""
-        self.table.clearContents()
-        self.table.setRowCount(0)
-        
-        if df.empty:
-            self.show_message('Данные не найдены')
-            return
-        
-        # Отладочная информация
-        print(f"Всего строк: {len(df)}")
-        print(f"Уникальных строк: {len(df.drop_duplicates())}")
-        
-        # Создаем копию DataFrame для форматирования
-        display_df = df.copy()
-        
-        # Определяем числовые колонки и их точность
-        numeric_columns = {
-            1: ['Объем'],  # 1 знак после запятой
-            2: ['Сумма 1С', 'Агентские', 'Транспорт м.н.', 
-                'Транспорт лок.', 'Доп услуги', 'Комиссия платежному агенту',
-                'Ст-ть трансп ВЭД'],  # 2 знака
-            4: ['курс для транспорта', 'Курс оплаты']  # 4 знака
-        }
-        
-        # Форматируем числовые колонки
-        for decimals, cols in numeric_columns.items():
-            for col in cols:
+        try:
+            self.table.clearContents()
+            self.table.setRowCount(0)
+            
+            if df.empty:
+                self.show_message('Данные не найдены')
+                return
+            
+            # Создаем копию DataFrame для форматирования
+            display_df = df.copy()
+            
+            # Определяем числовые колонки и их точность
+            numeric_columns = {
+                1: ['Объем'],  # 1 знак после запятой
+                2: ['Сумма 1С', 'Агентские', 'Транспорт м.н.', 'Погрузка/Выгрузка', 'Сумма 1го Поставщика',
+                    'Транспорт лок.', 'Доп услуги', 'Комиссия платежному агенту',
+                    'Ст-ть трансп ВЭД'],  # 2 знака
+                4: ['курс для транспорта', 'Курс оплаты']  # 4 знака
+            }
+            
+            # Форматируем числовые колонки
+            for decimals, cols in numeric_columns.items():
+                for col in cols:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col].apply(
+                            lambda x: (
+                                f"{float(x):,.{decimals}f}".replace(',', ' ').replace('.', ',')
+                                if pd.notnull(x) and str(x).strip() != ''
+                                else ""
+                            )
+                        )
+            
+            # Форматируем даты
+            date_columns = ['Дата', 'Тамож. дата', 'Дата прихода']
+            for col in date_columns:
                 if col in display_df.columns:
                     display_df[col] = display_df[col].apply(
-                        lambda x: (
-                            f"{float(x):,.{decimals}f}".replace(',', ' ').replace('.', ',')
-                            if pd.notnull(x) 
-                            else f"0{' ' if decimals > 0 else ''},{'0'*decimals}"
-                        )
+                        lambda x: x.strftime('%d.%m.%Y') 
+                        if not pd.isna(x) and x is not None 
+                        else ''
                     )
-        
-        # Форматируем даты
-        date_columns = ['Дата', 'Тамож. дата', 'Дата прихода']
-        for col in date_columns:
-            if col in display_df.columns:
-                display_df[col] = display_df[col].apply(
-                    lambda x: x.strftime('%d.%m.%Y') 
-                    if not pd.isna(x) and x is not None 
-                    else ''
-                )
-        
-        # Настраиваем таблицу
-        self.table.setColumnCount(len(display_df.columns))
-        self.table.setRowCount(len(display_df))
-        self.table.setHorizontalHeaderLabels(display_df.columns)
-        
-        # Заполняем таблицу
-        all_numeric_cols = [col for cols in numeric_columns.values() for col in cols if col in display_df.columns]
-        
-        for row_idx, row in display_df.iterrows():
-            for col_idx, (col_name, value) in enumerate(row.items()):
-                item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                
-                # Выравнивание чисел по правому краю
-                if col_name in all_numeric_cols:
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                
-                self.table.setItem(row_idx, col_idx, item)
-        
-        # Автонастройка ширины столбцов
-        self.table.resizeColumnsToContents()
-        
-        # Дополнительная проверка
-        if len(df) != len(df.drop_duplicates()):
-            print("ВНИМАНИЕ: В данных обнаружены дубликаты!")
+            
+            # Настраиваем таблицу
+            self.table.setColumnCount(len(display_df.columns))
+            self.table.setRowCount(len(display_df))
+            self.table.setHorizontalHeaderLabels(display_df.columns)
+            
+            # Заполняем таблицу
+            all_numeric_cols = [col for cols in numeric_columns.values() for col in cols if col in display_df.columns]
+            
+            for row_idx, row in display_df.iterrows():
+                for col_idx, (col_name, value) in enumerate(row.items()):
+                    item = QTableWidgetItem(str(value) if value is not None else "")
+                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+                    
+                    # Выравнивание чисел по правому краю
+                    if col_name in all_numeric_cols:
+                        item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    
+                    self.table.setItem(row_idx, col_idx, item)
+            
+            # Автонастройка ширины столбцов
+            self.table.resizeColumnsToContents()
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка при отображении данных: {str(e)}")
 
     def show_message(self, text):
         """Показать компактное информационное сообщение"""

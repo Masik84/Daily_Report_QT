@@ -23,7 +23,7 @@ from pages_functions.product import ProductsPage
 
 class MarketplacePage(QWidget):
     def __init__(self):
-        super(MarketplacePage).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
@@ -394,12 +394,7 @@ class MarketplacePage(QWidget):
                 df = self.read_cash_data()
             else:
                 df = self._get_marketplace_data(market_place)
-            
-            required_columns = ['Document', 'Date', 'Material_id', 'Qty', 'Amount_1C', 'Customer_id']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                self.show_error_message(f"В данных КЭШ отсутствуют обязательные колонки: {', '.join(missing_columns)}")
-                return
+
             # Подготавливаем и сохраняем данные
             prepared_df = self._prepare_marketplace_data(df)
             self._update_marketplace_data(prepared_df, market_place)
@@ -443,10 +438,10 @@ class MarketplacePage(QWidget):
             dtype=config["dtype"],
             special_filters=config["filters"]
         )
-        
+
         # Проверяем наличие продуктов в БД
         df = self._check_products_in_db(df)
-        
+
         return df
 
     def _read_marketplace_file(self, file_path, sheet_name, market_place_name, dtype, special_filters=None):
@@ -876,7 +871,6 @@ class MarketplacePage(QWidget):
                 db.query(Marketplace).filter(Marketplace.id.in_(records_to_delete)).delete(synchronize_session=False)
             
             db.commit()
-            print(f"Обновлено {marketplace_name}: {len(updated_records)} записей обновлено, {len(new_records)} добавлено, {len(records_to_delete)} удалено")
             
         except Exception as e:
             db.rollback()

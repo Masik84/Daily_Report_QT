@@ -23,7 +23,7 @@ Contract_file = MAIN_FOLDER + "Выгрузки_new\\Реестр договор
 
 
 Collection_file = MAIN_FOLDER + "! Сборщик отчета !.xlsx"
-Complectation_file = MAIN_FOLDER + "! Комплектации !.xlsx" 
+Complectation_file = MAIN_FOLDER + "! Комплектации !_2.xlsx" 
 new_Complectation_file = MAIN_FOLDER + "ERRORs_Compectations_new.xlsx"
 
 

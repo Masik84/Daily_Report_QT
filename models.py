@@ -122,7 +122,7 @@ class Hyundai_Dealer(Base):
     __tablename__ = 'hyundai_dealers'
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # Внутренний ID (автоинкремент)
-    Dealer_code = Column(String, nullable=True, unique=True)  # "Код дилера HYUNDAI" (может быть NULL)
+    Dealer_code = Column(String, unique=True)  # "Код дилера HYUNDAI" (может быть NULL)
     Hyundai_code = Column(String, unique=True, nullable=False)  # "Код в HYUNDAI" (обязателен)
     Name = Column(String)  # "Наим дилера HYUNDAI"
     City = Column(String)  # "Город"
@@ -368,7 +368,6 @@ class DOCType(Base):
     __tablename__ = 'doc_type'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    merge = Column(String)  # Вид документа_Вид операции
     Document = Column(String) # Вид документа
     Transaction = Column(String) # Вид операции
     Doc_type = Column(String) # Тип документа
@@ -553,7 +552,7 @@ class Movements(Base):
     Date_Time = Column(Date)  # Дата_Время
     Document = Column(String)  # Документ
     Date = Column(Date)  # Дата
-    Doc_based = Column(String)  # ДокОсн
+    Doc_based = Column(String, nullable=True)  # ДокОсн
     Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)  # Дата ДокОсн
     Stock = Column(String)  # Склад
     Qty = Column(Numeric)  # Количество
@@ -586,7 +585,7 @@ class Complects_manual(Base):
     
     # Внешние ключи
     DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_complects_doctype'))  # Тип документа
-    Material_id = Column(String, ForeignKey('material.Code', name='fk_complects_material'))  # Код материала
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_complects_material'))  # Код
     
     # Связи
     doc_type = relationship("DOCType", back_populates="complects_manual")
@@ -623,7 +622,7 @@ class WriteOff(Base):
     outComing = Column(Numeric)  # Расход
     Qty = Column(Numeric)  # Количество
     Reporting = Column(String)  # Отчет
-    Doc_based = Column(String)  # ДокОсн
+    Doc_based = Column(String, nullable=True)  # ДокОсн
     Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)  # Дата ДокОсн
     Order = Column(String)  # Order N
     Shipment = Column(String)  # Shipment #
@@ -634,7 +633,7 @@ class WriteOff(Base):
     # Внешние ключи
     DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_writeoff_doctype'))  # Тип документа
     Material_id = Column(String, ForeignKey('material.Code', name='fk_writeoff_material'))  # Код материала
-    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_writeoff_supplier'))  # Контрагент.Код
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_writeoff_supplier'), nullable=True)  # Контрагент.Код
     
     # Связи
     doc_type = relationship("DOCType", back_populates="write_off")

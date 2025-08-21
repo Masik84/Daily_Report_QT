@@ -15,7 +15,7 @@ from config import All_data_file
 
 class ManagersPage(QWidget):
     def __init__(self):
-        super(ManagersPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

@@ -28,7 +28,7 @@ QWidget{
 
 #Title_label.QLabel {
 color: #262626;
-font: 22pt &quot;Tahoma&quot;;
+font: 18pt &quot;Tahoma&quot;;
 }
 
 QLabel {
@@ -382,7 +382,7 @@ QCalendarWidget QSpinBox::down-arrow {
         <property name="font">
          <font>
           <family>Tahoma</family>
-          <pointsize>22</pointsize>
+          <pointsize>18</pointsize>
           <italic>false</italic>
           <bold>false</bold>
          </font>
@@ -391,7 +391,7 @@ QCalendarWidget QSpinBox::down-arrow {
          <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="text">
-         <string>Движения</string>
+         <string>Временные таблицы (Закупки, Продажи, Заказы)</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -413,11 +413,8 @@ QCalendarWidget QSpinBox::down-arrow {
          </size>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
-         <property name="spacing">
-          <number>0</number>
-         </property>
          <property name="leftMargin">
-          <number>12</number>
+          <number>9</number>
          </property>
          <property name="topMargin">
           <number>0</number>
@@ -426,8 +423,183 @@ QCalendarWidget QSpinBox::down-arrow {
           <number>0</number>
          </property>
          <property name="bottomMargin">
-          <number>5</number>
+          <number>9</number>
          </property>
+         <item>
+          <widget class="QFrame" name="frame_6">
+           <property name="frameShape">
+            <enum>QFrame::Shape::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Shadow::Raised</enum>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_2">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QFrame" name="frame_4">
+              <property name="minimumSize">
+               <size>
+                <width>80</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::Shape::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Shadow::Raised</enum>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_5">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>6</number>
+               </property>
+               <property name="bottomMargin">
+                <number>6</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="label_6">
+                 <property name="text">
+                  <string>Таблица</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>Артикул</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_7">
+                 <property name="text">
+                  <string>Продукт</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <widget class="QFrame" name="frame_5">
+              <property name="minimumSize">
+               <size>
+                <width>250</width>
+                <height>120</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>300</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="frameShape">
+               <enum>QFrame::Shape::StyledPanel</enum>
+              </property>
+              <property name="frameShadow">
+               <enum>QFrame::Shadow::Raised</enum>
+              </property>
+              <layout class="QVBoxLayout" name="verticalLayout_6">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QComboBox" name="line_table">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="line_article">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="line_product">
+                 <property name="minimumSize">
+                  <size>
+                   <width>0</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>25</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Policy::Fixed</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>50</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
          <item>
           <widget class="QFrame" name="frame">
            <property name="minimumSize">
@@ -442,6 +614,11 @@ QCalendarWidget QSpinBox::down-arrow {
              <height>16777215</height>
             </size>
            </property>
+           <property name="font">
+            <font>
+             <pointsize>1</pointsize>
+            </font>
+           </property>
            <property name="frameShape">
             <enum>QFrame::Shape::StyledPanel</enum>
            </property>
@@ -453,21 +630,14 @@ QCalendarWidget QSpinBox::down-arrow {
              <number>0</number>
             </property>
             <property name="topMargin">
-             <number>0</number>
+             <number>6</number>
             </property>
             <property name="rightMargin">
              <number>9</number>
             </property>
             <property name="bottomMargin">
-             <number>3</number>
+             <number>6</number>
             </property>
-            <item>
-             <widget class="QLabel" name="label_4">
-              <property name="text">
-               <string>Таблица</string>
-              </property>
-             </widget>
-            </item>
             <item>
              <widget class="QLabel" name="label_3">
               <property name="font">
@@ -546,16 +716,6 @@ QCalendarWidget QSpinBox::down-arrow {
             <property name="bottomMargin">
              <number>0</number>
             </property>
-            <item>
-             <widget class="QComboBox" name="line_table">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
             <item>
              <widget class="QComboBox" name="line_doc_type">
               <property name="minimumSize">
@@ -679,198 +839,6 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="icon">
                <iconset resource="../resource.qrc">
                 <normaloff>:/icon/icon/search — копия — копия.svg</normaloff>:/icon/icon/search — копия — копия.svg</iconset>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_3">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeType">
-            <enum>QSizePolicy::Policy::Fixed</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>50</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_6">
-           <property name="frameShape">
-            <enum>QFrame::Shape::StyledPanel</enum>
-           </property>
-           <property name="frameShadow">
-            <enum>QFrame::Shadow::Raised</enum>
-           </property>
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_4">
-           <property name="minimumSize">
-            <size>
-             <width>80</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="frameShape">
-            <enum>QFrame::Shape::StyledPanel</enum>
-           </property>
-           <property name="frameShadow">
-            <enum>QFrame::Shadow::Raised</enum>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_5">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>3</number>
-            </property>
-            <property name="bottomMargin">
-             <number>3</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="label_6">
-              <property name="text">
-               <string>Контрагент</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="label">
-              <property name="text">
-               <string>Контрагент.Код</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="label_8">
-              <property name="text">
-               <string>Артикул</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="label_7">
-              <property name="text">
-               <string>Продукт</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_5">
-           <property name="minimumSize">
-            <size>
-             <width>250</width>
-             <height>120</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>300</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="frameShape">
-            <enum>QFrame::Shape::StyledPanel</enum>
-           </property>
-           <property name="frameShadow">
-            <enum>QFrame::Shadow::Raised</enum>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QComboBox" name="line_customer">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="line_cust_id">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLineEdit" name="line_article">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QComboBox" name="line_product">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>25</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>25</height>
-               </size>
               </property>
              </widget>
             </item>

@@ -18,7 +18,7 @@ from wind.pages.plans_ui import Ui_Form
 
 class PlansPage(QWidget):
     def __init__(self):
-        super(PlansPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 

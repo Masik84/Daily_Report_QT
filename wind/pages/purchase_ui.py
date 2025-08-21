@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'movestBmsHN.ui'
+## Form generated from reading UI file 'purchaseYyLMEf.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -382,9 +382,93 @@ class Ui_Form(object):
         self.frame_Search.setMinimumSize(QSize(0, 130))
         self.frame_Search.setMaximumSize(QSize(16777215, 16777215))
         self.horizontalLayout_5 = QHBoxLayout(self.frame_Search)
-        self.horizontalLayout_5.setSpacing(0)
         self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
-        self.horizontalLayout_5.setContentsMargins(12, 0, 0, 5)
+        self.horizontalLayout_5.setContentsMargins(9, 0, 0, 9)
+        self.frame_6 = QFrame(self.frame_Search)
+        self.frame_6.setObjectName(u"frame_6")
+        self.frame_6.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_6.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_2 = QHBoxLayout(self.frame_6)
+        self.horizontalLayout_2.setSpacing(0)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.frame_4 = QFrame(self.frame_6)
+        self.frame_4.setObjectName(u"frame_4")
+        self.frame_4.setMinimumSize(QSize(80, 0))
+        self.frame_4.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_4.setFrameShadow(QFrame.Shadow.Raised)
+        self.verticalLayout_5 = QVBoxLayout(self.frame_4)
+        self.verticalLayout_5.setObjectName(u"verticalLayout_5")
+        self.verticalLayout_5.setContentsMargins(0, 3, -1, 3)
+        self.label_6 = QLabel(self.frame_4)
+        self.label_6.setObjectName(u"label_6")
+
+        self.verticalLayout_5.addWidget(self.label_6)
+
+        self.label = QLabel(self.frame_4)
+        self.label.setObjectName(u"label")
+
+        self.verticalLayout_5.addWidget(self.label)
+
+        self.label_8 = QLabel(self.frame_4)
+        self.label_8.setObjectName(u"label_8")
+
+        self.verticalLayout_5.addWidget(self.label_8)
+
+        self.label_7 = QLabel(self.frame_4)
+        self.label_7.setObjectName(u"label_7")
+
+        self.verticalLayout_5.addWidget(self.label_7)
+
+
+        self.horizontalLayout_2.addWidget(self.frame_4)
+
+        self.frame_5 = QFrame(self.frame_6)
+        self.frame_5.setObjectName(u"frame_5")
+        self.frame_5.setMinimumSize(QSize(250, 120))
+        self.frame_5.setMaximumSize(QSize(300, 16777215))
+        self.frame_5.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_5.setFrameShadow(QFrame.Shadow.Raised)
+        self.verticalLayout_6 = QVBoxLayout(self.frame_5)
+        self.verticalLayout_6.setObjectName(u"verticalLayout_6")
+        self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
+        self.line_supplier = QComboBox(self.frame_5)
+        self.line_supplier.setObjectName(u"line_supplier")
+        self.line_supplier.setMinimumSize(QSize(0, 25))
+        self.line_supplier.setMaximumSize(QSize(16777215, 25))
+
+        self.verticalLayout_6.addWidget(self.line_supplier)
+
+        self.line_order = QComboBox(self.frame_5)
+        self.line_order.setObjectName(u"line_order")
+        self.line_order.setMinimumSize(QSize(0, 25))
+
+        self.verticalLayout_6.addWidget(self.line_order)
+
+        self.line_article = QLineEdit(self.frame_5)
+        self.line_article.setObjectName(u"line_article")
+        self.line_article.setMinimumSize(QSize(0, 25))
+        self.line_article.setMaximumSize(QSize(16777215, 25))
+
+        self.verticalLayout_6.addWidget(self.line_article)
+
+        self.line_product = QComboBox(self.frame_5)
+        self.line_product.setObjectName(u"line_product")
+        self.line_product.setMinimumSize(QSize(0, 25))
+        self.line_product.setMaximumSize(QSize(16777215, 25))
+
+        self.verticalLayout_6.addWidget(self.line_product)
+
+
+        self.horizontalLayout_2.addWidget(self.frame_5)
+
+
+        self.horizontalLayout_5.addWidget(self.frame_6)
+
+        self.horizontalSpacer_3 = QSpacerItem(50, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_5.addItem(self.horizontalSpacer_3)
+
         self.frame = QFrame(self.frame_Search)
         self.frame.setObjectName(u"frame")
         self.frame.setMinimumSize(QSize(80, 0))
@@ -393,12 +477,7 @@ class Ui_Form(object):
         self.frame.setFrameShadow(QFrame.Shadow.Raised)
         self.verticalLayout_2 = QVBoxLayout(self.frame)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
-        self.verticalLayout_2.setContentsMargins(0, 0, 9, 3)
-        self.label_4 = QLabel(self.frame)
-        self.label_4.setObjectName(u"label_4")
-
-        self.verticalLayout_2.addWidget(self.label_4)
-
+        self.verticalLayout_2.setContentsMargins(0, 6, 9, 6)
         self.label_3 = QLabel(self.frame)
         self.label_3.setObjectName(u"label_3")
         font1 = QFont()
@@ -433,12 +512,6 @@ class Ui_Form(object):
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.line_table = QComboBox(self.frame_2)
-        self.line_table.setObjectName(u"line_table")
-        self.line_table.setMinimumSize(QSize(0, 25))
-
-        self.verticalLayout_3.addWidget(self.line_table)
-
         self.line_doc_type = QComboBox(self.frame_2)
         self.line_doc_type.setObjectName(u"line_doc_type")
         self.line_doc_type.setMinimumSize(QSize(0, 25))
@@ -488,91 +561,6 @@ class Ui_Form(object):
 
 
         self.horizontalLayout_5.addWidget(self.frame_3)
-
-        self.horizontalSpacer_3 = QSpacerItem(50, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
-
-        self.horizontalLayout_5.addItem(self.horizontalSpacer_3)
-
-        self.frame_6 = QFrame(self.frame_Search)
-        self.frame_6.setObjectName(u"frame_6")
-        self.frame_6.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_6.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_2 = QHBoxLayout(self.frame_6)
-        self.horizontalLayout_2.setSpacing(0)
-        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
-        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-
-        self.horizontalLayout_5.addWidget(self.frame_6)
-
-        self.frame_4 = QFrame(self.frame_Search)
-        self.frame_4.setObjectName(u"frame_4")
-        self.frame_4.setMinimumSize(QSize(80, 0))
-        self.frame_4.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_4.setFrameShadow(QFrame.Shadow.Raised)
-        self.verticalLayout_5 = QVBoxLayout(self.frame_4)
-        self.verticalLayout_5.setObjectName(u"verticalLayout_5")
-        self.verticalLayout_5.setContentsMargins(0, 3, -1, 3)
-        self.label_6 = QLabel(self.frame_4)
-        self.label_6.setObjectName(u"label_6")
-
-        self.verticalLayout_5.addWidget(self.label_6)
-
-        self.label = QLabel(self.frame_4)
-        self.label.setObjectName(u"label")
-
-        self.verticalLayout_5.addWidget(self.label)
-
-        self.label_8 = QLabel(self.frame_4)
-        self.label_8.setObjectName(u"label_8")
-
-        self.verticalLayout_5.addWidget(self.label_8)
-
-        self.label_7 = QLabel(self.frame_4)
-        self.label_7.setObjectName(u"label_7")
-
-        self.verticalLayout_5.addWidget(self.label_7)
-
-
-        self.horizontalLayout_5.addWidget(self.frame_4)
-
-        self.frame_5 = QFrame(self.frame_Search)
-        self.frame_5.setObjectName(u"frame_5")
-        self.frame_5.setMinimumSize(QSize(250, 120))
-        self.frame_5.setMaximumSize(QSize(300, 16777215))
-        self.frame_5.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_5.setFrameShadow(QFrame.Shadow.Raised)
-        self.verticalLayout_6 = QVBoxLayout(self.frame_5)
-        self.verticalLayout_6.setObjectName(u"verticalLayout_6")
-        self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
-        self.line_customer = QComboBox(self.frame_5)
-        self.line_customer.setObjectName(u"line_customer")
-        self.line_customer.setMinimumSize(QSize(0, 25))
-        self.line_customer.setMaximumSize(QSize(16777215, 25))
-
-        self.verticalLayout_6.addWidget(self.line_customer)
-
-        self.line_cust_id = QLineEdit(self.frame_5)
-        self.line_cust_id.setObjectName(u"line_cust_id")
-        self.line_cust_id.setMinimumSize(QSize(0, 25))
-
-        self.verticalLayout_6.addWidget(self.line_cust_id)
-
-        self.line_article = QLineEdit(self.frame_5)
-        self.line_article.setObjectName(u"line_article")
-        self.line_article.setMinimumSize(QSize(0, 25))
-        self.line_article.setMaximumSize(QSize(16777215, 25))
-
-        self.verticalLayout_6.addWidget(self.line_article)
-
-        self.line_product = QComboBox(self.frame_5)
-        self.line_product.setObjectName(u"line_product")
-        self.line_product.setMinimumSize(QSize(0, 25))
-        self.line_product.setMaximumSize(QSize(16777215, 25))
-
-        self.verticalLayout_6.addWidget(self.line_product)
-
-
-        self.horizontalLayout_5.addWidget(self.frame_5)
 
         self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -741,16 +729,15 @@ class Ui_Form(object):
 
     def retranslateUi(self, Form):
         Form.setWindowTitle(QCoreApplication.translate("Form", u"Form", None))
-        self.Title_label.setText(QCoreApplication.translate("Form", u"\u0414\u0432\u0438\u0436\u0435\u043d\u0438\u044f", None))
-        self.label_4.setText(QCoreApplication.translate("Form", u"\u0422\u0430\u0431\u043b\u0438\u0446\u0430", None))
+        self.Title_label.setText(QCoreApplication.translate("Form", u"\u0417\u0430\u043a\u0443\u043f\u043a\u0438", None))
+        self.label_6.setText(QCoreApplication.translate("Form", u"Supplier", None))
+        self.label.setText(QCoreApplication.translate("Form", u"Order", None))
+        self.label_8.setText(QCoreApplication.translate("Form", u"\u0410\u0440\u0442\u0438\u043a\u0443\u043b", None))
+        self.label_7.setText(QCoreApplication.translate("Form", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442", None))
         self.label_3.setText(QCoreApplication.translate("Form", u"\u0422\u0438\u043f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430", None))
         self.label_2.setText(QCoreApplication.translate("Form", u"\u0413\u043e\u0434", None))
         self.label_5.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u0441\u044f\u0446", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
-        self.label_6.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442", None))
-        self.label.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442.\u041a\u043e\u0434", None))
-        self.label_8.setText(QCoreApplication.translate("Form", u"\u0410\u0440\u0442\u0438\u043a\u0443\u043b", None))
-        self.label_7.setText(QCoreApplication.translate("Form", u"\u041f\u0440\u043e\u0434\u0443\u043a\u0442", None))
         self.label_11.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u0448\u0442", None))
         self.label_qty_pcs.setText("")
         self.label_9.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u043b", None))

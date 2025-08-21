@@ -16,7 +16,7 @@ from wind.pages.taxfees_ui import Ui_Form
 
 class CostsPage(QWidget):
     def __init__(self):
-        super(CostsPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         

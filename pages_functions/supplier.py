@@ -16,7 +16,7 @@ from config import All_data_file, AddCosts_File
 
 class SupplierPage(QWidget):
     def __init__(self):
-        super(SupplierPage, self).__init__()
+        super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
