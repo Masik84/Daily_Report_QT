@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'temp_tablesBuJGAM.ui'
+## Form generated from reading UI file 'temp_tablesFXFpgJ.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QApplicat
     QLabel, QLineEdit, QPushButton, QSizePolicy,
     QSpacerItem, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget)
-import resource_rc
+from wind import resource_rc
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -493,6 +493,11 @@ class Ui_Form(object):
 
         self.verticalLayout_2.addWidget(self.label_5)
 
+        self.label = QLabel(self.frame)
+        self.label.setObjectName(u"label")
+
+        self.verticalLayout_2.addWidget(self.label)
+
 
         self.horizontalLayout_5.addWidget(self.frame)
 
@@ -525,6 +530,12 @@ class Ui_Form(object):
         self.line_Mnth.setMaximumSize(QSize(16777215, 25))
 
         self.verticalLayout_3.addWidget(self.line_Mnth)
+
+        self.line_customer = QComboBox(self.frame_2)
+        self.line_customer.setObjectName(u"line_customer")
+        self.line_customer.setMinimumSize(QSize(0, 25))
+
+        self.verticalLayout_3.addWidget(self.line_customer)
 
 
         self.horizontalLayout_5.addWidget(self.frame_2)
@@ -728,6 +739,7 @@ class Ui_Form(object):
         self.label_3.setText(QCoreApplication.translate("Form", u"\u0422\u0438\u043f \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430", None))
         self.label_2.setText(QCoreApplication.translate("Form", u"\u0413\u043e\u0434", None))
         self.label_5.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u0441\u044f\u0446", None))
+        self.label.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043d\u0442\u0440\u0430\u0433\u0435\u043d\u0442", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
         self.label_11.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u0448\u0442", None))
         self.label_qty_pcs.setText("")

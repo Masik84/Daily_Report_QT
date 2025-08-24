@@ -746,7 +746,7 @@ class MovesPage(QWidget):
                 # Преобразуем None/NaN в пустую строку
                 if pd.isna(value) or value is None or str(value) in ['None', 'nan', 'NaT']:
                     value = ''
-                
+
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 
@@ -805,7 +805,7 @@ class MovesPage(QWidget):
             # Запись финальных данных в Excel
             self._write_final_data_to_excel(move_df)
             
-            self.show_message("Данные успешно обновлены")
+            self.show_message("Движения успешно обновлены")
             self.refresh_all_comboboxes()
             
         except Exception as e:
@@ -865,7 +865,7 @@ class MovesPage(QWidget):
             "Единица": "Единица измерения",
             "Код": "Контрагент.Код",
             "Код.1": "Код",
-            "Код.2": "Грузополучатель.Код"
+            "Код.2": "Грузополучатель.Код",
         })
         
         # Фильтрация данных
@@ -977,11 +977,11 @@ class MovesPage(QWidget):
             
         # Фильтруем строки с отсутствующими продуктами
         missing_df = df[df['Код'].isin(missing_codes)]
-        missing_products = missing_df[['Артикул', 'Код', 'Продукт + упаковка']].drop_duplicates()
+        missing_products = missing_df[['Артикул', 'Код', 'Номенклатура']].drop_duplicates()
         
         # Формируем сообщение с информацией об отсутствующих продуктах
         msg = "Следующие продукты отсутствуют в БД:\n\n"
-        msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Продукт + упаковка']}" 
+        msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Номенклатура']}" 
                         for _, row in missing_products.iterrows())
         msg += "\n\nЗапустить обновление продуктов?"
         
@@ -1007,10 +1007,10 @@ class MovesPage(QWidget):
                 if still_missing:
                     # Формируем сообщение о продуктах, которые все еще отсутствуют
                     still_missing_df = df[df['Код'].isin(still_missing)]
-                    still_missing_products = still_missing_df[['Артикул', 'Код', 'Продукт + упаковка']].drop_duplicates()
+                    still_missing_products = still_missing_df[['Артикул', 'Код', 'Номенклатура']].drop_duplicates()
                     
                     msg = "Следующие продукты все еще отсутствуют в БД и будут пропущены:\n\n"
-                    msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Продукт + упаковка']}" 
+                    msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Номенклатура']}" 
                                     for _, row in still_missing_products.iterrows())
                     self.show_message(msg)
                     
@@ -1117,11 +1117,7 @@ class MovesPage(QWidget):
                         'Recipient': self._null_if_empty(row.get('Грузополучатель')),
                         'Bill': self._null_if_empty(row.get('Счет')),
                         'Bill_date': bill_date,
-                        'DocType_id': self._get_doc_type_id(
-                            row.get('Вид документа', ''),
-                            row.get('Вид операции', ''),
-                            row.get('Тип документа', '')
-                        ),
+                        'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
                         'Material_id': str(row.get('Код', ''))
                     }
 
@@ -1307,43 +1303,19 @@ class MovesPage(QWidget):
             if isinstance(min_date, pd.Timestamp):
                 min_date = min_date.date()
             db.query(Complects).filter(Complects.Date >= min_date).delete()
-            
-            # Получаем mapping ID -> Doc_type из БД
-            doc_type_mapping = {}
-            try:
-                doc_types = db.query(DOCType.id, DOCType.Doc_type).all()
-                doc_type_mapping = {str(doc_id): doc_type for doc_id, doc_type in doc_types}
-            except Exception as e:
-                print(f"Ошибка при получении типов документов: {str(e)}")
-                return
-            
+
             # Подготавливаем данные для вставки
             records = []
             for _, row in df.iterrows():
                 try:
-                    # Преобразуем ID типа документа обратно в текстовое значение
-                    doc_type_id = str(row.get('Тип документа')) if pd.notna(row.get('Тип документа')) else None
-                    doc_type_text = doc_type_mapping.get(doc_type_id) if doc_type_id else None
-                    
-                    # Получаем ID типа документа для БД
-                    doc_type_id_for_db = self._get_doc_type_id(
-                        str(row.get('Вид документа')) if pd.notna(row.get('Вид документа')) else None,
-                        str(row.get('Вид операции')) if pd.notna(row.get('Вид операции')) else None,
-                        doc_type_text  # Используем текстовое значение
-                    )
-                    
-                    if doc_type_id_for_db is None:
-                        print(f"Не удалось найти ID для типа документа: {doc_type_text}")
-                        continue
-                        
                     record = {
-                        'Date_Time': row['Дата_Время'] if pd.notna(row.get('Дата_Время')) else None,
-                        'Document': str(row['Документ']) if pd.notna(row.get('Документ')) else None,
-                        'Date': row['Дата'] if pd.notna(row.get('Дата')) else None,
-                        'Stock': str(row['Склад']) if pd.notna(row.get('Склад')) else None,
-                        'Qty': float(row['Количество']) if pd.notna(row.get('Количество')) else 0.0,
-                        'DocType_id': doc_type_id_for_db,  # Используем найденный ID
-                        'Material_id': str(row['Код']) if pd.notna(row.get('Код')) else None
+                        'Date_Time': self._safe_datetime(row.get('Date_Time')),
+                        'Document': row['Документ'],
+                        'Date': row['Дата'],
+                        'Stock': row['Склад'],
+                        'Qty': row['Количество'],
+                        'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
+                        'Material_id': row['Код'],
                     }
                     records.append(record)
                 except Exception as e:
@@ -1378,12 +1350,12 @@ class MovesPage(QWidget):
             records = []
             for _, row in df.iterrows():
                 record = {
-                    'Date_Time': row['Дата_Время'],
+                    'Date_Time': self._safe_datetime(row.get('Date_Time')),
                     'Document': row['Документ'],
                     'Date': row['Дата'],
                     'Stock': row['Склад'],
                     'Qty': row['Количество'],
-                    'DocType_id': self._get_doc_type_id('Комплектация номенклатуры', 'Комплектация', '2.0. Комплектация'),
+                    'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
                     'Material_id': row['Код'],
                 }
                 records.append(record)
@@ -1539,7 +1511,7 @@ class MovesPage(QWidget):
                 except Exception as e:
                     self.show_error_message(f"Ошибка при записи данных в Excel: {str(e)}")
                     traceback.print_exc()
-            move_df.to_excel("move_df_w_writeoff.xlsx")
+                    
             return move_df.drop(columns=["merge2", "CHECK_write_off"], errors="ignore")
             
         except Exception as e:
@@ -1565,9 +1537,9 @@ class MovesPage(QWidget):
                 try:
                     # Создаем запись с проверкой наличия всех полей
                     record = {
-                        'Date_Time': self._convert_to_datetime(row.get('Дата_Время')),
+                        'Date_Time': self._safe_datetime(row.get('Date_Time')),
                         'Document': str(row.get('Документ', '')),
-                        'Date': self._convert_to_date(row.get('Дата')),
+                        'Date': self._safe_date(row.get('Дата')),
                         'Stock': str(row.get('Склад', '')),
                         'Comment': str(row.get('Комментарий', None)),
                         'inComing': self._safe_float(row.get('Приход')),
@@ -1575,17 +1547,13 @@ class MovesPage(QWidget):
                         'Qty': self._safe_float(row.get('Количество')),
                         'Reporting': str(row.get('Отчет', 'нет')),
                         'Doc_based': str(row.get('ДокОсн', None)),
-                        'Date_Doc_based': self._convert_to_date(row.get('Дата ДокОсн')),
+                        'Date_Doc_based': self._safe_date(row.get('Дата ДокОсн')),
                         'Order': str(row.get('Order N', row.get('Order', None))),
                         'Shipment': str(row.get('Shipment #', row.get('Shipment', None))),
                         'Suppl_Inv_N': str(row.get('Вход. док-т', None)),
                         'Bill': str(row.get('Счет', None)),
-                        'Bill_date': self._convert_to_date(row.get('Дата счета')),
-                        'DocType_id': self._get_doc_type_id(
-                            row.get('Вид документа', ''),
-                            row.get('Вид операции', ''),
-                            row.get('Тип документа', '')
-                        ),
+                        'Bill_date': self._safe_date(row.get('Дата счета')),
+                        'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
                         'Material_id': str(row.get('Код', '')),
                         'Supplier_id': self._safe_supplier_id(row.get('Контрагент.Код'))
                     }
@@ -1651,7 +1619,7 @@ class MovesPage(QWidget):
             # Рассчитываем дополнительные колонки
             move_df['Кол-во, шт'] = move_df.apply(lambda row: self._calculate_pcs(row.to_dict()), axis=1)
             move_df['Кол-во в л прод'] = move_df.apply(lambda row: self._calculate_liters(row.to_dict()), axis=1)
-            move_df.to_excel("move_df_final.xlsx")
+
             # Подготовка финальных данных для записи
             move_full_to_write = move_df[[
                 "Дата_Время", "Документ", "Дата", "Вид операции", "Вид документа", "ДокОсн", "Дата ДокОсн", 
@@ -1810,23 +1778,7 @@ class MovesPage(QWidget):
             "Списания": WriteOff
         }
         return models.get(table_name)
-        
-    def _convert_to_datetime(self, value):
-        """Конвертирует значение в datetime или возвращает None"""
-        if pd.isna(value) or value is None:
-            return None
-        if isinstance(value, pd.Timestamp):
-            return value.to_pydatetime()
-        try:
-            return pd.to_datetime(value).to_pydatetime()
-        except:
-            return None
-
-    def _convert_to_date(self, value):
-        """Конвертирует значение в date или возвращает None"""
-        dt = self._convert_to_datetime(value)
-        return dt.date() if dt else None
-
+    
     def _safe_supplier_id(self, value):
         """Обрабатывает Supplier_id, заменяя NaN/None на NULL"""
         if pd.isna(value) or value is None or str(value).strip() in ['', 'nan', 'None']:
@@ -1865,36 +1817,40 @@ class MovesPage(QWidget):
         return None
 
     def _safe_datetime(self, value):
-        """Безопасное преобразование в datetime с обработкой некорректных значений"""
+        """Безопасное преобразование в datetime с форматом 19.08.2025 10:57:21"""
         if pd.isna(value) or value is None or str(value) in ['NaT', 'nan', 'None', '']:
             return None
         
         # Если значение уже является datetime
         if isinstance(value, (datetime.datetime, pd.Timestamp)):
-            if isinstance(value, pd.Timestamp):
-                return value.to_pydatetime()
             return value
         
-        # Если значение - строка, проверяем, является ли оно датой/временем
+        # Если значение - строка, пытаемся распарсить
         if isinstance(value, str):
-            # Пропускаем явно не датовые значения
-            if any(char in value for char in ['СЧ', 'ОП', 'НМ', '-', '/', '\\']):
-                return None
-            
             try:
-                # Пробуем разные форматы дат/времени
-                for fmt in ['%d.%m.%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%d.%m.%Y', '%Y-%m-%d']:
+                # Убираем лишние пробелы
+                value = value.strip()
+                # Пробуем разные форматы
+                for fmt in ['%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M', '%Y-%m-%d %H:%M:%S', 
+                        '%Y-%m-%d %H:%M', '%d.%m.%Y', '%Y-%m-%d']:
                     try:
-                        dt = datetime.datetime.strptime(value, fmt)
-                        return dt
+                        return datetime.datetime.strptime(value, fmt)
                     except ValueError:
                         continue
-                # Если ни один формат не подошел
-                return None
             except (ValueError, TypeError):
-                return None
+                pass
+        
+        # Если значение - дата, добавляем время по умолчанию
+        if isinstance(value, datetime.date):
+            return datetime.datetime.combine(value, datetime.time(0, 0, 0))
         
         return None
+
+    def _format_datetime_display(self, dt):
+        """Форматирование datetime для отображения 19.08.2025 10:57:21"""
+        if dt is None:
+            return ""
+        return dt.strftime("%d.%m.%Y %H:%M:%S")
 
     def _null_if_empty(self, value):
         """Преобразует пустые/некорректные значения в None"""

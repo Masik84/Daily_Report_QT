@@ -8,7 +8,7 @@ naming_convention = {
 }
 
 import sqlalchemy
-from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Date, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Date, Index, UniqueConstraint, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy import CheckConstraint
@@ -37,6 +37,8 @@ class Manager(Base):
     hyundai_dealers = relationship("Hyundai_Dealer", back_populates="manager")  # мн. число
     customer_plans = relationship("CustomerPlan", back_populates="manager")
     marketplace_entries = relationship("Marketplace", back_populates="manager")
+    temp_sales = relationship("temp_Sales", back_populates="manager")
+    temp_orders = relationship("temp_Orders", back_populates="manager")
 
 class STL(Base):
     __tablename__ = 'stls'
@@ -79,6 +81,8 @@ class Customer(Base):
     contracts = relationship("Contract", back_populates="customer")
     marketplace_entries = relationship("Marketplace", back_populates="customer")
     movements = relationship("Movements", back_populates="customer")
+    temp_sales = relationship("temp_Sales", back_populates="customer")
+    temp_orders = relationship("temp_Orders", back_populates="customer")
 
 class Holding(Base):
     __tablename__ = 'holdings'
@@ -117,6 +121,8 @@ class Contract(Base):
     customer = relationship("Customer", back_populates="contracts")
     manager = relationship("Manager", back_populates="contracts")
     marketplace_entries = relationship("Marketplace", back_populates="contract")
+    temp_sales = relationship("temp_Sales", back_populates="contract")
+    temp_orders = relationship("temp_Orders", back_populates="contract")
 
 class Hyundai_Dealer(Base):
     __tablename__ = 'hyundai_dealers'
@@ -206,6 +212,10 @@ class Materials(Base):
     complects_manual = relationship("Complects_manual", back_populates="material")
     write_off = relationship("WriteOff", back_populates="material")
     complects = relationship("Complects", back_populates="material")
+    temp_purchases = relationship("temp_Purchase", back_populates="material")
+    temp_sales = relationship("temp_Sales", back_populates="material")
+    temp_orders = relationship("temp_Orders", back_populates="material")
+    purchase_orders = relationship("Purchase_Order", back_populates="material")
 
 class ABC_list(Base):
     __tablename__ = 'abc_list'
@@ -246,6 +256,10 @@ class Supplier(Base):
     add_suppl_costs = relationship("AddSupplCost", back_populates="supplier")
     movements = relationship("Movements", back_populates="supplier")
     write_off = relationship("WriteOff", back_populates="supplier")
+    temp_purchases = relationship("temp_Purchase", back_populates="supplier")
+    temp_sales = relationship("temp_Sales", back_populates="supplier")
+    temp_orders = relationship("temp_Orders", back_populates="supplier")
+    purchase_orders = relationship("Purchase_Order", back_populates="supplier")
 
 class SupplScheme(Base):
     __tablename__ = 'suppl_schemes'
@@ -306,6 +320,7 @@ class AddSupplCost(Base):
 
     # Связи
     supplier = relationship("Supplier", back_populates="add_suppl_costs")
+    purchase_orders = relationship("Purchase_Order", back_populates="add_suppl_cost")
 
 class EcoFee_amount(Base):  # экосбор_ставки
     __tablename__ = 'ecofee_amount'
@@ -377,6 +392,10 @@ class DOCType(Base):
     complects_manual = relationship("Complects_manual", back_populates="doc_type")
     write_off = relationship("WriteOff", back_populates="doc_type")
     complects = relationship("Complects", back_populates="doc_type")
+    temp_purchases = relationship("temp_Purchase", back_populates="doc_type")
+    temp_sales = relationship("temp_Sales", back_populates="doc_type")
+    temp_orders = relationship("temp_Orders", back_populates="doc_type")
+    purchase_orders = relationship("Purchase_Order", back_populates="doc_type")
 
 class Year(Base):
     __tablename__ = 'years'
@@ -549,7 +568,7 @@ class Movements(Base):
     __tablename__ = 'movements'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    Date_Time = Column(Date)  # Дата_Время
+    Date_Time = Column(DateTime)  # Дата_Время
     Document = Column(String)  # Документ
     Date = Column(Date)  # Дата
     Doc_based = Column(String, nullable=True)  # ДокОсн
@@ -577,7 +596,7 @@ class Complects_manual(Base):
     __tablename__ = 'complects_manual'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    Date_Time = Column(Date)  # Дата_Время
+    Date_Time = Column(DateTime)  # Дата_Время
     Document = Column(String)  # Документ
     Date = Column(Date)  # Дата
     Stock = Column(String)  # Склад
@@ -595,7 +614,7 @@ class Complects(Base):
     __tablename__ = 'complects'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    Date_Time = Column(Date)  # Дата_Время
+    Date_Time = Column(DateTime)  # Дата_Время
     Document = Column(String)  # Документ
     Date = Column(Date)  # Дата
     Stock = Column(String)  # Склад
@@ -613,7 +632,7 @@ class WriteOff(Base):
     __tablename__ = 'write_off'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    Date_Time = Column(Date)  # Дата_Время
+    Date_Time = Column(DateTime)  # Дата_Время
     Document = Column(String)  # Документ
     Date = Column(Date)  # Дата
     Stock = Column(String)  # Склад
@@ -639,6 +658,196 @@ class WriteOff(Base):
     doc_type = relationship("DOCType", back_populates="write_off")
     material = relationship("Materials", back_populates="write_off")
     supplier = relationship("Supplier", back_populates="write_off")
+
+class temp_Purchase(Base):
+    __tablename__ = 'temp_purchase'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Document = Column(String)                                                       # Документ
+    Date = Column(Date)                                                                  # Дата
+    Status = Column(String)                                                             # Статус
+    Doc_based = Column(String, nullable=True)                               # ДокОсн
+    Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)   # Дата ДокОсн
+    Stock = Column(String)                                                              # Склад
+    Currency = Column(String)                                                         # Валюта
+    VAT = Column(String)                                                                # % НДС
+    Country = Column(String)                                                          # Страна происхождения
+    GTD = Column(String)                                                                # Номер ГТД
+    FX_rate_1C = Column(Numeric, nullable=True)                         # Курс взаиморасчетов
+    Qty = Column(Numeric)                                                             # Количество
+    Amount_1C = Column(Numeric)                                                 # Сумма 1С
+
+    # Внешние ключи
+    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_purchase_doctype'))
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_temp_purchase_supplier'), nullable=True)
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_purchase_material'))
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="temp_purchases")
+    supplier = relationship("Supplier", back_populates="temp_purchases")
+    material = relationship("Materials", back_populates="temp_purchases")
+
+class temp_Sales(Base):
+    __tablename__ = 'temp_sales'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Document = Column(String)                                                              # Документ
+    Date = Column(Date)                                                                         # Дата
+    Status = Column(String)                                                                     # Статус
+    Bill = Column(String)                                                                         # Счет
+    Bill_Date = Column(sqlalchemy.Date(), nullable=True)                      # Дата счета
+    Doc_based = Column(String)                                                              # ДокОсн
+    Date_Doc_based = Column(sqlalchemy.Date(), nullable=True)           # Дата ДокОсн
+    Stock = Column(String)                                                                      # Склад
+    Delivery_method = Column(String)                                                    # Способ доставки
+    Currency = Column(String)                                                                 # Валюта
+    FX_rate_1C = Column(Numeric, nullable=True)                                 # Курс взаиморасчетов
+    Qty = Column(Numeric)                                                                     # Количество
+    Amount_1C = Column(Numeric)                                                         # Сумма 1С
+    VAT = Column(String)                                                                        # % НДС
+    Recipient = Column(String, nullable=True)                                        # Грузополучатель
+    Recipient_code = Column(String, nullable=True)                               # Грузополучатель.Код
+    Days_for_Pay = Column(Numeric)                                                      # Кол-во дней на оплату
+    Plan_Delivery_Day = Column(sqlalchemy.Date(), nullable=True)       # ПланДатаОтгр
+    Plan_Pay_Day = Column(sqlalchemy.Date(), nullable=True)               # Плановая дата оплаты
+    Post_payment = Column(Numeric)                                                    # Постоплата%
+    Payment_term = Column(String)                                                       # Условие оплаты
+    Priority = Column(String)                                                                  # Приоритет
+    Comment = Column(String)                                                              # Регистратор.Комментарий
+    Sborka = Column(String)                                                                  # Сборка
+    Spec_Order = Column(String)                                                           # Спец поставка
+    Purchase_doc = Column(String)                                                       # Док Поставки
+    Purchase_date = Column(sqlalchemy.Date(), nullable=True)            # Дата Поставки
+    Order = Column(String)                                                                    # Order N Поставки
+    k_Movement = Column(Numeric)                                                    # к_Транспорт (перемещ), л
+    k_Storage = Column(Numeric)                                                         # к_Хранение, л
+    k_Money = Column(Numeric)                                                           # к_Ст-ть Денег, л
+    
+    # Внешние ключи
+    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_sales_doctype'))
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_temp_sales_customer'), nullable=True)      # Контрагент.Код
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_sales_material'))                                # Код
+    Contract_id = Column(String, ForeignKey('contracts.id', name='fk_temp_sales_contract'), nullable=True)          # Договор.Код
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_temp_sales_supplier'), nullable=True)          # Поставщик.Код
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_temp_sales_managers'))
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="temp_sales")
+    customer = relationship("Customer", back_populates="temp_sales")
+    material = relationship("Materials", back_populates="temp_sales")
+    contract = relationship("Contract", back_populates="temp_sales")
+    supplier = relationship("Supplier", back_populates="temp_sales")
+    manager = relationship("Manager", back_populates="temp_sales")
+
+class temp_Orders(Base):
+    __tablename__ = 'temp_orders'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Bill = Column(String)                                                               # Счет
+    Bill_Date = Column(Date)                                                         # Дата счета
+    Status = Column(String)                                                          # Статус
+    Qty = Column(Numeric)                                                           # Количество
+    Amount_1C = Column(Numeric)                                               # Сумма 1С
+    VAT = Column(String)                                                                # % НДС
+    Currency = Column(String)                                                       # Валюта
+    Recipient = Column(String, nullable=True)                               # Грузополучатель
+    Recipient_code = Column(String, nullable=True)                      # Грузополучатель.Код
+    Reserve_date = Column(sqlalchemy.Date(), nullable=True)       # Дата резерва
+    Reserve_days = Column(Integer, nullable=True)                       # Дни резерва
+    Document = Column(String)                                                     # Документ
+    Date = Column(Date)                                                                # Дата
+    Comment = Column(String)                                                        # Заказ.Комментарий
+    Days_for_Pay = Column(Numeric)                                              # Кол-во дней на оплату
+    FX_rate_1C = Column(Numeric)                                                # Курс взаиморасчетов
+    Plan_Pay_Day = Column(sqlalchemy.Date(), nullable=True)     # Плановая дата оплаты
+    Post_payment = Column(Numeric)                                          # Постоплата%
+    Priority = Column(String)                                                           # Приоритет
+    Stock = Column(String)                                                              # Склад
+    Delivery_method = Column(String)                                            # Способ доставки
+    Pay_status = Column(String)                                                     # Статус оплаты
+    Payment_term = Column(String)                                               # Условие оплаты
+    Sborka = Column(String)                                                             # Сборка
+    Spec_Order = Column(String, nullable=True)                              #  Спец поставка
+    Purchase_doc = Column(String, nullable=True)                            # Док Поставки
+    Purchase_date = Column(sqlalchemy.Date(), nullable=True)        # Дата Поставки
+    Order = Column(String)                                                              # Order N Поставки
+    k_Movement = Column(Numeric)                                                    # к_Транспорт (перемещ), л
+    k_Storage = Column(Numeric)                                                         # к_Хранение, л
+    k_Money = Column(Numeric)                                                           # к_Ст-ть Денег, л
+    
+    # Внешние ключи
+    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_orders_doctype'))
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_temp_orders_customer'))                        # Контрагент.Код
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_orders_material'))                          # Код
+    Contract_id = Column(String, ForeignKey('contracts.id', name='fk_temp_orders_contract'), nullable=True)     # Договор.Код
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_temp_orders_supplier'), nullable=True)     # Поставщик.Код
+    Manager_id = Column(Integer, ForeignKey('managers.id', name='fk_temp_orders_managers'))
+    
+    # Связи
+    doc_type = relationship("DOCType", back_populates="temp_orders")
+    customer = relationship("Customer", back_populates="temp_orders")
+    material = relationship("Materials", back_populates="temp_orders")
+    contract = relationship("Contract", back_populates="temp_orders")
+    supplier = relationship("Supplier", back_populates="temp_orders")
+    manager = relationship("Manager", back_populates="temp_orders")
+
+class Purchase_Order(Base):
+    __tablename__ = 'purchase_orders'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Status = Column(String)  # Статус
+    Date = Column(Date)  # Дата
+    Document = Column(String)  # Документ
+    Supplier1 = Column(String)  # Supplier 1
+    Supplier2 = Column(String)  # Supplier 2
+    Order = Column(String)  # Order N
+    Shipment = Column(String)  # Shipment #
+    VAT = Column(String)  # % НДС
+    Currency = Column(String)  # Валюта
+    Qty = Column(Numeric)  # Количество
+    Amount_1C = Column(Numeric)  # Сумма 1С
+    Price_1C = Column(Numeric)  # Цена 1С
+    Qty_pcs = Column(Numeric)  # Кол-во, шт
+    Qty_lt = Column(Numeric)  # Кол-во, л
+    Payment_FX = Column(Numeric)  # Курс оплаты
+    Price_pcs_Curr = Column(Numeric)  # Цена шт, у.е.
+    Price_lt_Curr = Column(Numeric)  # Цена л, у.е.
+    Price_wo_VAT_Rub = Column(Numeric)  # Цена без НДС, руб/л
+    Amount_wo_VAT_Rub = Column(Numeric)  # Сумма без НДС, руб
+    Transport_mn = Column(Numeric)  # Транспорт м.н.
+    Customs_fee = Column(Numeric)  # Тамож. Пошлина
+    Customs_docs = Column(Numeric)  # Тамож. оформление
+    Bank_fee = Column(Numeric)  # Комиссия банка
+    Agency = Column(Numeric)  # Агентские
+    Add_Services = Column(Numeric)  # Доп услуги
+    ED = Column(Numeric)  # Акциз
+    Eco_fee = Column(Numeric)  # ЭкоСбор
+    Movement_fee = Column(Numeric)  # Перемещ
+    Load_Unload = Column(Numeric)  # Погрузка/Выгрузка
+    LPC_purchase_lt = Column(Numeric)  # Себ-ть л
+    LPC_purchase_pcs = Column(Numeric)  # Себ-ть шт
+    LPC_purchase_amount = Column(Numeric)  # Себ-ть партии
+    Qty_after_spec_order = Column(Numeric)  # Кол-во после спец поставки
+    LPC_purchase_after_spec_order = Column(Numeric)  # Себ-ть партии после спец поставки
+    
+    # Внешние ключи
+    Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_purchase_orders_supplier'))  # Контрагент.Код
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_purchase_orders_material'))  # Код
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_purchase_orders_doctype'))  # Тип документа
+    AddSupplCost_id = Column(Integer, ForeignKey('add_suppl_cost.id', name='fk_purchase_orders_addsupplcost'), nullable=True)  # Связь с AddSupplCost
+    
+    # Связи
+    supplier = relationship("Supplier", back_populates="purchase_orders")
+    material = relationship("Materials", back_populates="purchase_orders")
+    doc_type = relationship("DOCType", back_populates="purchase_orders")
+    add_suppl_cost = relationship("AddSupplCost", back_populates="purchase_orders")
+
+
+    __table_args__ = (
+        Index('idx_purchase_order_unique', 'Order', 'Document', 'Date', unique=True),
+        Index('idx_purchase_order_supplier', 'Supplier_id'),
+        Index('idx_purchase_order_material', 'Material_id'),
+    )
 
 
 

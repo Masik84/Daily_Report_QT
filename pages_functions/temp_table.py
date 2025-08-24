@@ -2,22 +2,22 @@ import pandas as pd
 import numpy as np
 import os
 import datetime
-
-import xlwings as xw
-from sqlalchemy import extract
-from PySide6.QtWidgets import QScrollArea, QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget, QTextEdit
+from sqlalchemy import extract, and_
+from PySide6.QtWidgets import QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget
 from PySide6.QtCore import Qt, QDate
 from functools import lru_cache
 import traceback
+import sys
 
 from db import db
-from models import (Movements, Complects_manual, WriteOff, Complects, AddSupplCost, DOCType, Materials, Customer, Supplier, Product_Names)
-
-from config import Movement_folder, Complectation_file
-from wind.pages.moves_ui import Ui_Form
+from models import (temp_Purchase, temp_Sales, temp_Orders, Purchase_Order, DOCType, Materials, 
+        Customer, Supplier, Contract, Manager, Product_Names, Complects, Sector, Holding, Marketplace, Hyundai_Dealer)
+from config import Purchase_folder, Sales_folder, Orders_file, Reserve_file, Customer_file, Contract_file, AddCosts_File, CustDelivery_File
+from wind.pages.temp_tables_ui import Ui_Form
 from pages_functions.product import ProductsPage
+from pages_functions.customer import CustomerPage
 
-class MovesPage(QWidget):
+class TempTablesPage(QWidget):
     def __init__(self):
         super().__init__()
         self.ui = Ui_Form()
@@ -53,10 +53,12 @@ class MovesPage(QWidget):
         self.ui.line_doc_type.currentTextChanged.connect(self.on_doc_type_changed)
         self.ui.line_Year.currentTextChanged.connect(self.on_year_changed)
         self.ui.line_Mnth.currentTextChanged.connect(self.on_month_changed)
+        self.ui.line_customer.currentTextChanged.connect(self.on_customer_changed)
+        self.ui.line_customer.currentTextChanged.connect(self.on_supplier_changed)
         
-        self.ui.btn_find.clicked.connect(self.find_moves_data)
+        self.ui.btn_find.clicked.connect(self.find_temp_data)
         self.ui.btn_refresh.clicked.connect(self.refresh_data)
-    
+        
     def show_context_menu(self, position):
         """Показ контекстного меню для копирования"""
         menu = QMenu()
@@ -104,22 +106,364 @@ class MovesPage(QWidget):
             # Здесь ваш код, который использует self.report_start_date
         else:
             print("Дата еще не выбрана.")
-    
-    def refresh_all_comboboxes(self):
-        """Обновление всех выпадающих списков"""
-        self._fill_combobox(self.ui.line_table, ["-", "Движения", "Комплектации", "Комплектации Ручные", "Списания"])
-        self.fill_doc_type_list()
-        self.fill_year_list()
-        self.fill_month_list()
-        self.fill_customer_list()
-        self.fill_product_list()
-    
+
+    def _fill_combobox(self, combobox, items):
+        """Заполнение выпадающего списка элементами с обязательным первым элементом '-'"""
+        current_text = combobox.currentText()
+        
+        # Всегда добавляем "-" первым элементом
+        if "-" not in items:
+            items = ["-"] + items
+        else:
+            # Если "-" уже есть в списке, перемещаем его на первое место
+            items = ["-"] + [item for item in items if item != "-"]
+        
+        combobox.clear()
+        combobox.addItems(items)
+        
+        # Пытаемся восстановить предыдущее значение, если оно есть в новом списке
+        if current_text in items:
+            combobox.setCurrentText(current_text)
+        else:
+            combobox.setCurrentIndex(0)  # Устанавливаем на "-"
+        
+    def fill_year_list(self):
+        """Заполнение списка годов из выбранной временной таблицы"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_Year, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_Year, [])
+                return
+                
+            # Получаем уникальные годы из временной таблицы
+            years = db.query(extract('year', model.Date)).distinct().all()
+            years_list = sorted([str(int(y[0])) for y in years if y[0] is not None])
+            
+            self._fill_combobox(self.ui.line_Year, years_list)
+        except Exception as e:
+            print(f"Ошибка при загрузке списка годов: {str(e)}")
+            self._fill_combobox(self.ui.line_Year, [])
+
+    def fill_month_list(self):
+        """Заполнение списка месяцев из выбранной временной таблицы"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_Mnth, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_Mnth, [])
+                return
+                
+            # Получаем уникальные месяцы из временной таблицы
+            months = db.query(extract('month', model.Date)).distinct().all()
+            months_list = sorted([str(int(m[0])) for m in months if m[0] is not None])
+            
+            self._fill_combobox(self.ui.line_Mnth, months_list)
+        except Exception as e:
+            print(f"Ошибка при загрузке списка месяцев: {str(e)}")
+            self._fill_combobox(self.ui.line_Mnth, [])
+
+    def fill_doc_type_list(self):
+        """Заполнение списка типов документов из выбранной временной таблицы"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_doc_type, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_doc_type, [])
+                return
+                
+            # Получаем уникальные типы документов через связь с doc_type
+            query = db.query(DOCType.Doc_type).join(model, model.Doc_type_id == DOCType.id)
+            doc_types = query.distinct().all()
+            doc_types_list = sorted([d[0] for d in doc_types if d[0] is not None])
+            
+            self._fill_combobox(self.ui.line_doc_type, doc_types_list)
+        except Exception as e:
+            print(f"Ошибка при загрузке списка типов документов: {str(e)}")
+            self._fill_combobox(self.ui.line_doc_type, [])
+
+    def fill_product_list(self):
+        """Заполнение списка продуктов из выбранной временной таблицы - только названия"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_product, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_product, [])
+                return
+                
+            # Получаем названия продуктов через связь с Materials и Product_Names
+            # ИСПРАВЛЕНО: используем правильные имена полей для каждой модели
+            if model == temp_Purchase:
+                query = db.query(Product_Names.Product_name).join(
+                    Materials, Materials.Product_Names_id == Product_Names.id
+                ).join(
+                    model, model.Material_id == Materials.Code
+                )
+            elif model == temp_Sales:
+                query = db.query(Product_Names.Product_name).join(
+                    Materials, Materials.Product_Names_id == Product_Names.id
+                ).join(
+                    model, model.Material_id == Materials.Code
+                )
+            elif model == temp_Orders:
+                query = db.query(Product_Names.Product_name).join(
+                    Materials, Materials.Product_Names_id == Product_Names.id
+                ).join(
+                    model, model.Material_id == Materials.Code
+                )
+            elif model == Purchase_Order:
+                query = db.query(Product_Names.Product_name).join(
+                    Materials, Materials.Product_Names_id == Product_Names.id
+                ).join(
+                    model, model.Material_id == Materials.Code
+                )
+            else:
+                self._fill_combobox(self.ui.line_product, [])
+                return
+            
+            # Применяем фильтры по дате, если выбраны
+            year = self.ui.line_Year.currentText()
+            month = self.ui.line_Mnth.currentText()
+            
+            if year != "-" and year != "":
+                try:
+                    year_int = int(year)
+                    query = query.filter(extract('year', model.Date) == year_int)
+                except ValueError:
+                    pass
+            
+            if month != "-" and month != "":
+                try:
+                    month_int = int(month)
+                    query = query.filter(extract('month', model.Date) == month_int)
+                except ValueError:
+                    pass
+            
+            # Применяем фильтр по типу документа, если выбран
+            doc_type = self.ui.line_doc_type.currentText()
+            if doc_type != "-" and doc_type != "":
+                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                    DOCType.Doc_type == doc_type
+                )
+            
+            # Для клиентов/поставщиков применяем дополнительный фильтр
+            if model in [temp_Sales, temp_Orders]:
+                customer = self.ui.line_customer.currentText()
+                if customer != "-" and customer != "":
+                    # ИСПРАВЛЕНО: правильные имена полей для связей
+                    if model == temp_Sales:
+                        query = query.join(model.customer).filter(Customer.Customer_name == customer)
+                    elif model == temp_Orders:
+                        query = query.join(model.customer).filter(Customer.Customer_name == customer)
+            
+            elif model in [temp_Purchase, Purchase_Order]:
+                supplier = self.ui.line_customer.currentText()
+                if supplier != "-" and supplier != "":
+                    # ИСПРАВЛЕНО: правильные имена полей для связей
+                    if model == temp_Purchase:
+                        query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier)
+                    elif model == Purchase_Order:
+                        query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier)
+            
+            products = query.distinct().all()
+            products_list = sorted([p.Product_name for p in products if p.Product_name])
+            
+            self._fill_combobox(self.ui.line_product, products_list)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка при загрузке списка продуктов: {str(e)}\n{traceback.format_exc()}")
+            self._fill_combobox(self.ui.line_product, [])
+
+    def fill_customer_list(self):
+        """Заполнение списка клиентов из временной таблицы Продажи/Заказы - только названия"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            # Только для моделей с клиентами
+            if model not in [temp_Sales, temp_Orders]:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            # Получаем названия клиентов из временной таблицы
+            # ИСПРАВЛЕНО: правильные имена полей для связей
+            if model == temp_Sales:
+                query = db.query(Customer.Customer_name).join(
+                    model, model.Customer_id == Customer.id
+                )
+            elif model == temp_Orders:
+                query = db.query(Customer.Customer_name).join(
+                    model, model.Customer_id == Customer.id
+                )
+            else:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+            
+            # Применяем фильтры по дате, если выбраны
+            year = self.ui.line_Year.currentText()
+            month = self.ui.line_Mnth.currentText()
+            
+            if year != "-" and year != "":
+                try:
+                    year_int = int(year)
+                    query = query.filter(extract('year', model.Date) == year_int)
+                except ValueError:
+                    pass
+            
+            if month != "-" and month != "":
+                try:
+                    month_int = int(month)
+                    query = query.filter(extract('month', model.Date) == month_int)
+                except ValueError:
+                    pass
+            
+            # Применяем фильтр по типу документа, если выбран
+            doc_type = self.ui.line_doc_type.currentText()
+            if doc_type != "-" and doc_type != "":
+                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                    DOCType.Doc_type == doc_type
+                )
+            
+            # Применяем фильтр по продукту, если выбран
+            product = self.ui.line_product.currentText()
+            if product != "-" and product != "":
+                # ИСПРАВЛЕНО: правильные имена полей для связей
+                if model == temp_Sales:
+                    query = query.join(Materials, model.Material_id == Materials.Code).join(
+                        Product_Names, Materials.Product_Names_id == Product_Names.id
+                    ).filter(Product_Names.Product_name == product)
+                elif model == temp_Orders:
+                    query = query.join(Materials, model.Material_id == Materials.Code).join(
+                        Product_Names, Materials.Product_Names_id == Product_Names.id
+                    ).filter(Product_Names.Product_name == product)
+            
+            customers = query.distinct().all()
+            customers_list = sorted([c.Customer_name for c in customers if c.Customer_name])
+            
+            self._fill_combobox(self.ui.line_customer, customers_list)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка при загрузке списка клиентов: {str(e)}\n{traceback.format_exc()}")
+            self._fill_combobox(self.ui.line_customer, [])
+
+    def fill_supplier_list(self):
+        """Заполнение списка поставщиков из временной таблицы Закупки/Заказы поставщиков - только названия"""
+        try:
+            table = self.ui.line_table.currentText()
+            if table == "-":
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            model = self._get_model_for_table(table)
+            if not model:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            # Только для моделей с поставщиками
+            if model not in [temp_Purchase, Purchase_Order]:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+                
+            # Получаем названия поставщиков из временной таблицы
+            # ИСПРАВЛЕНО: правильные имена полей для связей
+            if model == temp_Purchase:
+                query = db.query(Supplier.Supplier_Name).join(
+                    model, model.Supplier_id == Supplier.id
+                )
+            elif model == Purchase_Order:
+                query = db.query(Supplier.Supplier_Name).join(
+                    model, model.Supplier_id == Supplier.id
+                )
+            else:
+                self._fill_combobox(self.ui.line_customer, [])
+                return
+            
+            # Применяем фильтры по дате, если выбраны
+            year = self.ui.line_Year.currentText()
+            month = self.ui.line_Mnth.currentText()
+            
+            if year != "-" and year != "":
+                try:
+                    year_int = int(year)
+                    query = query.filter(extract('year', model.Date) == year_int)
+                except ValueError:
+                    pass
+            
+            if month != "-" and month != "":
+                try:
+                    month_int = int(month)
+                    query = query.filter(extract('month', model.Date) == month_int)
+                except ValueError:
+                    pass
+            
+            # Применяем фильтр по типу документа, если выбран
+            doc_type = self.ui.line_doc_type.currentText()
+            if doc_type != "-" and doc_type != "":
+                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                    DOCType.Doc_type == doc_type
+                )
+            
+            # Применяем фильтр по продукту, если выбран
+            product = self.ui.line_product.currentText()
+            if product != "-" and product != "":
+                # ИСПРАВЛЕНО: правильные имена полей для связей
+                if model == temp_Purchase:
+                    query = query.join(Materials, model.Material_id == Materials.Code).join(
+                        Product_Names, Materials.Product_Names_id == Product_Names.id
+                    ).filter(Product_Names.Product_name == product)
+                elif model == Purchase_Order:
+                    query = query.join(Materials, model.Material_id == Materials.Code).join(
+                        Product_Names, Materials.Product_Names_id == Product_Names.id
+                    ).filter(Product_Names.Product_name == product)
+            
+            suppliers = query.distinct().all()
+            suppliers_list = sorted([s.Supplier_Name for s in suppliers if s.Supplier_Name])
+            
+            self._fill_combobox(self.ui.line_customer, suppliers_list)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка при загрузке списка поставщиков: {str(e)}\n{traceback.format_exc()}")
+            self._fill_combobox(self.ui.line_customer, [])
+
     def on_table_changed(self):
         """Обработчик изменения таблицы"""
         self.fill_doc_type_list()
         self.fill_year_list()
         self.fill_month_list()
-        self.fill_customer_list()
+        
+        # В зависимости от выбранной таблицы заполняем соответствующий список
+        table = self.ui.line_table.currentText()
+        model = self._get_model_for_table(table)
+        
+        if model in [temp_Sales, temp_Orders]:
+            self.fill_customer_list()
+            
+        elif model in [temp_Purchase, Purchase_Order]:
+            self.fill_supplier_list()
+        
         self.fill_product_list()
     
     def on_doc_type_changed(self):
@@ -127,303 +471,49 @@ class MovesPage(QWidget):
         self.fill_year_list()
         self.fill_month_list()
         self.fill_customer_list()
+        self.fill_supplier_list()
         self.fill_product_list()
-    
+
     def on_year_changed(self):
         """Обработчик изменения года"""
         self.fill_month_list()
         self.fill_customer_list()
+        self.fill_supplier_list()
         self.fill_product_list()
-    
+
     def on_month_changed(self):
         """Обработчик изменения месяца"""
         self.fill_customer_list()
+        self.fill_supplier_list()
         self.fill_product_list()
-    
-    def _fill_combobox(self, combobox, items):
-        """Универсальное заполнение комбобокса"""
-        current_text = combobox.currentText()
-        combobox.clear()
+
+    def on_customer_changed(self):
+        """Обработчик изменения клиента"""
+        self.fill_product_list()
+
+    def on_supplier_changed(self):
+        """Обработчик изменения поставщика"""
+        self.fill_product_list()
+
+    def refresh_all_comboboxes(self):
+        """Обновление всех выпадающих списков"""
+        models = {
+            "Закупки": temp_Purchase,
+            "Продажи": temp_Sales,
+            "Заказы клиентов": temp_Orders,
+            "Заказы поставщиков": Purchase_Order
+        }
+        self._fill_combobox(self.ui.line_table, list(models.keys()))
         
-        filtered_items = [str(item) for item in items if item is not None and str(item).strip()]
-        unique_items = sorted(list(set(filtered_items)))
-        
-        if not unique_items or unique_items[0] != "-":
-            unique_items = ["-"] + [item for item in unique_items if item != "-"]
-        
-        combobox.addItems(unique_items)
-        
-        if current_text in unique_items:
-            combobox.setCurrentText(current_text)
-        else:
-            combobox.setCurrentText("-")
+        self.fill_doc_type_list()
+        self.fill_year_list()
+        self.fill_month_list()
+        self.fill_customer_list()
+        self.fill_supplier_list()
+        self.fill_product_list()
 
-    def fill_doc_type_list(self):
-        """Заполнение списка типов документов"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_doc_type, ["-"])
-                return
-                
-            # Определяем модель в зависимости от выбранной таблицы
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_doc_type, ["-"])
-                return
-                
-            query = db.query(DOCType.Doc_type).join(model.doc_type)
-            doc_types = query.distinct()
-            doc_types_list = sorted([d[0] for d in doc_types if d[0] is not None])
-            
-            self._fill_combobox(self.ui.line_doc_type, ["-"] + doc_types_list)
-        except Exception as e:
-            print(f"Ошибка при загрузке списка типов документов: {str(e)}")
-            self._fill_combobox(self.ui.line_doc_type, ["-"])
-
-    def fill_year_list(self):
-        """Заполнение списка годов"""
-        try:
-            table = self.ui.line_table.currentText()
-            doc_type = self.ui.line_doc_type.currentText()
-            
-            if table == "-":
-                self._fill_combobox(self.ui.line_Year, ["-"])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_Year, ["-"])
-                return
-                
-            query = db.query(extract('year', model.Date).label('year'))
-            
-            if doc_type != "-":
-                query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-                
-            years = query.distinct()
-            years_list = sorted(list({y[0] for y in years if y[0] is not None}), reverse=True)
-            years_list = [str(y) for y in years_list]
-            
-            self._fill_combobox(self.ui.line_Year, ["-"] + years_list)
-        except Exception as e:
-            print(f"Ошибка при загрузке списка годов: {str(e)}")
-            self._fill_combobox(self.ui.line_Year, ["-"])
-
-    def fill_month_list(self):
-        """Заполнение списка месяцев с защитой от пустых значений"""
-        try:
-            table = self.ui.line_table.currentText()
-            doc_type = self.ui.line_doc_type.currentText()
-            year = self.ui.line_Year.currentText()
-            
-            # Если не выбрана таблица или год, очищаем список месяцев
-            if table == "-" or year == "-":
-                self._fill_combobox(self.ui.line_Mnth, ["-"])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_Mnth, ["-"])
-                return
-                
-            # Проверяем, что год - валидное число
-            try:
-                year_int = int(year) if year and year != "-" else None
-            except ValueError:
-                year_int = None
-                
-            if not year_int:
-                self._fill_combobox(self.ui.line_Mnth, ["-"])
-                return
-                
-            # Создаем базовый запрос
-            query = db.query(
-                extract('month', model.Date).label('month')
-            ).filter(
-                extract('year', model.Date) == year_int
-            )
-                
-            # Добавляем фильтр по типу документа, если он выбран
-            if doc_type and doc_type != "-":
-                query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-                
-            # Получаем уникальные месяцы
-            months = query.distinct().all()
-            months_list = sorted(
-                [str(m[0]) for m in months if m[0] is not None and str(m[0]).strip()]
-            )
-            
-            # Заполняем комбобокс
-            self._fill_combobox(self.ui.line_Mnth, ["-"] + months_list)
-            
-        except Exception as e:
-            print(f"Ошибка при загрузке списка месяцев: {str(e)}")
-            traceback.print_exc()
-            self._fill_combobox(self.ui.line_Mnth, ["-"])
-
-    def fill_customer_list(self):
-        """Заполнение списка контрагентов с полной защитой от ошибок"""
-        try:
-            table = self.ui.line_table.currentText()
-            doc_type = self.ui.line_doc_type.currentText()
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
-
-            # Если не выбрана таблица, очищаем список
-            if table == "-":
-                self._fill_combobox(self.ui.line_customer, ["-"])
-                return
-
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_customer, ["-"])
-                return
-
-            # Определяем тип запроса в зависимости от модели и типа документа
-            if model == Movements:
-                if doc_type in ["1.0. Поступление", "1.0. Поступление (перераб)", 
-                            "1.1. Поступление (корр-ка)", "7.0. Передача в переработку"]:
-                    # Запрос для поставщиков
-                    query = db.query(
-                        Supplier.id.label('code'),
-                        Supplier.Supplier_Name.label('name')
-                    ).join(model.supplier)
-                else:
-                    # Запрос для клиентов
-                    query = db.query(
-                        Customer.id.label('code'),
-                        Customer.Customer_name.label('name')
-                    ).join(model.customer)
-            elif model == WriteOff:
-                # Для списаний всегда используем поставщиков
-                query = db.query(
-                    Supplier.id.label('code'),
-                    Supplier.Supplier_Name.label('name')
-                ).join(model.supplier)
-            else:
-                self._fill_combobox(self.ui.line_customer, ["-"])
-                return
-
-            # Применяем фильтры
-            if self._is_valid_value(doc_type):
-                query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-
-            if self._is_valid_value(year):
-                try:
-                    year_int = int(year)
-                    query = query.filter(extract('year', model.Date) == year_int)
-                except ValueError:
-                    pass
-
-            if self._is_valid_value(month):
-                try:
-                    month_int = int(month)
-                    query = query.filter(extract('month', model.Date) == month_int)
-                except ValueError:
-                    pass
-
-            # Получаем и обрабатываем результаты
-            customers = query.distinct().all()
-            customers_list = sorted([f"{c.code} - {c.name}" for c in customers 
-                                if c.code is not None and c.name is not None])
-
-            # Заполняем комбобокс
-            self._fill_combobox(self.ui.line_customer, ["-"] + customers_list)
-
-        except Exception as e:
-            print(f"Ошибка при загрузке списка контрагентов: {str(e)}")
-            traceback.print_exc()
-            self._fill_combobox(self.ui.line_customer, ["-"])
-
-    def fill_product_list(self):
-        """Заполнение списка продуктов с полной защитой от ошибок"""
-        try:
-            # Получаем текущие значения из интерфейса
-            table = self.ui.line_table.currentText()
-            doc_type = self.ui.line_doc_type.currentText()
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
-            customer = self.ui.line_customer.currentText()
-
-            # Если не выбрана таблица, очищаем список
-            if table == "-":
-                self._fill_combobox(self.ui.line_product, ["-"])
-                return
-
-            # Получаем модель для выбранной таблицы
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_product, ["-"])
-                return
-
-            # Создаем базовый запрос
-            query = db.query(Product_Names.Product_name).join(Materials, Product_Names.materials)
-
-            # Обрабатываем разные типы моделей
-            if model == Movements:
-                query = query.join(model, Materials.movements)
-                
-                # Фильтр по типу документа
-                if self._is_valid_value(doc_type):
-                    query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-                    
-                    # Определяем тип контрагента (Supplier или Customer)
-                    if doc_type in ["1.0. Поступление", "1.0. Поступление (перераб)", 
-                                "1.1. Поступление (корр-ка)", "7.0. Передача в переработку"]:
-                        if self._is_valid_value(customer):
-                            supplier_name = self._extract_name(customer)
-                            query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier_name)
-                    else:
-                        if self._is_valid_value(customer):
-                            customer_name = self._extract_name(customer)
-                            query = query.join(model.customer).filter(Customer.Customer_name == customer_name)
-
-            elif model == WriteOff:
-                query = query.join(model, Materials.write_off)
-                
-                if self._is_valid_value(doc_type):
-                    query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-                    
-                if self._is_valid_value(customer):
-                    supplier_name = self._extract_name(customer)
-                    query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier_name)
-
-            elif model == Complects_manual:
-                query = query.join(model, Materials.complects_manual)
-                
-                if self._is_valid_value(doc_type):
-                    query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
-
-            # Применяем фильтры по датам
-            if self._is_valid_value(year):
-                try:
-                    year_int = int(year)
-                    query = query.filter(extract('year', model.Date) == year_int)
-                except ValueError:
-                    pass
-
-            if self._is_valid_value(month):
-                try:
-                    month_int = int(month)
-                    query = query.filter(extract('month', model.Date) == month_int)
-                except ValueError:
-                    pass
-
-            # Получаем и обрабатываем результаты
-            products = query.distinct().all()
-            products_list = sorted([str(p[0]) for p in products if p[0] is not None and str(p[0]).strip()])
-
-            # Заполняем комбобокс
-            self._fill_combobox(self.ui.line_product, ["-"] + products_list)
-
-        except Exception as e:
-            print(f"Ошибка при загрузке списка продуктов: {str(e)}")
-            traceback.print_exc()
-            self._fill_combobox(self.ui.line_product, ["-"])
-
-    def find_moves_data(self):
-        """Поиск данных по заданным критериям"""
+    def find_temp_data(self):
+        """Поиск данных по заданным критериям с улучшенной обработкой"""
         self.table.clearContents()
         self.table.setRowCount(0)
         
@@ -454,53 +544,53 @@ class MovesPage(QWidget):
             # Преобразуем результат в DataFrame
             data = []
             for row in result:
-                row_data = {
-                    "Документ": row.Document,
-                    "Дата": row.Date.strftime("%d.%m.%Y") if row.Date else "",
-                    "Тип документа": row.Doc_type,
-                    "Код": row.Code,
-                    "Артикул": row.Article,
-                    "Продукт + упаковка": row.Product_name,
-                    "Вид упаковки": row.Package_type,
-                    "Единица измерения": row.UoM if hasattr(row, 'UoM') else "",
-                    "Склад": row.Stock,
-                    "Кол-во, шт": self._calculate_pcs(row),
-                    "Кол-во, л": self._calculate_liters(row),
-                    "Контрагент.Код": self._get_counterparty_code(row, model),
-                    "Контрагент": self._get_counterparty_name(row, model) }
+                row_data = {}
                 
-                # Добавляем специфичные поля для разных таблиц
-                if model == Movements:
-                    row_data.update({
-                        "ДокОсн": row.Doc_based,
-                        "Дата ДокОсн": row.Date_Doc_based.strftime("%d.%m.%Y") if row.Date_Doc_based else "",
-                        "Грузополучатель.Код": row.Recipient_code,
-                        "Грузополучатель": row.Recipient,
-                        "Счет": row.Bill,
-                        "Дата счета": row.Bill_date.strftime("%d.%m.%Y") if row.Bill_date else ""})
-                elif model == WriteOff:
-                    row_data.update({
-                        "Отчет": row.Reporting,
-                        "ДокОсн": row.Doc_based,
-                        "Дата ДокОсн": row.Date_Doc_based.strftime("%d.%m.%Y") if row.Date_Doc_based else "",
-                        "Order N": row.Order,
-                        "Shipment #": row.Shipment,
-                        "Вход. док-т": row.Suppl_Inv_N,
-                        "Счет": row.Bill,
-                        "Дата счета": row.Bill_date.strftime("%d.%m.%Y") if row.Bill_date else "",
-                        "Комментарий": row.Comment})
-                elif model in [Complects, Complects_manual]:
-                    row_data.update({"Дата_Время": row.Date_Time.strftime("%d.%m.%Y %H:%M:%S") if hasattr(row, 'Date_Time') and row.Date_Time else ""})
+                # Базовые поля модели
+                for column in model.__table__.columns:
+                    value = getattr(row, column.name)
+                    if isinstance(value, datetime.date):
+                        value = value.strftime("%d.%m.%Y") if value else ""
+                    elif isinstance(value, float):
+                        value = round(value, 2)
+                    row_data[column.name] = value
+                
+                # Добавляем связанные данные
+                if hasattr(row, 'material') and row.material:
+                    row_data['Код'] = row.material.Code
+                    row_data['Артикул'] = row.material.Article
+                    row_data['Продукт + упаковка'] = row.material.product_name.Product_name if row.material.product_name else ""
+                    row_data['Package_Volume'] = row.material.Package_Volume if row.material.Package_Volume else 0
+                
+                if hasattr(row, 'customer') and row.customer:
+                    row_data['Контрагент.Код'] = row.customer.id
+                    row_data['Контрагент'] = row.customer.Customer_name
+                
+                if hasattr(row, 'supplier') and row.supplier:
+                    row_data['Поставщик.Код'] = row.supplier.id
+                    row_data['Поставщик'] = row.supplier.Supplier_Name
+                
+                if hasattr(row, 'doc_type') and row.doc_type:
+                    row_data['Тип документа'] = row.doc_type.Doc_type
+                
+                # Вычисляем Кол-во, шт и Кол-во, л если нужно
+                if 'Qty' in row_data and 'Package_Volume' in row_data:
+                    row_data['Кол-во, шт'] = row_data['Qty']
+                    row_data['Кол-во, л'] = row_data['Qty'] * row_data['Package_Volume']
                 
                 data.append(row_data)
             
             df = pd.DataFrame(data)
             
+            if df.empty:
+                self.show_message("Данные не найдены")
+                return
+            
             # Отображаем данные в таблице
             self._display_data(df)
             
             # Обновляем сводную информацию
-            self._update_summary(df)
+            self._update_summary(df, model)
             
         except Exception as e:
             self.show_error_message(f"Ошибка при поиске данных: {str(e)}")
@@ -508,241 +598,182 @@ class MovesPage(QWidget):
 
     def _build_base_query(self, model):
         """Создает базовый запрос в зависимости от модели"""
-        if model == Movements:
-            return db.query(
-                Movements.Document,
-                Movements.Date,
-                DOCType.Doc_type,
-                Materials.Code,
-                Materials.Article,
-                Product_Names.Product_name,
-                Materials.Package_type,
-                Materials.UoM,
-                Materials.Package_Volume,
-                Materials.Items_per_Set,
-                Movements.Stock,
-                Movements.Qty,
-                Movements.Doc_based,
-                Movements.Date_Doc_based,
-                Movements.Recipient_code,
-                Movements.Recipient,
-                Movements.Bill,
-                Movements.Bill_date,
-                Customer.id.label('Customer_id'),
-                Customer.Customer_name.label('Customer_name'),
-                Supplier.id.label('Supplier_id'),
-                Supplier.Supplier_Name.label('Supplier_name')
-            ).join(Movements.doc_type
-            ).join(Movements.material
-            ).join(Materials.product_name
-            ).outerjoin(Movements.customer
-            ).outerjoin(Movements.supplier)
+        # Базовый запрос с основными полями
+        query = db.query(model)
         
-        elif model == WriteOff:
-            return db.query(
-                WriteOff.Document,
-                WriteOff.Date,
-                DOCType.Doc_type,
-                Materials.Code,
-                Materials.Article,
-                Product_Names.Product_name,
-                Materials.Package_type,
-                Materials.UoM,
-                Materials.Package_Volume,
-                Materials.Items_per_Set,
-                WriteOff.Stock,
-                WriteOff.Qty,
-                WriteOff.Reporting,
-                WriteOff.Doc_based,
-                WriteOff.Date_Doc_based,
-                WriteOff.Order,
-                WriteOff.Shipment,
-                WriteOff.Suppl_Inv_N,
-                WriteOff.Bill,
-                WriteOff.Bill_date,
-                WriteOff.Comment,
-                Supplier.id.label('Supplier_id'),
-                Supplier.Supplier_Name.label('Supplier_name')
-            ).join(WriteOff.doc_type
-            ).join(WriteOff.material
-            ).join(Materials.product_name
-            ).join(WriteOff.supplier)
-        
-        elif model == Complects:
-            return db.query(
-                Complects.Document,
-                Complects.Date,
-                DOCType.Doc_type,
-                Materials.Code,
-                Materials.Article,
-                Product_Names.Product_name,
-                Materials.Package_type,
-                Materials.UoM,
-                Materials.Package_Volume,
-                Materials.Items_per_Set,
-                Complects.Stock,
-                Complects.Qty,
-                Complects.Date_Time
-            ).join(Complects.doc_type
-            ).join(Complects.material
-            ).join(Materials.product_name)
-        
-        elif model == Complects_manual:
-            return db.query(
-                Complects_manual.Document,
-                Complects_manual.Date,
-                DOCType.Doc_type,
-                Materials.Code,
-                Materials.Article,
-                Product_Names.Product_name,
-                Materials.Package_type,
-                Materials.UoM,
-                Materials.Package_Volume,
-                Materials.Items_per_Set,
-                Complects_manual.Stock,
-                Complects_manual.Qty,
-                Complects_manual.Date_Time
-            ).join(Complects_manual.doc_type
-            ).join(Complects_manual.material
-            ).join(Materials.product_name)
-
-    def _apply_filters(self, query, model):
-        """Применяет фильтры к запросу с полной поддержкой всех моделей"""
-        doc_type = self.ui.line_doc_type.currentText()
-        year = self.ui.line_Year.currentText()
-        month = self.ui.line_Mnth.currentText()
-        customer = self.ui.line_customer.currentText()
-        cust_id = self.ui.line_cust_id.text()
-        article = self.ui.line_article.text()
-        product = self.ui.line_product.currentText()
-        
-        # Общие фильтры для всех моделей
-        if doc_type != "-":
-            query = query.filter(DOCType.Doc_type == doc_type)
-        
-        if year != "-":
-            query = query.filter(extract('year', model.Date) == int(year))
-        
-        if month != "-":
-            query = query.filter(extract('month', model.Date) == int(month))
-        
-        if article:
-            query = query.filter(Materials.Article.like(f"%{article}%"))
-        
-        if product != "-":
-            query = query.filter(Product_Names.Product_name == product)
-        
-        # Специфичные фильтры для Movements
-        if model == Movements:
-            if customer != "-":
-                # Определяем, использовать Supplier или Customer по типу документа
-                supplier_doc_types = [
-                    "1.0. Поступление",
-                    "1.0. Поступление (перераб)",
-                    "1.1. Поступление (корр-ка)",
-                    "7.0. Передача в переработку"
-                ]
-                
-                current_doc_type = self.ui.line_doc_type.currentText()
-                if current_doc_type in supplier_doc_types:
-                    query = query.filter(Supplier.Supplier_Name == customer)
-                else:
-                    query = query.filter(Customer.Customer_name == customer)
-            
-            if cust_id:
-                query = query.filter(
-                    (Customer.id.like(f"%{cust_id}%")) | 
-                    (Supplier.id.like(f"%{cust_id}%")))
-        
-        # Специфичные фильтры для WriteOff
-        elif model == WriteOff:
-            if customer != "-":
-                query = query.filter(Supplier.Supplier_Name == customer)
-            
-            if cust_id:
-                query = query.filter(Supplier.id.like(f"%{cust_id}%"))
+        # Добавляем joins для связанных данных в зависимости от модели
+        if model == temp_Purchase:
+            query = query.join(model.material).join(model.supplier).join(model.doc_type)
+        elif model == temp_Sales:
+            query = query.join(model.material).join(model.customer).join(model.doc_type)
+        elif model == temp_Orders:
+            query = query.join(model.material).join(model.customer).join(model.doc_type)
+        elif model == Purchase_Order:
+            query = query.join(model.material).join(model.supplier).join(model.doc_type)
         
         return query
 
-    def _calculate_pcs(self, row):
-        """Рассчитывает количество в штуках с защитой от ошибок"""
-        try:
-            # Проверяем, является ли row словарем или объектом Row
-            if isinstance(row, dict):
-                package_type = row.get('Package_type', row.get('Вид упаковки'))
-                uom = row.get('UoM', row.get('Единица измерения'))
-                package_volume = float(row.get('Package_Volume', row.get('Упаковка', 0)))
-                items_per_set = float(row.get('Items_per_Set', row.get('Кол-во в упак', 1)))
-                qty = float(row.get('Qty', row.get('Количество', 0)))
-            else:
-                # Для объектов Row/SQLAlchemy
-                package_type = getattr(row, 'Package_type', getattr(row, 'Вид упаковки', None))
-                uom = getattr(row, 'UoM', getattr(row, 'Единица измерения', None))
-                package_volume = float(getattr(row, 'Package_Volume', getattr(row, 'Упаковка', 0)))
-                items_per_set = float(getattr(row, 'Items_per_Set', getattr(row, 'Кол-во в упак', 1)))
-                qty = float(getattr(row, 'Qty', getattr(row, 'Количество', 0)))
+    def _apply_filters(self, query, model):
+        """Применяет фильтры к запросу с учетом типа модели"""
+        # Фильтр по году
+        year = self.ui.line_Year.currentText()
+        if year != "-":
+            try:
+                year_int = int(year)
+                query = query.filter(extract('year', model.Date) == year_int)
+            except ValueError:
+                pass
+        
+        # Фильтр по месяцу
+        month = self.ui.line_Mnth.currentText()
+        if month != "-":
+            try:
+                month_int = int(month)
+                query = query.filter(extract('month', model.Date) == month_int)
+            except ValueError:
+                pass
+        
+        # Фильтр по типу документа
+        doc_type = self.ui.line_doc_type.currentText()
+        if doc_type != "-":
+            query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
+        
+        # Фильтр по контрагенту (клиент или поставщик в зависимости от модели)
+        if model in [temp_Sales, temp_Orders]:
+            # Для моделей с клиентами
+            customer = self.ui.line_customer.currentText()
+            if customer != "-" and hasattr(model, 'customer'):
+                customer_id = customer.split(" - ")[0]
+                query = query.join(model.customer).filter(Customer.id == customer_id)
+        
+        elif model in [temp_Purchase, Purchase_Order]:
+            # Для моделей с поставщиками
+            supplier = self.ui.line_customer.currentText()
+            if supplier != "-" and hasattr(model, 'supplier'):
+                supplier_id = supplier.split(" - ")[0]
+                query = query.join(model.supplier).filter(Supplier.id == supplier_id)
+        
+        # Фильтр по продукту
+        product = self.ui.line_product.currentText()
+        if product != "-":
+            product_code = product.split(" - ")[0]
+            query = query.join(model.material).filter(Materials.Code == product_code)
+        
+        return query
 
-            if not package_type or not qty:
-                return 0.0
-
-            if package_type == "комплект":
-                return qty * items_per_set
-            elif uom == "шт":
-                return qty
-            elif uom == "т":
-                return qty * 1000 / package_volume if package_volume != 0 else 0.0
-            else:
-                return qty / package_volume if package_volume != 0 else 0.0
-
-        except Exception as e:
-            print(f"Ошибка расчета количества в штуках: {str(e)}")
-            return 0.0
-
-    def _calculate_liters(self, row):
-        """Рассчитывает количество в литрах с защитой от ошибок"""
-        try:
-            # Получаем количество в штуках
-            pcs = self._calculate_pcs(row)
+    def _update_summary(self, df, model):
+        """Обновление сводной информации с учетом label_qty_pcs и label_Volume"""
+        if df.empty:
+            volume_liters = qty_pcs = amount = 0
+        else:
+            # Определяем колонки для суммирования в зависимости от модели
+            amount_col = 'Amount_1C' if 'Amount_1C' in df.columns else df.columns[0]
+            amount = df[amount_col].sum() if amount_col in df.columns else 0
             
-            # Получаем объем упаковки
-            if isinstance(row, dict):
-                package_volume = float(row.get('Package_Volume', row.get('Упаковка', 0)))
+            # Для количества в штуках и литрах используем специальные колонки или вычисления
+            if 'Кол-во, шт' in df.columns:
+                qty_pcs = df['Кол-во, шт'].sum()
+            elif 'Qty_pcs' in df.columns:
+                qty_pcs = df['Qty_pcs'].sum()
+            elif 'Qty' in df.columns and hasattr(model, 'material'):
+                # Если нет специальной колонки, пытаемся вычислить из Qty
+                qty_pcs = df['Qty'].sum()
             else:
-                package_volume = float(getattr(row, 'Package_Volume', getattr(row, 'Упаковка', 0)))
+                qty_pcs = 0
+            
+            if 'Кол-во, л' in df.columns:
+                volume_liters = df['Кол-во, л'].sum()
+            elif 'Qty_lt' in df.columns:
+                volume_liters = df['Qty_lt'].sum()
+            elif 'Volume_liters' in df.columns:
+                volume_liters = df['Volume_liters'].sum()
+            else:
+                volume_liters = 0
+        
+        def format_number(value, is_integer=False):
+            """Форматирование чисел с учетом типа"""
+            if pd.isna(value) or value is None:
+                return "0"
+            
+            try:
+                if is_integer:
+                    return f"{int(value):,}".replace(",", " ")
+                else:
+                    return f"{float(value):,.2f}".replace(",", " ").replace(".", ",")
+            except (ValueError, TypeError):
+                return "0"
+        
+        # Обновляем информацию в интерфейсе
+        self.ui.label_qty_pcs.setText(f"{format_number(qty_pcs, True)} шт.")
+        self.ui.label_Volume.setText(f"{format_number(volume_liters)} л.")
+        self.ui.label_Amount.setText(f"{format_number(amount)} руб.")
+        self.ui.label_Count.setText(f"{len(df)} записей")
 
-            return pcs * package_volume
-
-        except Exception as e:
-            print(f"Ошибка расчета количества в литрах: {str(e)}")
-            return 0.0
-
-    def _get_counterparty_code(self, row, model):
-        """Возвращает код контрагента"""
-        if model == Movements:
-            return row.Supplier_id if row.Supplier_id else row.Customer_id
-        elif model == WriteOff:
-            return row.Supplier_id
-        return ""
-
-    def _get_counterparty_name(self, row, model):
-        """Возвращает название контрагента"""
-        if model == Movements:
-            return row.Supplier_name if row.Supplier_name else row.Customer_name
-        elif model == WriteOff:
-            return row.Supplier_name
-        return ""
+    def _get_volume_unit(self, model):
+        """Возвращает единицу измерения объема в зависимости от модели"""
+        if model == temp_Purchase:
+            return "ед."
+        elif model == temp_Sales:
+            return "ед."
+        elif model == temp_Orders:
+            return "ед."
+        elif model == Purchase_Order:
+            return "ед."
+        return "ед."
 
     def _display_data(self, df):
-        """Отображение данных в таблице"""
+        """Отображение данных в таблице с вычислением Кол-во, шт и Кол-во, л"""
         self.table.clearContents()
-        self.table.setColumnCount(len(df.columns))
-        self.table.setRowCount(len(df))
-        self.table.setHorizontalHeaderLabels(df.columns)
         
-        numeric_cols = ["Кол-во, шт", "Кол-во, л"]
+        # Добавляем вычисляемые колонки если их нет
+        if 'Кол-во, шт' not in df.columns and 'Qty' in df.columns:
+            df['Кол-во, шт'] = df['Qty']
+        
+        if 'Кол-во, л' not in df.columns and 'Qty' in df.columns and 'Package_Volume' in df.columns:
+            df['Кол-во, л'] = df['Qty'] * df['Package_Volume']
+        
+        # Выбираем колонки для отображения
+        display_columns = []
+        preferred_columns = [
+            'Документ', 'Date', 'Дата', 'Код', 'Артикул', 'Продукт + упаковка',
+            'Кол-во, шт', 'Кол-во, л', 'Сумма 1С', 'Amount_1C', 'Контрагент',
+            'Поставщик', 'Валюта', 'Склад', 'Статус'
+        ]
+        
+        for col in preferred_columns:
+            if col in df.columns:
+                display_columns.append(col)
+        
+        # Добавляем остальные колонки
+        for col in df.columns:
+            if col not in display_columns and col not in ['Кол-во, шт', 'Кол-во, л']:
+                display_columns.append(col)
+        
+        # Убедимся что нужные колонки есть
+        if 'Кол-во, шт' in df.columns and 'Кол-во, шт' not in display_columns:
+            display_columns.insert(0, 'Кол-во, шт')
+        if 'Кол-во, л' in df.columns and 'Кол-во, л' not in display_columns:
+            display_columns.insert(1, 'Кол-во, л')
+        
+        self.table.setColumnCount(len(display_columns))
+        self.table.setRowCount(len(df))
+        self.table.setHorizontalHeaderLabels(display_columns)
+        
+        numeric_cols = ["Кол-во, шт", "Кол-во, л", "Qty", "Amount_1C", "Сумма 1С", "Qty_pcs", 
+                    "Qty_lt", "Price_1C", "FX_rate_1C", "Payment_FX", "Price_pcs_Curr", 
+                    "Price_lt_Curr", "Price_wo_VAT_Rub", "Amount_wo_VAT_Rub", "Transport_mn", 
+                    "Customs_fee", "Customs_docs", "Bank_fee", "Agency", "Add_Services", 
+                    "ED", "Eco_fee", "Movement_fee", "Load_Unload", "LPC_purchase_lt", 
+                    "LPC_purchase_pcs", "LPC_purchase_amount", "Qty_after_spec_order", 
+                    "LPC_purchase_after_spec_order"]
+        
+        date_cols = ["Date", "Дата", "Bill_Date", "Date_Doc_based", "Plan_Delivery_Day", 
+                    "Plan_Pay_Day", "Purchase_date", "Reserve_date", "Bill_date"]
         
         for row_idx, row in df.iterrows():
-            for col_idx, value in enumerate(row):
+            for col_idx, col_name in enumerate(display_columns):
+                value = row[col_name] if col_name in row else ''
+                
                 # Преобразуем None/NaN в пустую строку
                 if pd.isna(value) or value is None or str(value) in ['None', 'nan', 'NaT']:
                     value = ''
@@ -750,83 +781,97 @@ class MovesPage(QWidget):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 
-                if df.columns[col_idx] in numeric_cols:
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                    if pd.notna(value) and value != '':
-                        try:
-                            if df.columns[col_idx] == "Кол-во, шт":
-                                item.setText(f"{int(float(value)):,}".replace(",", " "))
-                            else:
-                                item.setText(f"{float(value):,.2f}".replace(",", " ").replace(".", ","))
-                        except (ValueError, TypeError):
-                            pass
+                # Форматирование числовых колонок
+                if col_name in numeric_cols and pd.notna(value) and value != '':
+                    try:
+                        if col_name in ["Кол-во, шт", "Qty", "Qty_pcs", "Qty_after_spec_order"]:
+                            # Целочисленные значения
+                            item.setText(f"{int(float(value)):,}".replace(",", " "))
+                            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                        else:
+                            # Дробные значения
+                            item.setText(f"{float(value):,.2f}".replace(",", " ").replace(".", ","))
+                            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Форматирование дат
+                elif col_name in date_cols and pd.notna(value) and value != '':
+                    try:
+                        if isinstance(value, str):
+                            # Пытаемся преобразовать строку в дату
+                            date_obj = datetime.datetime.strptime(value, "%d.%m.%Y")
+                            item.setText(date_obj.strftime("%d.%m.%Y"))
+                        elif isinstance(value, datetime.date):
+                            item.setText(value.strftime("%d.%m.%Y"))
+                        elif isinstance(value, pd.Timestamp):
+                            item.setText(value.strftime("%d.%m.%Y"))
+                    except (ValueError, TypeError):
+                        pass
                 
                 self.table.setItem(row_idx, col_idx, item)
         
         self.table.resizeColumnsToContents()
 
-    def _update_summary(self, df):
-        """Обновление сводной информации"""
-        if df.empty:
-            volume = pcs = 0
-        else:
-            volume = df["Кол-во, л"].sum()
-            pcs = df["Кол-во, шт"].sum()
-        
-        def format_number(value):
-            return f"{float(value):,.2f}".replace(",", " ").replace(".", ",")
-        
-        self.ui.label_Volume.setText(f"{format_number(volume)} л." if volume != 0 else "0,00 л.")
-        self.ui.label_qty_pcs.setText(f"{int(pcs):,} шт".replace(",", " ") if pcs != 0 else "0 шт.")
-
     def refresh_data(self):
         """Обновление данных из файлов и загрузка в БД"""
         try:
             date_start = self.ui.date_Start.date()
-            move_df = self.read_movement_data(date_start)
+            self.report_start_date = date_start.toPython()
+            self.report_start_date = pd.to_datetime(self.report_start_date)
             
-            if move_df.empty:
-                self.show_message("Нет данных для обновления")
-                return
+            # Обработка данных в зависимости от выбранной таблицы
+            table = self.ui.line_table.currentText()
             
-            # Проверка наличия документов в AddSupplCost для поступлений
-            if not self._check_purchases_in_add_suppl_cost(move_df):
-                return  # Прекращаем выполнение, если найдены новые поступления
+            if table == '-':
+                self.show_message("Таблица для обновления не выбрана!")
                 
-            # Обработка комплектаций и списаний
-            move_df = self._process_complectations(move_df)
+            elif table == "Закупки":
+                purchase_df = self.read_purchase_data(date_start)  # Передаем date_start
+                if not purchase_df.empty:
+                    self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
+                    self.show_message("Данные о закупках успешно обновлены")
             
-            # Обработка списаний
-            move_df = self._process_write_offs(move_df)
+            elif table == "Продажи":
+                sales_df = self.read_sales_data(date_start)  # Передаем date_start
+                if not sales_df.empty:
+                    self._update_temp_sales_in_db(sales_df, self.report_start_date)  # Добавлен report_start_date
+                    self.show_message("Данные о продажах успешно обновлены")
             
-            # Обновление данных в БД
-            self._update_moves_in_db(move_df)
+            elif table == "Заказы клиентов":
+                orders_df = self.read_orders_data(date_start)  # Передаем date_start
+                if not orders_df.empty:
+                    self._update_temp_orders_in_db(orders_df)
+                    self.show_message("Данные о заказах успешно обновлены")
             
-            # Запись финальных данных в Excel
-            self._write_final_data_to_excel(move_df)
+            elif table == "Заказы поставщиков":
+                purchase_order_df = self.read_purchase_order_data()
+                if not purchase_order_df.empty:
+                    self._update_purchase_order_in_db(purchase_order_df)
+                    self.show_message("Данные о заказах поставщиков успешно обновлены")
             
-            self.show_message("Данные успешно обновлены")
             self.refresh_all_comboboxes()
             
         except Exception as e:
             self.show_error_message(f"Ошибка при обновлении данных: {str(e)}")
             traceback.print_exc()
 
-    def read_movement_data(self, date_start: QDate):
-        """Чтение данных о движениях из файлов"""
+    def read_purchase_data(self, date_start: QDate):
+        """Чтение данных о закупках"""
         report_start_date = date_start.toPython()
         report_start_date = pd.to_datetime(report_start_date)
         
-        move_df = pd.DataFrame()
-        dtypes = {"Артикул": str, "Дата": "datetime64[ns]"}
+        purchase_df = pd.DataFrame()
+        dtypes = {"Номер документа сторонней организации": str, "Артикул": str, "Курс взаиморасчетов": float, 
+                    "Цена": float, "% НДС": str, "Количество": float, "Сумма без НДС": float}
         
         # Определяем файлы для чтения на основе года из date_start
         target_year = report_start_date.year
         files_to_read = []
         
-        for root, dirs, files in os.walk(Movement_folder):
+        for root, dirs, files in os.walk(Purchase_folder):
             for name in files:
-                if name.startswith("Движения_") and name.endswith(".xlsx"):
+                if name.startswith("Закупки_") and name.endswith(".xlsx"):
                     try:
                         file_year = int(name.split("_")[1].split(".")[0])
                         if file_year >= target_year:
@@ -834,7 +879,129 @@ class MovesPage(QWidget):
                     except (IndexError, ValueError):
                         continue
         
-        # Чтение файлов
+        frames = []
+        for file_path in files_to_read:
+            try:
+                data = pd.read_excel(file_path, skiprows=4, dtype=dtypes)
+                frames.append(data)
+            except Exception as e:
+                self.show_error_message(f"Ошибка при чтении файла {file_path}: {e}")
+        
+        if frames:
+            purchase_df = pd.concat(frames, axis=0, ignore_index=True)
+        
+        if purchase_df.empty:
+            return pd.DataFrame()
+        
+        # Обработка данных
+        purchase_df = self._process_purchase_data(purchase_df, report_start_date)
+        return purchase_df
+
+    def _process_purchase_data(self, df, report_start_date):
+        """Обработка данных о закупках"""
+        
+        # Чтение и обработка lpc_transf_df
+        dtype_lpc = {"Документ": str, "Тип документа": str, "Артикул": str, "Продукт + упаковка": str, 
+                                "Сумма переноса": float, "Сумма 1С": float, "Артикул Компл": str}
+        lpc_transf_df = pd.read_excel(AddCosts_File, sheet_name="Перенос себ-ти", dtype=dtype_lpc)
+        lpc_transf_df["Дата"] = pd.to_datetime(lpc_transf_df["Дата"], format="%d.%m.%Y")
+        lpc_transf_df["Имп/Лок"] = "нет"
+        lpc_transf_df["Валюта"] = "RUB"
+        lpc_transf_df["Единица измерения"] = "шт"
+        lpc_transf_df["Склад"] = "-"
+        lpc_transf_df["% НДС"] = "20%"
+        lpc_transf_df["Курс взаиморасчетов"] = 1.0
+
+        df = df.rename(columns={"Регистратор номер": "Документ", 
+                                                    "Ссылка.Вид операции": "Вид операции",
+                                                    "Сумма без НДС": "Сумма 1С", 
+                                                    "Номер документа сторонней организации": "Suppl Inv N"})
+    
+        df["Контрагент"] = df['Контрагент'].str.replace('не исп_', '', regex=False)
+        df = df[df["Документ"] != "Итого"]
+        df['Вид операции'] = df['Вид операции'].fillna('-')
+        
+        df = df[(df["Контрагент.Код"] != "ОП-001636")]
+
+        df["Документ основание"] = df["Документ основание"].astype(str)
+        split_columns = df["Документ основание"].str.split(" ", expand=True)
+        
+        df["ДокОсн"] = split_columns.get(4, pd.Series([None] * len(df)))
+        df["Дата ДокОсн"] = split_columns.get(6, pd.Series([None] * len(df)))
+
+        df["Дата"] = pd.to_datetime(df["Дата"], format="%d.%m.%Y", errors="coerce")
+        df["Дата ДокОсн"] = pd.to_datetime(df["Дата ДокОсн"], format="%d.%m.%Y", errors="coerce")
+
+        df["doc"] = np.where(pd.isna(df["Количество"]) & pd.isna(df["Сумма 1С"]), "yes",  "no")
+        df = df[df["doc"] != "yes"]
+        df["Код"] = df["Код"].str.strip()
+        
+        df = df[df["Дата"] >= report_start_date]
+        lpc_transf_df = lpc_transf_df[lpc_transf_df["Дата"] >= report_start_date]
+        
+        if not lpc_transf_df.empty:
+            lpc_transf_df = lpc_transf_df.dropna(axis=1, how='all')
+            df = pd.concat([df, lpc_transf_df], axis=0, ignore_index=True)
+            
+        df["Статус"] = np.where(df["Тип документа"].str.contains("Поступление"), "Закуп", "Склад")
+            
+        # Получение ID типа документа
+        df['Doc_type_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+
+        # Проверка продуктов
+        self._check_products(df)
+        
+        # Проверка поставщиков
+        self._check_suppliers(df, 'Контрагент.Код')
+        
+        # Переименование колонок согласно соответствию
+        column_mapping = {
+            'Документ': 'Document',
+            'Дата': 'Date',
+            'Статус': 'Status',
+            'ДокОсн': 'Doc_based',
+            'Дата ДокОсн': 'Date_Doc_based',
+            'Контрагент.Код': 'Supplier_id',
+            'Контрагент': 'Supplier_Name',
+            'Код': 'Material_id',
+            'Склад': 'Stock',
+            'Валюта': 'Currency',
+            '% НДС': 'VAT',
+            'Страна происхождения': 'Country',
+            'Номер ГТД': 'GTD',
+            'Курс взаиморасчетов': 'FX_rate_1C',
+            'Количество': 'Qty',
+            'Сумма 1С': 'Amount_1C'
+        }
+        
+        df = df.rename(columns=column_mapping)
+
+        return df
+
+    def read_sales_data(self, date_start: QDate):
+        report_start_date = date_start.toPython()
+        report_start_date = pd.to_datetime(report_start_date)
+        
+        """Чтение данных о продажах"""
+        sales_df = pd.DataFrame()
+        dtypes = {"Контрагент.ИНН": str, "Артикул": str, "Код дилера HYUNDAI": str, "Курс взаиморасчетов": float, "Цена": float,
+                    "% НДС": str, "Количество": float, "Сумма без НДС": float, "Процент пост оплаты": float,
+                    "Заполнен на основании документа.Номер": str, "Сумма включая НДС": float, "Сборка": str}
+        
+        # Определяем файлы для чтения на основе года из date_start
+        target_year = report_start_date.year
+        files_to_read = []
+        
+        for root, dirs, files in os.walk(Sales_folder):
+            for name in files:
+                if name.startswith("Продажи_") and name.endswith(".xlsx"):
+                    try:
+                        file_year = int(name.split("_")[1].split(".")[0])
+                        if file_year >= target_year:
+                            files_to_read.append(os.path.join(root, name))
+                    except (IndexError, ValueError):
+                        continue
+        
         frames = []
         for file_path in files_to_read:
             try:
@@ -844,119 +1011,857 @@ class MovesPage(QWidget):
                 print(f"Ошибка при чтении файла {file_path}: {e}")
         
         if frames:
-            move_df = pd.concat(frames, axis=0, ignore_index=True)
+            sales_df = pd.concat(frames, axis=0, ignore_index=True)
         
-        if move_df.empty:
+        if sales_df.empty:
             return pd.DataFrame()
-            
+        
         # Обработка данных
-        move_df = self._process_movement_data(move_df, report_start_date)
-        return move_df
+        sales_df = self._process_sales_data(sales_df, report_start_date)
+        return sales_df
 
-    def _process_movement_data(self, move_df, report_start_date):
-        """Обработка данных о движениях с улучшенной проверкой продуктов"""
+    def _process_sales_data(self, df, report_start_date):
+        """Обработка данных о продажах с использованием данных из БД"""
+        # Чтение данных коррекции
+        dtype_SD = {"Сборка_корр": str}
+        корр_Сборка = pd.read_excel(CustDelivery_File, sheet_name="Корр-ка Сборки", dtype=dtype_SD)
+        корр_Сборка = корр_Сборка.drop(columns=["Дата", "Счет", 'Дата счета', "Контрагент"])
+
+        sales_corr = pd.read_excel(AddCosts_File, sheet_name="Корр-ка реал-ий")
+        sales_corr["Дата"] = pd.to_datetime(sales_corr["Дата"], format="%d.%m.%Y", errors="coerce")
+        sales_corr = sales_corr[sales_corr["Документ"] != "-"].drop(columns=["Контрагент"]).drop_duplicates(subset=["Документ", "Дата"])
+        
         # Переименование колонок
-        move_df = move_df.rename(columns={
-            "Рег дата время": "Дата_Время",
-            "Рег номер": "Документ",
-            "Рег дата": "Дата",
-            "Рег тип значения": "Вид документа",
-            "Рег вид операции": "Вид операции",
-            "Единица": "Единица измерения",
-            "Код": "Контрагент.Код",
-            "Код.1": "Код",
-            "Код.2": "Грузополучатель.Код"
+        df = df.rename(columns={
+            "Регистратор номер": "Документ",
+            "Счет на оплату покупателю номер": "Счет",
+            "Счет на оплату покупателю дата": "Дата счета",
+            "Счет на оплату.Способ доставки": "Способ доставки",
+            "Сумма без НДС": "Сумма 1С",
+            "Процент пост оплаты": "Постоплата%",
+            "Грузополучатель код": "Грузополучатель.Код",
+            "Заполнен на основании документа.Номер": "Сборка",
+            "Заполнен на основании документа.Плановая дата отгрузки": "ПланДатаОтгр",
+            "Счет на оплату.Приоритет резервирования": "Приоритет"
         })
+
+        # Обработка данных
+        df["Договор"] = df["Договор"].fillna("blank")
+        df["Условие оплаты"] = df["Условие оплаты"].fillna("blank")
+        df["Грузополучатель.Код"] = df["Грузополучатель.Код"].fillna("-")
+
+        df["Документ основание"] = df["Документ основание"].str.replace("Реализация отгруженных товаров", "Реализация (акт, накладная, УПД)")
+        df["Документ основание"] = df["Документ основание"].str.replace("Корректировка реализации", "Реализация (акт, накладная, УПД)")
         
-        # Фильтрация данных
-        move_df = move_df.loc[
-            (move_df["Приход"] != "Количество приход") & 
-            (move_df["Приход"] != "Приход") & 
-            (move_df["Дата_Время"] != "Итого")
+        split_columns = df["Документ основание"].str.split(" ", expand=True, n=7)
+        df["ДокОсн"] = split_columns.get(4, pd.Series([None] * len(df)))
+        df["Дата ДокОсн"] = split_columns.get(6, pd.Series([None] * len(df)))
+        
+        df["ПланДатаОтгр"] = np.where(pd.isnull(df["ПланДатаОтгр"]), df["Дата"], df["ПланДатаОтгр"])
+
+        # Преобразование дат
+        date_columns = ["Дата", "Дата счета", "Дата ДокОсн", "Плановая дата оплаты", "ПланДатаОтгр"]
+        for col in date_columns:
+            df[col] = pd.to_datetime(df[col], format="%d.%m.%Y", errors="coerce")
+        
+        # Фильтрация по дате
+        df = df[df["Дата"] >= report_start_date]
+
+        # Фильтрация исключений
+        df = df[
+            (df["Документ"] != "Итого") &
+            (~df["Контрагент.Код"].isin(["ОЛ-000220", "ОП-007777", "ОП-001518", "ОП-001217", "ОП-041292", "ОП-041302", "ОП-000220"])) &
+            (df["Код"] != "НМ-00003477") &
+            (df["Номенклатура"] != "агентские услуги")
         ]
+
+        # Удаление пустых документов
+        df["doc"] = np.where(pd.isnull(df["Количество"]) & pd.isnull(df["Сумма 1С"]), "yes", "no")
+        df = df[df["doc"] != "yes"]
         
-        # Очистка данных
-        move_df["Счет на оплату"] = move_df['Счет на оплату'].str.replace('   ', ' ', regex=False)
-        move_df["Код"] = move_df["Код"].str.strip()
-        move_df[["Приход", "Расход"]] = move_df[["Приход", "Расход"]].astype(float)
-        move_df["Вид операции"] = move_df["Вид операции"].fillna("-")
-        move_df.dropna(subset=['Дата'], inplace=True)
+        doc_types = db.query(DOCType).all()
+
+        doc_type_df = pd.DataFrame([{
+            'Doc_type_id': item.id,
+            'Document': item.Document, 
+            'Transaction': item.Transaction,
+            'Тип документа': item.Doc_type} for item in doc_types])
+
+        # Merge с df
+        df = pd.merge(df, doc_type_df,
+            left_on=['Вид документа', 'Вид операции'],
+            right_on=['Document', 'Transaction'],how='left').drop(['Document', 'Transaction'], axis=1)
         
-        # Получаем тип документа из БД
-        doc_types = pd.read_sql(
-            db.query(
-                DOCType.Document,
-                DOCType.Transaction,
-                DOCType.Doc_type
-            ).statement,
-            db.bind
-        )
+        # Расчет цены 1С
+        df["Цена 1С"] = np.where(df["Количество"] != 0.0, round(df["Сумма 1С"] / df["Количество"], 2), 0.0)
+        df["Код"] = df["Код"].str.strip()
         
-        move_df = move_df.merge(
-            doc_types,
-            left_on=["Вид документа", "Вид операции"],
-            right_on=["Document", "Transaction"],
-            how="left"
-        ).rename(columns={"Doc_type": "Тип документа"
-        }).drop(columns=["Document", "Transaction"])
+        # Коррекция имен контрагентов
+        corr_name = {
+            "Розничный покупатель": "Yandex", 
+            "ЯНДЕКС ООО": "Yandex", 
+            "ЯНДЕКС МАРКЕТ ООО": "Yandex",
+            "ВАЙЛДБЕРРИЗ ООО": "Wildberries", 
+            "РВБ ООО": "Wildberries", 
+            "ИНТЕРНЕТ РЕШЕНИЯ ООО": "OZON",
+            "МАРКЕТПЛЕЙС ООО": "СберМегаМаркет"
+        }
+        df["Контрагент"] = df["Контрагент"].replace(corr_name)
+
+        # Фильтрация marketplace данных
+        conditions = (
+            (((df["Вид документа"] == "Отчет комиссионера (агента)") | (df["Вид операции"] == "Услуги") | (df["Вид операции"] == "Выкуп комиссионером") ) 
+                        & (df["Контрагент.Код"] == "ОП-000160")) |   # ozon
+            ((df["Контрагент.Код"] == "ОП-000105") |   # yandex
+            (df["Контрагент.Код"] == "ОП-041776") |   # yandex
+            (df["Контрагент.Код"] == "ОП-000155") | (df["Контрагент.Код"] == "ОП-001773")))     # WB
+
+        df["check"] = np.where(conditions, "del", "-")
+        df = df[df["check"] != "del"]
+        df = df[df["Тип документа"] != "4.0. Реализация (компенсация ОЗОН)"]
         
-        # Улучшенная проверка продуктов в БД с возможностью обновления
-        move_df = self._check_and_update_products(move_df)
-        if move_df.empty:
-            return pd.DataFrame()
+        # Определение типа документа
+        doc_type_conditions = [
+            (df["Контрагент.Код"] == "ОП-000160") & # ozon
+            (df["Вид документа"] == "Реализация (акт, накладная, УПД)") & 
+            (df["Вид операции"] == "Товары"),
+            
+            (df["Контрагент.Код"] == "ОП-000163") & # yandex
+            (df["Вид документа"] == "Реализация отгруженных товаров"),
+            
+            (df["Контрагент.Код"] == "ОП-000163") & # yandex
+            ((df["Вид документа"] == "Корректировка реализации") | 
+            (df["Вид документа"] == "Возврат товаров от покупателя"))
+        ]
+
+        doc_type_choices = ["4.0. Реализация (ОЗОН 1P)", "4.0. Реализация (Yandex)", "4.0. Реализация (корр-ка Yandex)"]
+        df["Тип документа"] = np.select(doc_type_conditions, doc_type_choices, default=df["Тип документа"])
         
-        # Обработка счета на оплату
-        move_df[["field_0", "field_1", "Счет", "field_3", "Дата счета", "field_5"]] = move_df["Счет на оплату"].str.split(" ", n=5, expand=True)
-        move_df = move_df.drop(columns=["field_0", "field_1", "field_3", "field_5"], axis=1)
+        # Объединение с коррекцией
+        df = df.merge(sales_corr, how="left", on=["Документ", "Дата", "Контрагент.Код"])
+        df["Курс взаиморасчетов"] = df["Курс взаиморасчетов_corr"].fillna(df["Курс взаиморасчетов"])
+        df = df.drop(columns=["Курс взаиморасчетов_corr", "НДС"])
+        
+        # Заполнение пустых значений
+        df[["Курс взаиморасчетов", "Валюта", "% НДС"]] = df[["Курс взаиморасчетов", "Валюта", "% НДС"]].fillna({
+            "Курс взаиморасчетов": 1.0, 
+            "Валюта": "RUB", 
+            "% НДС": "20%"
+        })
+
+        # Коррекция сборки
+        df = df.merge(корр_Сборка, how="left", on=["Документ", "Контрагент.Код"])
+        df["Сборка_корр"] = df["Сборка_корр"].fillna("-")
+        df["Сборка"] = np.where(df["Сборка_корр"] != "-", df["Сборка_корр"], df["Сборка"])
+        
+        # Условия оплаты
+        conditions_pay_terms = [
+            (df["Договор"] == "КЭШ"), 
+            (df["Контрагент.Код"] == "ОП-000897")  # АВТОДОК
+        ]
+        choices_pay_terms = ["Аванс 100% через 0 к.д.", "Постоплата 100% через 7 к.д."]
+        df["Условие оплаты"] = np.select(conditions_pay_terms, choices_pay_terms, default=df["Условие оплаты"])
+        df["Плановая дата оплаты"] = np.where(df["Договор"] == "КЭШ", df["Дата"], df["Плановая дата оплаты"])
         
         # Преобразование дат
-        move_df["Дата"] = pd.to_datetime(move_df["Дата"], format="%d.%m.%Y")
-        move_df["Дата счета"] = pd.to_datetime(move_df["Дата счета"], format="%d.%m.%Y")
-        move_df["Дата_Время"] = pd.to_datetime(move_df["Дата_Время"], format="%d.%m.%Y %H:%M:%S")
-        
-        # Убедимся, что report_start_date имеет правильный тип
-        if not isinstance(report_start_date, pd.Timestamp):
-            report_start_date = pd.to_datetime(report_start_date)
-        
-        # Убедимся, что колонка 'Дата' имеет тип datetime64[ns]
-        if not pd.api.types.is_datetime64_any_dtype(move_df['Дата']):
-            move_df['Дата'] = pd.to_datetime(move_df['Дата'], format='%d.%m.%Y')
-        
-        # Теперь фильтрация будет работать корректно
-        move_df = move_df[(move_df["Дата"] >= report_start_date)]
-        
-        # Корректировка типа документа для недостач/утилизаций
-        move_df.loc[(move_df["Склад"].str.contains("Недостача")) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (недостача)"
-        move_df.loc[(move_df["Склад"].str.contains("Утилизация")) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (утилизация)"
-        
-        # 1. Условие для "5.0. Списание (утилизация)"
-        move_df.loc[move_df["Тип документа"] == "5.0. Списание (утилизация)", "Вид операции"] = "Списание со склада"
-        move_df.loc[move_df["Тип документа"] == "5.0. Списание (утилизация)", "Вид документа"] = "Утилизация"
+        df["Плановая дата оплаты"] = pd.to_datetime(df["Плановая дата оплаты"], errors='coerce')
+        df["Дата ДокОсн"] = pd.to_datetime(df["Дата ДокОсн"], errors='coerce')
 
-        # 2. Условие для "5.0. Списание (недостача)"
-        move_df.loc[move_df["Тип документа"] == "5.0. Списание (недостача)", "Вид операции"] = "Списание со склада"
-        move_df.loc[move_df["Тип документа"] == "5.0. Списание (недостача)", "Вид документа"] = "Недостача"
+        # Расчет дней на оплату
+        conditions_plan_pay_date = [
+            (df["Договор"] == "blank") | (df["Условие оплаты"] == "blank"),
+            (df["Тип документа"] == "4.1. Реализация (корр-ка)") & (df["ДокОсн"] != "-"),
+            (df["Контрагент.Код"] == "ОП-000897")  # АВТОДОК
+        ]
 
-        # Расчет количества
-        # Условие для "5.0. Списание (недостача)" или "5.0. Списание (утилизация)"
-        condition = (move_df["Тип документа"] == "5.0. Списание (недостача)") | (move_df["Тип документа"] == "5.0. Списание (утилизация)")
-        # Инициализация колонки "Количество"
-        move_df["Количество"] = None
-        # Условие 1: Если тип документа "5.0. Списание (недостача)" или "5.0. Списание (утилизация)", и "Приход" не пустой, а "Расход" пустой, то "Количество" = Приход * (-1)
-        move_df.loc[condition & move_df["Приход"].notnull() & move_df["Расход"].isnull(), "Количество"] = move_df["Приход"] * (-1)
-        # Условие 2: Если тип документа "5.0. Списание (недостача)" или "5.0. Списание (утилизация)", и "Расход" не пустой, а "Приход" пустой, то "Количество" = Расход
-        move_df.loc[condition & move_df["Расход"].notnull() & move_df["Приход"].isnull(), "Количество"] = move_df["Расход"]
-        # Условие 3: Если тип документа не "5.0. Списание (недостача)" или не "5.0. Списание (утилизация)", и "Приход" не пустой, а "Расход" пустой, то "Количество" = Приход
-        move_df.loc[~condition & move_df["Приход"].notnull() & move_df["Расход"].isnull(), "Количество"] = move_df["Приход"]
-        # Условие 4: Если тип документа не "5.0. Списание (недостача)" или не "5.0. Списание (утилизация)", и "Расход" не пустой, а "Приход" пустой, то "Количество" = Расход * (-1)
-        move_df.loc[~condition & move_df["Расход"].notnull() & move_df["Приход"].isnull(), "Количество"] = move_df["Расход"] * (-1)
-        
-        # Фильтрация перемещений
-        move_df = move_df[move_df["Тип документа"] != "3.0. Перемещение"]
-        
-        return move_df
+        choices_plan_pay_date = [
+            30, 
+            (df["Плановая дата оплаты"] - df["Дата ДокОсн"]).dt.days, 
+            7
+        ]
 
-    def _check_and_update_products(self, df):
+        df["Кол-во дней на оплату"] = np.select(
+            conditions_plan_pay_date, 
+            choices_plan_pay_date,
+            default=(df["Плановая дата оплаты"] - df["Дата"]).dt.days
+        )
+        
+        # Заполнение пустых значений
+        df["Сборка"] = df["Сборка"].fillna("-")
+        df["Счет"] = df["Счет"].fillna("-")
+        df["Статус"] = "Факт"
+        
+        # Дополнительная коррекция
+        df = df.merge(sales_corr, how="left", on=["Документ", "Дата", "Контрагент.Код"])
+        df["Курс взаиморасчетов"] = df["Курс взаиморасчетов_corr"].fillna(df["Курс взаиморасчетов"])
+        df = df.drop(columns=["Курс взаиморасчетов_corr"])
+        
+        # Проверка продуктов
+        self._check_products(df)
+        
+        # Проверка клиентов
+        self._check_customers(df, 'Контрагент.Код')
+        
+        # Проверка HYUNDAI дилеров
+        self._check_hyundai_dealers(df)
+        
+        # Проверка договоров
+        self._check_contracts(df, 'Договор.Код', 'Контрагент.Код')
+        
+        # Дополнительная обработка (сохраненная часть)
+        df['Цена 1С'] = np.round(df['Цена 1С'], 2).fillna(0).astype(float)
+        df["Счет"] = df["Счет"].fillna("-")
+        df["Дата счета"] = df["Дата счета"].fillna(df["Дата"])
+        
+        # Группировка данных
+        agg_columns = ['Количество', 'Сумма 1С']
+        group_columns = ['Документ', 'Дата', 'Тип документа', 'Счет', "Контрагент.Код", 'Код', 'Цена 1С']
+        other_columns = df.columns.difference(group_columns + agg_columns)
+        sales_grouped = df.groupby(group_columns, as_index=False).agg({'Количество': 'sum', 'Сумма 1С': 'sum'})
+
+        for col in other_columns:
+            sales_grouped[col] = df.groupby(group_columns)[col].first().values
+        
+        df = sales_grouped.copy()
+        
+        СпецЗаказы = self.read_special_orders(AddCosts_File)
+        
+        # Анализ специальных заказов
+        error_file_name = "ERRORs_Spec_Orders_Sales.xlsx"
+        keys_spec = set(zip(СпецЗаказы['Счет'], СпецЗаказы['Дата счета'], СпецЗаказы['Код']))
+        mask = df.apply(lambda row: (row['Счет'], row['Дата счета'], row['Код']) in keys_spec, axis=1)
+        
+        df_to_process = df[mask].copy()
+        processed_df = self.analyze_special_deliveries(df_to_process, СпецЗаказы, error_file_name)
+        df_not_processed = df[~mask].copy()
+
+        df = pd.concat([processed_df, df_not_processed], ignore_index=True)
+        
+        # Преобразование дат
+        df["Дата"] = pd.to_datetime(df["Дата"], format='%d.%m.%Y', errors="coerce")
+        df["Дата счета"] = pd.to_datetime(df["Дата счета"], format='%d.%m.%Y', errors="coerce")
+        df["Дата ДокОсн"] = pd.to_datetime(df["Дата ДокОсн"], format='%d.%m.%Y', errors="coerce")
+        df["Дата Поставки"] = pd.to_datetime(df["Дата Поставки"], format='%d.%m.%Y', errors="coerce")
+        df["Order N Поставки"] = df["Order N Поставки"].astype(str)
+        
+        df["Приоритет"] = df["Приоритет"].fillna("-")
+
+        column_mapping = {
+            'Документ': 'Document',
+            'Дата': 'Date',
+            'Статус': 'Status',
+            'Счет': 'Bill',
+            'Дата счета': 'Bill_Date',
+            'ДокОсн': 'Doc_based',
+            'Дата ДокОсн': 'Date_Doc_based',
+            'Контрагент.Код': 'Customer_id',
+            'Контрагент': 'Customer_Name',
+            'Код': 'Material_id',
+            'Склад': 'Stock',
+            'Способ доставки': 'Delivery_method',
+            'Валюта': 'Currency',
+            'Курс взаиморасчетов': 'FX_rate_1C',
+            'Количество': 'Qty',
+            'Сумма 1С': 'Amount_1C',
+            '% НДС': 'VAT',
+            'Грузополучатель': 'Recipient',
+            'Грузополучатель.Код': 'Recipient_code',
+            'Договор.Код': 'Contract_id',
+            'Договор.Менеджер': 'Manager',
+            'Кол-во дней на оплату': 'Days_for_Pay',
+            'ПланДатаОтгр': 'Plan_Delivery_Day',
+            'Плановая дата оплаты': 'Plan_Pay_Day',
+            'Постоплата%': 'Post_payment',
+            'Условие оплаты': 'Payment_term',
+            'Приоритет': 'Priority',
+            'Регистратор.Комментарий': 'Comment',
+            'Сборка': 'Sborka',
+            'Спец поставка': 'Spec_Order',
+            'Док Поставки': 'Purchase_doc',
+            'Дата Поставки': 'Purchase_date',
+            'Поставщик.Код': 'Supplier_id',
+            'Order N Поставки': 'Order',
+            'к_Транспорт (перемещ), л': 'k_Movement',
+            'к_Хранение, л': 'k_Storage',
+            'к_Ст-ть Денег, л': 'k_Money'
+        }
+        
+        df = df.rename(columns=column_mapping)
+        
+        return df
+    
+    def read_orders_data(self, date_start: QDate):
+        """Чтение данных о заказах"""
+        max_date = db.query(temp_Sales.Date).order_by(temp_Sales.Date.desc()).first()
+        if max_date:
+            sales_max_date = max_date[0]
+            sales_max_date = pd.to_datetime(sales_max_date)
+        else:
+            report_start_date = date_start.toPython()
+            sales_max_date = pd.to_datetime(report_start_date)
+        
+        dtypes = {
+            "Номер": str, "ИНН": str, "Номенклатура1 артикул": str,
+            "Процент пост оплаты": float, "Заказ.Курс взаиморасчетов": float, "Сумма расчетов": float,
+            "% НДС": str, "Сумма": float, "Заказано количество": float, "Старый резерв количество": float,
+            "Новый резерв количество": float, "Реализация количество": float,
+            "Остаток отгрузки по Заказу (т.е. Заказ-Реализация)": float}
+        
+        try:
+            ord_df = pd.read_excel(Orders_file, dtype=dtypes)
+        except Exception as e:
+            self.show_error_message(f"Ошибка при чтении файла заказов {Orders_file}: {e}")
+        
+        # Чтение файла резервов
+        try:
+            reserve_df = pd.read_excel(Reserve_file, dtype=dtypes)
+        except Exception as e:
+            self.show_error_message(f"Ошибка при чтении файла резервов {Reserve_file}: {e}")
+        
+        """Обработка данных о заказах"""
+        
+        ord_df = ord_df.rename(columns={"Номер": "Счет", "Дата": "Дата счета", "Заказ контрагент код": "Контрагент.Код",
+                                                            "ИНН": "Контрагент.ИНН", "Заказ грузополучатель код": "Грузополучатель.Код",
+                                                            "Номенклатура1 артикул": "Артикул", "Номенклатура1 код": "Код", "Номенклатура1": "Номенклатура",
+                                                            "Номенклатура.Единица": "Единица измерения", 
+                                                            "Комментарий": "Заказ.Комментарий",
+                                                            "Заказ договор контрагента код": "Договор.Код", 
+                                                            "Процент пост оплаты": "Постоплата%", "Статус": "Статус оплаты",
+                                                            "Сумма расчетов": "Сумма оплаты", 
+                                                            "ОсталосьОтгрузить": "ОстЗак",
+                                                            "Приоритет резервирования": "Приоритет"})
+        
+        ord_df = ord_df.drop(columns=["Менеджер"])
+        ord_df = ord_df[(ord_df["Заказано"] != "Заказано количество") & (ord_df["Счет"] != "Итого")]
+
+        ord_df["Код"] = ord_df["Код"].str.strip()
+        ord_df["Договор"] = ord_df["Договор"].fillna("blank")
+        ord_df["Условие оплаты"] = ord_df["Условие оплаты"].fillna("blank")
+        ord_df["Грузополучатель.Код"] = ord_df["Грузополучатель.Код"].fillna("-")
+        ord_df["Статус оплаты"] = ord_df["Статус оплаты"].fillna("Не оплачен")
+        ord_df["Склад"] = ""
+        ord_df[["Сумма", "Заказано", "Отгружено", "ОстЗак"]] = ord_df[["Сумма", "Заказано", "Отгружено", "ОстЗак"]].astype(float).fillna(0.0)
+        ord_df["Дата счета"] = pd.to_datetime(ord_df["Дата счета"], format="%d.%m.%Y")
+        ord_df["Плановая дата оплаты"] = pd.to_datetime(ord_df["Плановая дата оплаты"], format="%d.%m.%Y", errors="coerce")
+        
+        reserve_df = reserve_df.rename(columns={"Заказ.Номер": "Счет", "Заказ.Дата": "Дата счета", "Заказ контрагент код": "Контрагент.Код",
+                                                                        "Заказ грузополучатель код": "Грузополучатель.Код",
+                                                                        "Номенклатура1 артикул": "Артикул", "Номенклатура1 код": "Код", "Номенклатура1": "Номенклатура",
+                                                                        "Склад резерва": "Склад", 
+                                                                        "Номенклатура единица измерения": "Единица измерения", 
+                                                                        "Заказ договор контрагента код": "Договор.Код", 
+                                                                        "Старый резерв количество": "СтарРезерв", "Новый резерв количество": "НовРезерв",
+                                                                        "Первый резерв": "Дата резерва" })
+    
+        reserve_df = reserve_df[reserve_df["Счет"] != "Итого"]
+        reserve_df["Дата счета"] = pd.to_datetime(reserve_df["Дата счета"], format="%d.%m.%Y", errors="coerce")
+        reserve_df["Дата резерва"] = pd.to_datetime(reserve_df["Дата резерва"], format="%d.%m.%Y", errors="coerce")
+        reserve_df[["СтарРезерв", "НовРезерв", ]] = reserve_df[["СтарРезерв", "НовРезерв", ]].astype(float).fillna(0.0)
+        reserve_df["Резерв"] = reserve_df["СтарРезерв"] + reserve_df["НовРезерв"]
+        reserve_df = reserve_df[reserve_df["НовРезерв"] > 0]
+        reserve_df["Статус"] = "Резерв"
+        
+        reserve_for_check = reserve_df.groupby(["Счет", "Дата счета", "Контрагент.Код", "Договор.Код", "Код"])["Резерв"].sum().reset_index()
+        
+        report_day = sales_max_date + datetime.timedelta(days=1)
+        
+        ord_w_reserve = reserve_df.merge(ord_df, how="left", on=["Счет", "Дата счета", "Контрагент.Код", "Договор.Код", "Код"])
+        ord_w_reserve = ord_w_reserve.rename(columns={"Склад_x": "Склад", "Единица измерения_x": "Единица измерения"})
+        ord_w_reserve.drop(columns=["Склад_y", ], inplace=True)
+        ord_w_reserve = ord_w_reserve.rename(columns={"Резерв": "Количество"})
+        ord_w_reserve["Дата"] = report_day
+        ord_w_reserve["Дни резерва"] = (ord_w_reserve["Дата"] - ord_w_reserve["Дата резерва"]).dt.days
+        ord_w_reserve["Сумма 1С"] = ord_w_reserve["Сумма"] / ord_w_reserve["Заказано"] * ord_w_reserve["Количество"]
+
+        ord_wo_reserve = ord_df.merge(reserve_for_check, how="left", on=["Счет", "Дата счета", "Контрагент.Код", "Договор.Код", "Код"])
+        ord_wo_reserve[["ОстЗак", "Резерв"]] = ord_wo_reserve[["ОстЗак", "Резерв"]].astype(float).fillna(0.0)
+        ord_wo_reserve["Остаток"] = np.where( ord_wo_reserve["Резерв"] == 0, ord_wo_reserve["ОстЗак"], 
+                                                        np.where( ord_wo_reserve["Резерв"] == ord_wo_reserve["ОстЗак"], 0,
+                                                        ord_wo_reserve["ОстЗак"] - ord_wo_reserve["Резерв"] ))
+        ord_wo_reserve = ord_wo_reserve[ord_wo_reserve["Остаток"] > 0]
+        ord_wo_reserve["Статус"] = "Заказ"
+        ord_wo_reserve = ord_wo_reserve.rename(columns={"Остаток": "Количество"})
+        ord_wo_reserve["Дата"] = datetime.date.today()
+        ord_wo_reserve["Дата"] = ord_wo_reserve["Дата"] + pd.offsets.MonthBegin(1)
+        ord_wo_reserve.loc[ord_wo_reserve["Дата"] < report_day, "Дата"] = report_day
+        ord_wo_reserve["Сумма 1С"] = ord_wo_reserve["Сумма"] / ord_wo_reserve["Заказано"] * ord_wo_reserve["Количество"]
+
+        ord_df = pd.concat([ord_w_reserve, ord_wo_reserve], axis=0)
+        
+        exclude_codes = ["ОЛ-000220", "ОП-007777", "ОП-001518", "ОП-000220"]
+        exclude_kod = ["НМ-00003477", "НМ-00004559", "ОП-000040", "ОП-000041", "ОП-000042", "ОП-000043"]
+
+        filters = (~ord_df["Контрагент.Код"].isin(exclude_codes) & 
+                (ord_df["Контрагент"] != "тест") & 
+                (ord_df["Пометка удаления"] != "Да") & 
+                (ord_df["Проведен"] != "Нет") &
+                (ord_df["Статус оплаты"] != "Отменен") & 
+                (ord_df["Технический счет"] != "Да") & 
+                (ord_df["Закрытие заказа"] != "Да") & 
+                (~ord_df["Код"].isin(exclude_kod)) & 
+                (ord_df["Номенклатура"] != "агентские услуги"))
+
+        ord_df = ord_df[filters]
+        
+        cols_to_check = ["Счет", "Код"]
+        ord_df = ord_df[~ord_df[cols_to_check].isnull().apply(lambda row: all(row), axis=1)]
+        
+        ord_df["Цена 1С"] = np.round(ord_df["Сумма 1С"] / ord_df["Количество"], 2).fillna(0).astype(float)
+        ord_df["Документ"] = "-"
+        
+        corr_name = {"Розничный покупатель": "Yandex", 
+                            "ЯНДЕКС ООО": "Yandex", 
+                            "ЯНДЕКС МАРКЕТ ООО": "Yandex", 
+                            "ВАЙЛДБЕРРИЗ ООО": "Wildberries", 
+                            "РВБ ООО": "Wildberries", 
+                            "ИНТЕРНЕТ РЕШЕНИЯ ООО": "OZON", 
+                            "МАРКЕТПЛЕЙС ООО": "СберМегаМаркет" }
+        ord_df["Контрагент"] = ord_df["Контрагент"].replace(corr_name)
+        
+        ord_df["Курс взаиморасчетов"] = ord_df["Курс взаиморасчетов"].fillna(1.0)
+    
+        conditions = [ord_df["Вид номенклатуры"] == "Услуги",
+                                (ord_df["Контрагент"].str.strip() == "OZON") & (ord_df["Договор.Код"].str.strip() == "ОП-000644") & (ord_df["Статус"] == "Заказ"),
+                                (ord_df["Контрагент"].str.strip() == "OZON") & (ord_df["Договор.Код"].str.strip() == "ОП-000953") & (ord_df["Статус"] == "Заказ"),
+                                (ord_df["Контрагент"].str.strip() != "OZON") & (ord_df["Статус"] == "Резерв"),]
+        
+        choices = ["7.0. Счет (услуги)", 
+                            "7.1. Счет (ОЗОН комм-р)", 
+                            "7.1. Счет (ОЗОН 1P)",
+                            "7.0. Счет (резерв)"]
+        ord_df["Тип документа"] = np.select(conditions, choices, default="7.1. Счет (не отгружено)")
+        ord_df['Вид документа'] = 'Счет'
+        
+        conditions = [
+            ord_df["Тип документа"] == "7.0. Счет (не отгружено)",
+            ord_df["Тип документа"] == "7.0. Счет (ОЗОН 1P)",
+            ord_df["Тип документа"] == "7.0. Счет (ОЗОН комм-р)"]
+
+        choices = [
+            "Клиенты",
+            "ОЗОН 1P", 
+            "ОЗОН комиссионер"]
+
+        ord_df["Вид операции"] = np.select(conditions, choices, default="")
+
+        ord_df["Кол-во дней на оплату"] = np.where( (ord_df["Договор"] == "blank") | (ord_df["Условие оплаты"] == "blank"),
+                                                                            30, (ord_df["Плановая дата оплаты"] - ord_df["Дата счета"]).dt.days )
+        
+        agg_columns = ['Количество', 'Сумма 1С']
+        group_columns = ['Счет', 'Дата счета', 'Код', 'Цена 1С']
+
+        # Определяем остальные колонки
+        other_columns = ord_df.columns.difference(group_columns + agg_columns)
+        ord_df_grouped = ord_df.groupby(group_columns, as_index=False).agg({'Количество': 'sum', 'Сумма 1С': 'sum'})
+        
+        for col in other_columns:
+            ord_df_grouped[col] = ord_df.groupby(group_columns)[col].first().values
+
+        ord_df = ord_df_grouped.copy()
+        ord_df = ord_df.sort_values(by=["Дата", "Дата счета", "Счет", "Продукт + упаковка"], ascending=[True, True, True, True])
+        
+        # Проверка продуктов
+        self._check_products(ord_df)
+        
+        # Проверка клиентов
+        self._check_customers(ord_df, 'Контрагент.Код')
+        
+        # Проверка HYUNDAI дилеров
+        self._check_hyundai_dealers(ord_df)
+        
+        # Проверка договоров
+        self._check_contracts(ord_df, 'Договор.Код', 'Контрагент.Код')
+        
+        ord_df["ДокОсн"] = "-"
+        ord_df["Дата ДокОсн"] = None
+        ord_df["Сборка"] = "-"
+        ord_df["Приоритет"] = ord_df["Приоритет"].fillna("-")
+        
+        СпецЗаказы = self.read_special_orders(AddCosts_File)
+        
+        error_file_name = "ERRORs_Spec_Orders_Orders.xlsx"
+        keys_spec = set(zip(СпецЗаказы['Счет'], СпецЗаказы['Дата счета'], СпецЗаказы['Код']))
+        mask = ord_df.apply(lambda row: (row['Счет'], row['Дата счета'], row['Код']) in keys_spec, axis=1)
+
+        df_to_process = ord_df[mask].copy()
+        processed_df = self.analyze_special_deliveries(df_to_process, СпецЗаказы, error_file_name)
+        df_not_processed = ord_df[~mask].copy()
+
+        ord_df = pd.concat([processed_df, df_not_processed], ignore_index=True)
+
+        ord_df["Дата"] = pd.to_datetime(ord_df["Дата"], format='%d.%m.%Y', errors="coerce")
+        ord_df["Дата счета"] = pd.to_datetime(ord_df["Дата счета"], format='%d.%m.%Y', errors="coerce")
+        ord_df["Дата ДокОсн"] = pd.to_datetime(ord_df["Дата ДокОсн"], format='%d.%m.%Y', errors="coerce")
+        ord_df["Дата Поставки"] = pd.to_datetime(ord_df["Дата Поставки"], format='%d.%m.%Y', errors="coerce")
+        ord_df["Order N Поставки"] = ord_df["Order N Поставки"].astype(str)
+        
+        df['Doc_type_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+        
+        # Переименование колонок согласно соответствию
+        column_mapping = {
+            'Счет': 'Bill',
+            'Дата счета': 'Bill_Date',
+            'Статус': 'Status',
+            'Контрагент.Код': 'Customer_id',
+            'Контрагент': 'Customer_Name',
+            'Код': 'Material_id',
+            'Количество': 'Qty',
+            'Сумма 1С': 'Amount_1C',
+            '% НДС': 'VAT',
+            'Валюта': 'Currency',
+            'Грузополучатель': 'Recipient',
+            'Грузополучатель.Код': 'Recipient_code',
+            'Дата резерва': 'Reserve_date',
+            'Дни резерва': 'Reserve_days',
+            'Договор': 'Contract',
+            'Договор.Код': 'Contract_id',
+            'Договор.Менеджер': 'Manager',
+            'Документ': 'Document',
+            'Дата': 'Date',
+            'Заказ.Комментарий': 'Comment',
+            'Кол-во дней на оплату': 'Days_for_Pay',
+            'Курс взаиморасчетов': 'FX_rate_1C',
+            'Плановая дата оплаты': 'Plan_Pay_Day',
+            'Постоплата%': 'Post_payment',
+            'Приоритет': 'Priority',
+            'Склад': 'Stock',
+            'Способ доставки': 'Delivery_method',
+            'Статус оплаты': 'Pay_status',
+            'Условие оплаты': 'Payment_term',
+            'ДокОсн': 'Doc_based',
+            'Дата ДокОсн': 'Date_Doc_based',
+            'Сборка': 'Sborka',
+            'Спец поставка': 'Spec_Order',
+            'Док Поставки': 'Purchase_doc',
+            'Дата Поставки': 'Purchase_date',
+            'Поставщик.Код': 'Supplier_id',
+            'Order N Поставки': 'Order'
+        }
+        
+        df = df.rename(columns=column_mapping)
+        
+        # Преобразование дат
+        date_columns = ['Bill_Date', 'Reserve_date', 'Date', 'Plan_Pay_Day', 'Date_Doc_based', 'Purchase_date']
+        for col in date_columns:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+        
+        # Получение ID типа документа
+        df['Doc_type_id'] = df.apply(
+            lambda row: self._get_doc_type_id(row.get('Тип документа', ''), row.get('Вид операции', ''),row.get('Тип документа', '')), axis=1)
+        
+        # Проверка продуктов
+        df = self._check_products(df, 'Material_id')
+        
+        # Проверка клиентов
+        df = self._check_customers(df, 'Customer_id')
+        
+        # Проверка договоров
+        df = self._check_contracts(df, 'Contract_id', 'Customer_id', 'Manager')
+        
+        return df
+
+    def read_purchase_order_data(self):
+        """Чтение данных о заказах поставщиков"""
+        purchase_order_df = pd.DataFrame()
+        
+        purch_types = {
+            "Suppl Inv N": str, "Order N": str, "Артикул": str, "Упаковка": float, 
+            "Вес Нетто кг": float, "% НДС": str, "Кол-во, шт": float, "Кол-во, л": float, 
+            "Курс оплаты": float, "Цена шт, у.е.": float, "Цена л, у.е.": float, 
+            "Цена без НДС, руб/л": float, "Количество": float, "Сумма без НДС, руб": float, 
+            "Транспорт м.н.": float, "Тамож. Пошлина": float, "Тамож. оформление": float, 
+            "Комиссия банка": float, "Агентские": float, "Доп услуги": float, 
+            "Акциз": float, "ЭкоСбор": float, "Погрузка/Выгрузка": float, 
+            "Себ-ть л": float, "Себ-ть шт": float, "Себ-ть партии": float, 
+            "итого Себ-ть л с НДС": float, "итого Себ-ть шт с НДС": float, 
+            "итого Себ-ть партии с НДС": float, "Себ-ть л c деньгами и": float, 
+            "Себ-ть шт c деньгами и складом": float, 
+            "Себ-ть партии c деньгами и складом": float, "Статус": str, 
+            "Кол-во после спец поставки": float
+        }
+        
+        try:
+            purchase_order_df = pd.read_excel(AddCosts_File, sheet_name="Закупки в пути", skiprows=1, dtype=purch_types)
+            purchase_order_df = purchase_order_df[purchase_order_df["Статус"] == "transit"]
+            purchase_order_df = purchase_order_df.drop(columns=["Дата"])
+            purchase_order_df["Дата"] = datetime.date.today()
+            purchase_order_df["Дата"] = pd.to_datetime(purchase_order_df["Дата"])
+        except Exception as e:
+            self.show_error_message(f"Ошибка при чтении файла заказов поставщиков: {e}")
+            return pd.DataFrame()
+        
+        if purchase_order_df.empty:
+            return pd.DataFrame()
+        
+        # Обработка данных
+        purchase_order_df = self._process_purchase_order_data(purchase_order_df)
+        return purchase_order_df
+
+    def _process_purchase_order_data(self, df):
+        """Обработка данных о заказах поставщиков"""
+        # Переименование колонок согласно соответствию
+        df = df[df['Статус'].isin(['transit', 'order'])].assign(
+                Status=lambda x: x['Статус'].map({
+                    'transit': 'Закупки (транзит)', 
+                    'order': 'Закупки (заказ)'
+                })
+            )
+        
+        column_mapping = {
+            'Дата': 'Date',
+            'Документ': 'Document',
+            'Контрагент.Код': 'Supplier_id',
+            'Контрагент': 'Supplier_Name_report',
+            'Supplier 1': 'Supplier1',
+            'Supplier 2': 'Supplier2',
+            'Order N': 'Order',
+            'Shipment #': 'Shipment',
+            'Код': 'Material_id',
+            '% НДС': 'VAT',
+            'Валюта': 'Currency',
+            'Количество': 'Qty',
+            'Сумма 1С': 'Amount_1C',
+            'Цена 1С': 'Price_1C',
+            'Кол-во, шт': 'Qty_pcs',
+            'Кол-во, л': 'Qty_lt',
+            'Курс оплаты': 'Payment_FX',
+            'Цена шт, у.е.': 'Price_pcs_Curr',
+            'Цена л, у.е.': 'Price_lt_Curr',
+            'Цена без НДС, руб/л': 'Price_wo_VAT_Rub',
+            'Сумма без НДС, руб': 'Amount_wo_VAT_Rub',
+            'Транспорт м.н.': 'Transport_mn',
+            'Тамож. Пошлина': 'Customs_fee',
+            'Тамож. оформление': 'Customs_docs',
+            'Комиссия банка': 'Bank_fee',
+            'Агентские': 'Agency',
+            'Доп услуги': 'Add_Services',
+            'Акциз': 'ED',
+            'ЭкоСбор': 'Eco_fee',
+            'Перемещ': 'Movement_fee',
+            'Погрузка/Выгрузка': 'Load_Unload',
+            'Себ-ть л': 'LPC_purchase_lt',
+            'Себ-ть шт': 'LPC_purchase_pcs',
+            'Себ-ть партии': 'LPC_purchase_amount',
+            'Кол-во после спец поставки': 'Qty_after_spec_order',
+            'Себ-ть партии после спец поставки': 'LPC_purchase_after_spec_order'
+        }
+        
+        df = df.rename(columns=column_mapping)
+        
+        # Преобразование дат
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
+        # Получение ID типа документа (всегда "1.0. Поступление (транзит)")
+        df['Doc_type_id'] = self._get_doc_type_id("Транзит", "Транзит", "1.0. Поступление (транзит)")
+        df['Status'] = 'Закуп'
+        
+        # Проверка продуктов
+        df = self._check_products(df, 'Material_id')
+        
+        # Проверка поставщиков
+        df = self._check_suppliers(df, 'Supplier_id')
+        
+        return df
+
+    def read_special_orders(self, AddCosts_File):
+        """Чтение данных специальных заказов из Excel"""
+        dtype_спецзак = {"Артикул": str, "Order N": str}
+        СпецЗаказы = pd.read_excel(AddCosts_File, sheet_name="Заказы исключения", dtype=dtype_спецзак)
+        СпецЗаказы["Дата счета"] = pd.to_datetime(СпецЗаказы["Дата счета"], format="%d.%m.%Y", errors="coerce")
+        СпецЗаказы["Дата Поставки"] = pd.to_datetime(СпецЗаказы["Дата Поставки"], format="%d.%m.%Y", errors="coerce")
+        СпецЗаказы = СпецЗаказы.drop(columns=["merge сч-прод"])
+        СпецЗаказы[["к_Транспорт (перемещ), л", "к_Хранение, л", "к_Ст-ть Денег, л"]] = СпецЗаказы[["к_Транспорт (перемещ), л", "к_Хранение, л", "к_Ст-ть Денег, л"]].fillna(0).astype(float)
+        СпецЗаказы = СпецЗаказы.sort_values(by=["Счет", "Дата счета", "Артикул", "СФ", "Кол-во в заказе, шт"], ascending=[True, True, True, True, True])
+        
+        return СпецЗаказы
+    
+    def analyze_special_deliveries(self, df, СпецЗаказы, error_file_name):
+        """
+        Анализирует специальные поставки, сопоставляя данные из DataFrame (df) с данными из DataFrame СпецЗаказы.
+        """
+        # Инициализация колонок
+        df['Спец поставка'] = 'нет'
+        df['Док Поставки'] = None
+        df['Дата Поставки'] = None
+        df['Поставщик.Код'] = None
+        df['Поставщик'] = None
+        df['Order N Поставки'] = None
+        df['к_Транспорт (перемещ), л'] = None
+        df['к_Хранение, л'] = None
+        df['к_Ст-ть Денег, л'] = None
+
+        # 1. Создаем мультииндекс в СпецЗаказы
+        СпецЗаказы = СпецЗаказы.set_index(['Счет', 'Дата счета', 'Код'], drop=False)
+        СпецЗаказы = СпецЗаказы.sort_index()
+
+        new_rows = []
+        rows_to_drop = []
+        matched_data = []  # Список для хранения подобранных данных для записи в Excel
+
+        # Итерируемся по строкам DataFrame напрямую, используя iterrows()
+        for index, row in df.iterrows():
+            try:
+                счет = row['Счет']
+                дата_счета = row['Дата счета']
+                код = row['Код']
+                # Проверяем, есть ли соответствия в СпецЗаказы по счету, дате счета, и коду
+                try:
+                    group = СпецЗаказы.loc[(счет, дата_счета, код)]
+                    if isinstance(group, pd.Series):  # Обработка, если возвращается Series (одна строка)
+                        group = pd.DataFrame([group])  # Преобразуем в DataFrame
+                except KeyError:
+                    # Нет соответствий в СпецЗаказы, оставляем 'Спец поставка' = 'нет'
+                    continue
+
+                num_rows = len(group)  # Количество строк для данного счета, даты и кода
+
+                if num_rows == 1:
+                    # 1. Если для счета только одна строка
+                    spec_row = group.iloc[0]
+                    # Обновляем исходный df напрямую
+                    df.loc[index, 'Док Поставки'] = spec_row['Док Поставки']
+                    df.loc[index, 'Дата Поставки'] = spec_row['Дата Поставки']
+                    df.loc[index, 'Поставщик.Код'] = spec_row['Поставщик.Код']
+                    df.loc[index, 'Поставщик'] = spec_row['Поставщик']
+                    df.loc[index, 'Order N Поставки'] = spec_row['Order N Поставки']
+                    df.loc[index, 'к_Транспорт (перемещ), л'] = spec_row['к_Транспорт (перемещ), л']
+                    df.loc[index, 'к_Хранение, л'] = spec_row['к_Хранение, л']
+                    df.loc[index, 'к_Ст-ть Денег, л'] = spec_row['к_Ст-ть Денег, л']
+                    # Определяем 'Спец поставка'
+                    if spec_row['Поставщик.Код'] != 'no':
+                        df.loc[index, 'Спец поставка'] = 'да'
+                    else:
+                        df.loc[index, 'Спец поставка'] = 'нет'
+                    # print(f"1стр  {row['Документ']} : {spec_row['Кол-во в заказе, шт']}")
+                else:
+                    # 2. Если для счета больше одной строки
+                    row_processed = False
+                    remaining_quantity = row['Количество']  # Сколько осталось "распределить" из исходной строки
+
+                    # 2.1 Обработка строк с  СФ != '-'
+                    valid_specs = group[group['СФ'] != '-']
+
+                    if not valid_specs.empty:
+                        #  Проверяем соответствие "Документ" и "СФ" (Счет-фактура) и "Дата"
+                        matching_specs = valid_specs[
+                            (row['Документ'] == valid_specs['СФ']) &
+                            (row['Дата'] == valid_specs['Дата'])
+                        ]
+                        # print(f"{row['Документ']} {row['Счет']} {row['Код']} ")
+                        if not matching_specs.empty:
+                            # 2.1.1 Если есть подходящие строки
+                            # Создаем новые строки
+                            for i, spec_row in matching_specs.iterrows():
+                                # Создаем новую строку на основе текущей строки df
+                                new_row = row.copy()
+                                new_row['Количество'] = spec_row['Кол-во в заказе, шт']
+                                new_row['Сумма 1С'] = row['Сумма 1С'] / row['Количество'] * spec_row['Кол-во в заказе, шт']
+                                # Подтягиваем данные из СпецЗаказы
+                                new_row['Док Поставки'] = spec_row['Док Поставки']
+                                new_row['Дата Поставки'] = spec_row['Дата Поставки']
+                                new_row['Поставщик.Код'] = spec_row['Поставщик.Код']
+                                new_row['Поставщик'] = spec_row['Поставщик']
+                                new_row['Order N Поставки'] = spec_row['Order N Поставки']
+                                new_row['к_Транспорт (перемещ), л'] = spec_row['к_Транспорт (перемещ), л']
+                                new_row['к_Хранение, л'] = spec_row['к_Хранение, л']
+                                new_row['к_Ст-ть Денег, л'] = spec_row['к_Ст-ть Денег, л']
+                                # print(f"сф != -  кол и спец равны {row['Документ']} {row['Счет']} {row['Код']}: {new_row['Количество']}")
+                                # Определяем 'Спец поставка'
+                                if spec_row['Поставщик.Код'] != 'no':
+                                    new_row['Спец поставка'] = 'да'
+                                else:
+                                    new_row['Спец поставка'] = 'нет'
+
+                                new_rows.append(new_row)
+                                rows_to_drop.append(index)
+                                remaining_quantity -= spec_row['Кол-во в заказе, шт']
+                                # Устанавливаем флаг, что строка была обработана
+                                row_processed = True
+
+                    # 2.2 Обработка строк с СФ == '-' (ВЫПОЛНЯЕТСЯ ТОЛЬКО, ЕСЛИ СТРОКА ЕЩЕ НЕ БЫЛА ОБРАБОТАНА)
+                    if not row_processed:
+
+                        no_sf_specs = group[group['СФ'] == '-'].copy()
+
+                        for spec_index, spec_row in no_sf_specs.iterrows():  # Перебираем каждую строку СпецЗаказы
+                            spec_quantity = spec_row['Кол-во в заказе, шт']
+
+                            if remaining_quantity <= 0:
+                                break  # Если все количество уже распределено, выходим из цикла
+
+                            new_row = row.copy()  # Создаем новую строку для каждой строки из СпецЗаказы
+
+                            # Определяем, сколько взять из оставшегося количества
+                            quantity_to_take = min(remaining_quantity, spec_quantity)
+                            new_row['Количество'] = quantity_to_take
+                            new_row['Сумма 1С'] = row['Сумма 1С'] / row['Количество'] * quantity_to_take
+
+                            new_row['Док Поставки'] = spec_row['Док Поставки']
+                            new_row['Дата Поставки'] = spec_row['Дата Поставки']
+                            new_row['Поставщик.Код'] = spec_row['Поставщик.Код']
+                            new_row['Поставщик'] = spec_row['Поставщик']
+                            new_row['Order N Поставки'] = spec_row['Order N Поставки']
+                            new_row['к_Транспорт (перемещ), л'] = spec_row['к_Транспорт (перемещ), л']
+                            new_row['к_Хранение, л'] = spec_row['к_Хранение, л']
+                            new_row['к_Ст-ть Денег, л'] = spec_row['к_Ст-ть Денег, л']
+                            
+                            if spec_row['Поставщик.Код'] != 'no':
+                                new_row['Спец поставка'] = 'да'
+                            else:
+                                new_row['Спец поставка'] = 'нет'
+
+                            # print(f"сф = - кол-во : {new_row['Количество']}, Спец = {spec_quantity}")
+                            new_rows.append(new_row)
+
+                            remaining_quantity -= quantity_to_take  # Уменьшаем оставшееся количество
+                            rows_to_drop.append(index)
+            except Exception as e:
+                print(f"Произошла ошибка на индексе {index}: {e}")
+
+        # Удаляем старые строки из ИСХОДНОГО DataFrame (df)
+        if rows_to_drop:
+            df.drop(rows_to_drop, inplace=True)
+
+        # Добавляем новые строки в df
+        if new_rows:
+            df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+        # Создаем DataFrame из списка matched_data и записываем в Excel
+        if matched_data:
+            matched_df = pd.DataFrame(matched_data)
+            matched_df.to_excel(error_file_name, index=False)
+            self.show_error_message("В специальных заказах не найдены счет-фактуры. Проверьте файл ошибок.")
+
+        # Возвращаем DataFrame
+        return df
+    
+    def _check_hyundai_dealers(self, sales_df):
+        """Проверка HYUNDAI дилеров"""
+        try:
+            # Чтение данных о дилерах из БД
+            dealers = db.query(Hyundai_Dealer).all()
+            dealer_codes = {dealer.Hyundai_code: dealer.Name for dealer in dealers}
+            
+            # Проверка для контрагента ОП-000291
+            hyundai_sales = sales_df[sales_df["Контрагент.Код"] == "ОП-000291"]
+            error_find = hyundai_sales[
+                (hyundai_sales["Грузополучатель.Код"] != "-") & 
+                (~hyundai_sales["Грузополучатель.Код"].isin(dealer_codes.keys()))
+            ]
+            
+            if not error_find.empty:
+                self.show_error_message("В продажах найден новый дилер HYUNDAI. Проверьте файл ERRORs_Sales_new_HYUNDAI.xlsx")
+                error_find = error_find.drop_duplicates(subset=["Грузополучатель.Код"])[
+                    ["Грузополучатель.Код", "Грузополучатель", "Регистратор.Комментарий"]
+                ]
+                error_find.to_excel("ERRORs_Sales_new_HYUNDAI.xlsx", index=False)
+                
+        except Exception as e:
+            self.show_error_message(f"Ошибка при проверке HYUNDAI дилеров: {e}")
+
+    def _check_products(self, df):
         """Проверяет наличие продуктов в БД с возможностью обновления"""
         if df.empty:
             return df
@@ -1025,724 +1930,233 @@ class MovesPage(QWidget):
         
         return df
 
-    def _check_purchases_in_add_suppl_cost(self, move_df):
-        """Проверка наличия поступлений в AddSupplCost"""
-        purchases = move_df[(move_df["Тип документа"] == "1.0. Поступление") & (move_df["Контрагент.Код"] != "ОП-001636")]
-        
-        if purchases.empty:
-            return True  # Возвращаем True, если проверка прошла успешно
-            
-        # Проверяем наличие документов в AddSupplCost
-        doc_dates = purchases[["Документ", "Дата", "Контрагент.Код", "Контрагент", "Комментарий"]].drop_duplicates()
-        errors = []
-        
-        for _, row in doc_dates.iterrows():
-            exists = db.query(AddSupplCost).filter(
-                AddSupplCost.Document == row["Документ"],
-                AddSupplCost.Date == row["Дата"],
-                AddSupplCost.Supplier_id == row["Контрагент.Код"]
-            ).first()
-            
-            if not exists:
-                errors.append(row)
-        
-        if errors:
-            error_df = pd.DataFrame(errors)
-            error_df.to_excel("ERRORs_Purchase_new.xlsx", index=False)
-            
-            error_msg = "Найдены новые Поступления:\n\n"
-            error_msg += "\n".join(
-                f"{row['Документ']}, {row['Дата']}, {row['Контрагент.Код']}" 
-                for _, row in error_df.iterrows()
-            )
-            error_msg += "\n\nОшибки сохранены в файл ERRORs_Purchase_new.xlsx"
-            
-            self.show_error_message(error_msg)
-            return False  # Возвращаем False, если найдены ошибки
-        
-        return True  # Возвращаем True, если проверка прошла успешно
-
-    def _update_moves_in_db(self, move_df):
-        """Обновление данных Movements в БД с полной обработкой ошибок"""
+    def _check_customers(self, df, customer_id_column):
+        """Проверка клиентов в БД с автоматическим обновлением из файла"""
         try:
-            if move_df.empty:
-                self.show_message("Нет данных для обновления")
-                return
+            # Получение всех клиентов из БД
+            customers = db.query(Customer.id, Customer.Customer_name).all()
+            customer_dict = {cust[0]: cust[1] for cust in customers}
             
-            # Преобразуем все даты в колонке 'Дата' в datetime.date перед вычислением минимума
-            if not move_df['Дата'].empty:
-                move_df['Дата'] = move_df['Дата'].apply(
-                    lambda x: x.date() if isinstance(x, pd.Timestamp) else x
-                )
-                min_date = move_df['Дата'].min()
-            else:
-                min_date = None
-
-            if min_date is None:
-                self.show_message("Нет корректных дат для обновления")
-                return
+            # Проверяем, есть ли столбец с ID клиента в DataFrame
+            if customer_id_column not in df.columns:
+                print(f"Столбец {customer_id_column} не найден в DataFrame")
+                return df
             
-            # Удаление старых данных
-            db_min_date = min_date
-            if isinstance(db_min_date, pd.Timestamp):
-                db_min_date = db_min_date.date()
+            # Создаем временный столбец для проверки
+            df["Контрагент.ALLDATA"] = df[customer_id_column].map(customer_dict)
+            df["Контрагент.ALLDATA"] = df["Контрагент.ALLDATA"].fillna("не найден")
             
-            db.query(Movements).filter(Movements.Date >= db_min_date).delete()
-
-            # Получаем список существующих клиентов и поставщиков из БД
-            existing_customers = {str(c[0]) for c in db.query(Customer.id).all()}
-            existing_suppliers = {str(s[0]) for s in db.query(Supplier.id).all()}
-
-            # Подготовка данных
-            records = []
-            skipped_details = []  # Детальная информация о пропущенных записях
+            # Проверка новых клиентов
+            error_find = df[df["Контрагент.ALLDATA"] == "не найден"]
             
-            for idx, row in move_df.iterrows():
-                try:
-                    # Преобразуем даты из DataFrame
-                    date_time = self._safe_datetime(row.get('Дата_Время'))
-                    date = self._safe_date(row.get('Дата'))
-                    date_doc_based = self._safe_date(row.get('Дата ДокОсн'))
-                    bill_date = self._safe_date(row.get('Дата счета'))
-                    
-                    record = {
-                        'Date_Time': date_time,
-                        'Document': str(row.get('Документ', '')),
-                        'Date': date,
-                        'Doc_based': self._null_if_empty(row.get('ДокОсн')),
-                        'Date_Doc_based': date_doc_based,
-                        'Stock': str(row.get('Склад', '')),
-                        'Qty': self._safe_float(row.get('Количество')),
-                        'Recipient_code': self._null_if_empty(row.get('Грузополучатель.Код')),
-                        'Recipient': self._null_if_empty(row.get('Грузополучатель')),
-                        'Bill': self._null_if_empty(row.get('Счет')),
-                        'Bill_date': bill_date,
-                        'DocType_id': self._get_doc_type_id(
-                            row.get('Вид документа', ''),
-                            row.get('Вид операции', ''),
-                            row.get('Тип документа', '')
-                        ),
-                        'Material_id': str(row.get('Код', ''))
-                    }
-
-                    counterparty_code = self._null_if_empty(row.get('Контрагент.Код'))
-                    doc_type = row.get('Тип документа')
-                    document = row.get('Документ')
-                    material = row.get('Код')
-                    
-                    # ИСПРАВЛЕНИЕ: Умное определение типа контрагента
-                    if counterparty_code is None:
-                        # None разрешено для обоих полей
-                        record['Supplier_id'] = None
-                        record['Customer_id'] = None
-                    else:
-                        # Проверяем, кем является контрагент - клиентом или поставщиком
-                        if counterparty_code in existing_suppliers:
-                            record['Supplier_id'] = counterparty_code
-                            record['Customer_id'] = None
-                        elif counterparty_code in existing_customers:
-                            record['Customer_id'] = counterparty_code
-                            record['Supplier_id'] = None
-                        else:
-                            # Если код не найден ни у клиентов, ни у поставщиков
-                            # Пробуем определить по типу документа как запасной вариант
-                            supplier_doc_types = [
-                                "1.0. Поступление",
-                                "1.0. Поступление (перераб)", 
-                                "1.1. Поступление (корр-ка)",
-                                "7.0. Передача в переработку",
-                                '5.0. Списание (недостача)',
-                                '5.0. Списание (утилизация)'
-                                
-                            ]
-                            
-                            if doc_type in supplier_doc_types:
-                                reason = f"Поставщик '{counterparty_code}' не существует в БД"
-                            else:
-                                reason = f"Клиент '{counterparty_code}' не существует в БД"
-                                
-                            skipped_details.append(f"Документ: {document}, Дата: {date}, Код: {material}, Причина: {reason}")
-                            continue
-
-                    records.append(record)
-                except Exception as e:
-                    document = row.get('Документ', 'N/A')
-                    date = row.get('Дата', 'N/A')
-                    material = row.get('Код', 'N/A')
-                    reason = f"Ошибка обработки: {str(e)}"
-                    skipped_details.append(f"Документ: {document}, Дата: {date}, Код: {material}, Причина: {reason}")
-                    continue
-
-            if records:
-                db.bulk_insert_mappings(Movements, records)
-                db.commit()
+            if not error_find.empty:
+                # Получаем уникальные ID отсутствующих клиентов
+                missing_customer_ids = error_find[customer_id_column].unique()
                 
-                # Формируем детальное сообщение
-                msg = f"Успешно обновлено {len(records)} записей"
-                
-                if skipped_details:
-                    skipped_count = len(skipped_details)
-                    msg += f"\n\nПропущено {skipped_count} записей:\n"
-                    msg += "\n".join(skipped_details[:10])  # Показываем первые 10 пропущенных
-                    
-                    if skipped_count > 10:
-                        msg += f"\n... и еще {skipped_count - 10} записей"
-                    
-                    # Сохраняем полный список пропущенных записей в файл
-                    try:
-                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"skipped_records_{timestamp}.txt"
-                        with open(filename, 'w', encoding='utf-8') as f:
-                            f.write("Пропущенные записи:\n")
-                            f.write("\n".join(skipped_details))
-                        msg += f"\n\nПолный список сохранен в файл: {filename}"
-                    except Exception as e:
-                        msg += f"\n\nНе удалось сохранить файл с пропущенными записями: {str(e)}"
-                
-                self.show_message(msg)
-            else:
-                if skipped_details:
-                    msg = "Все записи пропущены. Причины:\n"
-                    msg += "\n".join(skipped_details[:20])  # Показываем первые 20 причин
-                    
-                    if len(skipped_details) > 20:
-                        msg += f"\n... и еще {len(skipped_details) - 20} записей"
-                    
-                    self.show_error_message(msg)
-                else:
-                    self.show_message("Нет корректных данных для вставки")
-
-        except Exception as e:
-            db.rollback()
-            error_msg = f"Критическая ошибка: {str(e)}\n{traceback.format_exc()}"
-            self.show_error_message(error_msg)
-            raise Exception(error_msg)
-
-    def _process_complectations(self, move_df):
-        """Обработка данных о комплектациях"""
-        # Проверяем наличие данных в Complects_manual
-        manual_complect_df = pd.DataFrame()
-        try:
-            # Пытаемся получить данные из БД
-            manual_complect_df = pd.read_sql(
-                db.query(Complects_manual).filter(
-                    Complects_manual.Date >= move_df['Дата'].min()
-                ).statement,
-                db.bind
-            )
-            
-            # Переименовываем колонки из БД в русские названия (как в Excel)
-            column_mapping = {
-                'Date_Time': 'Дата_Время',
-                'Document': 'Документ', 
-                'Date': 'Дата',
-                'Stock': 'Склад',
-                'Qty': 'Количество',
-                'DocType_id': 'Тип документа',  # Переименовываем ID в текст
-                'Material_id': 'Код'
-            }
-            
-            # Переименовываем только те колонки, которые существуют в DataFrame
-            existing_columns = [col for col in column_mapping.keys() if col in manual_complect_df.columns]
-            manual_complect_df = manual_complect_df.rename(columns={col: column_mapping[col] for col in existing_columns})
-            
-            # Теперь нужно получить текстовые значения типов документов вместо ID
-            if 'Тип документа' in manual_complect_df.columns:
-                # Получаем mapping ID -> Doc_type
-                doc_type_mapping = {}
+                # Пытаемся загрузить данные из файла 1С
                 try:
-                    doc_types = db.query(DOCType.id, DOCType.Doc_type).all()
-                    doc_type_mapping = {str(doc_id): doc_type for doc_id, doc_type in doc_types}
+                    df_cust1c = pd.read_excel(Customer_file, sheet_name=0, dtype={'ИНН': str})
+                    df_cust1c = df_cust1c[(df_cust1c["Это группа"] == 'Нет') & 
+                                        (df_cust1c['Код'].isin(missing_customer_ids))]
                     
-                    # Заменяем ID на текстовые значения
-                    manual_complect_df['Тип документа'] = manual_complect_df['Тип документа'].astype(str).map(doc_type_mapping)
-                    manual_complect_df['Вид операции'] = 'Комплектация'
-                    manual_complect_df['Вид документа'] = 'Комплектация номенклатуры'
-                except Exception as e:
-                    print(f"Ошибка при получении типов документов: {str(e)}")
-            
-        except Exception as e:
-            print(f"Ошибка при чтении ручных комплектаций из БД: {e}")
-
-        # Если в БД нет данных или они пустые, читаем из Excel
-        if manual_complect_df.empty:
-            try:
-                dtype_compl = {"Артикул": str, "Упаковка": float, "Кол-во в упак": float, "Количество": float}
-                manual_complect_df = pd.read_excel(Complectation_file, sheet_name="ручные компл", dtype=dtype_compl)
-                manual_complect_df["Код"] = manual_complect_df["Код"].str.strip()
-                manual_complect_df["Дата"] = pd.to_datetime(manual_complect_df["Дата"], format="%d.%m.%Y")
-                manual_complect_df["Дата_Время"] = pd.to_datetime(manual_complect_df["Дата_Время"], format="%d.%m.%Y %H:%M:%S")
-                manual_complect_df["merge"] = manual_complect_df["Документ"] + "_" + manual_complect_df["Дата"].astype(str) + "_" + manual_complect_df["Код"] + "_" + manual_complect_df["Тип документа"]
-                manual_complect_df = manual_complect_df.drop(columns=["Вид упаковки", "Упаковка", "Кол-во в упак"], axis=1)
-                manual_complect_df = manual_complect_df[(manual_complect_df["Дата"] >= move_df['Дата'].min())]
-                
-                # Обновляем данные в БД
-                self._update_complects_manual_in_db(manual_complect_df)
-            except Exception as e:
-                print(f"Ошибка при обработке ручных комплектаций: {str(e)}")
-            
-            move_df = pd.concat([move_df, manual_complect_df], axis=0, ignore_index=True)
-        
-        # Обрабатываем автоматические комплектации
-        complect_df = move_df[
-            (move_df['Тип документа'] == '2.0. Комплектация') | 
-            (move_df['Тип документа'] == '5.0. Списание') | 
-            (move_df['Тип документа'] == '6.0. Расход') | 
-            (move_df['Тип документа'] == '7.0. Передача в переработку')
-        ]
-        
-        if not complect_df.empty:
-            self._update_complects_in_db(complect_df)
-        
-        return move_df
-
-    def _update_complects_in_db(self, df):
-        """Обновление данных о комплектациях в БД с защитой от ошибок"""
-        try:
-            if df.empty:
-                return
-
-            # Удаляем старые данные за тот же период
-            min_date = df['Дата'].min()
-            if isinstance(min_date, pd.Timestamp):
-                min_date = min_date.date()
-            db.query(Complects).filter(Complects.Date >= min_date).delete()
-            
-            # Получаем mapping ID -> Doc_type из БД
-            doc_type_mapping = {}
-            try:
-                doc_types = db.query(DOCType.id, DOCType.Doc_type).all()
-                doc_type_mapping = {str(doc_id): doc_type for doc_id, doc_type in doc_types}
-            except Exception as e:
-                print(f"Ошибка при получении типов документов: {str(e)}")
-                return
-            
-            # Подготавливаем данные для вставки
-            records = []
-            for _, row in df.iterrows():
-                try:
-                    # Преобразуем ID типа документа обратно в текстовое значение
-                    doc_type_id = str(row.get('Тип документа')) if pd.notna(row.get('Тип документа')) else None
-                    doc_type_text = doc_type_mapping.get(doc_type_id) if doc_type_id else None
-                    
-                    # Получаем ID типа документа для БД
-                    doc_type_id_for_db = self._get_doc_type_id(
-                        str(row.get('Вид документа')) if pd.notna(row.get('Вид документа')) else None,
-                        str(row.get('Вид операции')) if pd.notna(row.get('Вид операции')) else None,
-                        doc_type_text  # Используем текстовое значение
-                    )
-                    
-                    if doc_type_id_for_db is None:
-                        print(f"Не удалось найти ID для типа документа: {doc_type_text}")
-                        continue
-                        
-                    record = {
-                        'Date_Time': row['Дата_Время'] if pd.notna(row.get('Дата_Время')) else None,
-                        'Document': str(row['Документ']) if pd.notna(row.get('Документ')) else None,
-                        'Date': row['Дата'] if pd.notna(row.get('Дата')) else None,
-                        'Stock': str(row['Склад']) if pd.notna(row.get('Склад')) else None,
-                        'Qty': float(row['Количество']) if pd.notna(row.get('Количество')) else 0.0,
-                        'DocType_id': doc_type_id_for_db,  # Используем найденный ID
-                        'Material_id': str(row['Код']) if pd.notna(row.get('Код')) else None
-                    }
-                    records.append(record)
-                except Exception as e:
-                    print(f"Ошибка обработки строки: {e}\nДанные: {row.to_dict()}")
-                    continue
-            
-            # Вставляем данные порциями по 500 записей
-            for i in range(0, len(records), 500):
-                try:
-                    db.bulk_insert_mappings(Complects, records[i:i+500])
-                    db.commit()
-                except Exception as e:
-                    db.rollback()
-                    print(f"Ошибка вставки записей {i}-{i+500}: {str(e)}")
-                    traceback.print_exc()
-                    
-        except Exception as e:
-            db.rollback()
-            error_msg = f"Ошибка обновления данных Complects в БД: {str(e)}"
-            print(error_msg)
-            traceback.print_exc()
-            raise Exception(error_msg)
-
-    def _update_complects_manual_in_db(self, df):
-        """Обновление данных о ручных комплектациях в БД"""
-        try:
-            # Удаляем старые данные за тот же период
-            min_date = df['Дата'].min()
-            db.query(Complects_manual).filter(Complects_manual.Date >= min_date).delete()
-            
-            # Подготавливаем данные для вставки
-            records = []
-            for _, row in df.iterrows():
-                record = {
-                    'Date_Time': row['Дата_Время'],
-                    'Document': row['Документ'],
-                    'Date': row['Дата'],
-                    'Stock': row['Склад'],
-                    'Qty': row['Количество'],
-                    'DocType_id': self._get_doc_type_id('Комплектация номенклатуры', 'Комплектация', '2.0. Комплектация'),
-                    'Material_id': row['Код'],
-                }
-                records.append(record)
-            
-            # Массовая вставка
-            db.bulk_insert_mappings(Complects_manual, records)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            raise Exception(f"Ошибка обновления данных Complects_manual в БД: {e}")
-
-    def _process_write_offs(self, move_df):
-        """Обработка списаний с правильной последовательностью операций"""
-        try:
-            # Получаем дату начала отчета из интерфейса
-            report_start_date = self.ui.date_Start.date().toPython()
-            report_start_date = pd.to_datetime(report_start_date)
-            
-            # 1. Чтение данных из файла списаний
-            dtype_compl = {
-                "Артикул": str, 
-                "Упаковка": float, 
-                "Кол-во в упак": float, 
-                "Количество": float
-            }
-            write_off_df = pd.read_excel(Complectation_file, sheet_name="Недостачи_Утилизации", dtype=dtype_compl)
-            
-            # Проверка обязательных колонок
-            required_columns = ['Документ', 'Дата', 'Код', 'Склад', 'Отчет', 'Тип документа']
-            for col in required_columns:
-                if col not in write_off_df.columns:
-                    raise ValueError(f"Отсутствует обязательная колонка: {col}")
-            
-            # 2. Подготовка данных из файла
-            write_off_df = write_off_df.rename(columns={'Order N': 'Order', 'Shipment #': 'Shipment'})
-            write_off_df["Код"] = write_off_df["Код"].str.strip()
-            write_off_df["Дата"] = pd.to_datetime(write_off_df["Дата"], format="%d.%m.%Y")
-            write_off_df["Дата_Время"] = pd.to_datetime(write_off_df["Дата_Время"], format="%d.%m.%Y %H:%M:%S")
-            write_off_df["merge2"] = (
-                write_off_df["Документ"] + "_" + 
-                write_off_df["Дата"].astype(str) + "_" + 
-                write_off_df["Код"] + "_" + 
-                write_off_df["Склад"]
-            )
-            write_off_df["CHECK_write_off"] = "yes"
-            
-            write_off_for_db = write_off_df.copy()
-            # 3. Фильтрация данных для БД
-            optional_columns = {
-                'ДокОсн': '',
-                'Дата ДокОсн': None,
-                'Order N': '',
-                'Shipment #': '',
-                'Вход. док-т': '',
-                'Счет': '',
-                'Дата счета': None,
-                'Комментарий': ''
-            }
-            
-            for col, default in optional_columns.items():
-                if col not in write_off_for_db.columns:
-                    write_off_for_db[col] = default
-            
-            # Обновление БД
-            if not write_off_for_db.empty:
-                self._update_write_off_in_db(write_off_for_db)
-            
-            # 5. Подготовка данных для проверки новых списаний
-            write_off_for_check = write_off_df[["merge2", "CHECK_write_off"]].drop_duplicates()
-            
-            # 6. Фильтрация move_df - исключаем уже проверенные списания
-            move_df["merge2"] = (
-                move_df["Документ"] + "_" + 
-                move_df["Дата"].astype(str) + "_" + 
-                move_df["Код"] + "_" + 
-                move_df["Склад"]
-            )
-            move_df = move_df.merge(write_off_for_check, on="merge2", how="left")
-            move_df["CHECK_write_off"] = move_df["CHECK_write_off"].fillna("no")
-            move_df = move_df[move_df["CHECK_write_off"] != "yes"]
-            
-            # 7. Добавление подтвержденных списаний обратно в move_df
-            write_off_df2 = write_off_df[
-                (write_off_df["Отчет"] == "да") & 
-                (write_off_df["Тип документа"] != "2.0. Комплектация") &
-                (write_off_df["Дата"] >= report_start_date)
-            ]
-    
-            if not write_off_df2.empty:
-                move_df = pd.concat([move_df, write_off_df2], axis=0, ignore_index=True)
-                
-            
-            # 8. Поиск новых списаний для сохранения в Excel
-            write_off_mask = (
-                (move_df["Склад"].str.contains("Недостача|Утилизация", na=False)) & 
-                (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])) &
-                (move_df["CHECK_write_off"] == "no")
-            )
-            new_write_offs = move_df[write_off_mask].copy()
-            
-            if not new_write_offs.empty:
-                try:
-                    # Получаем уникальные коды материалов из DataFrame
-                    material_codes = move_df['Код'].unique().tolist()
-                    
-                    # Запрашиваем дополнительные данные из БД
-                    materials_data = db.query(
-                        Materials.Code,
-                        Materials.Article,
-                        Materials.Package_type,
-                        Materials.Items_per_Package,
-                        Materials.Package_Volume,
-                        Materials.UoM,
-                        Product_Names.Product_name
-                    ).join(Materials.product_name
-                    ).filter(Materials.Code.in_(material_codes)
-                    ).all()
-                    
-                    # Создаём словарь для быстрого доступа к данным по коду материала
-                    materials_dict = {
-                        m.Code: {
-                            'Артикул': m.Article,
-                            'Продукт + упаковка': m.Product_name,
-                            'Вид упаковки': m.Package_type,
-                            'Упаковка': m.Package_Volume,
-                            'Кол-во в упак': m.Items_per_Package,
-                            'Единица измерения': m.UoM
+                    if not df_cust1c.empty:
+                        # Подготовка данных 1С
+                        column_map_1c = {
+                            'ИНН': 'INN',
+                            'Код': 'id',
+                            'Наименование в программе': 'Customer_name',
+                            'Сектор': 'Sector',
+                            'Тип цен': 'Price_type',
+                            'Холдинг': 'Holding'
                         }
-                        for m in materials_data
-                    }
-                    
-                    # Добавляем недостающие колонки в DataFrame
-                    for code, data in materials_dict.items():
-                        mask = new_write_offs['Код'] == code
-                        for col_name, value in data.items():
-                            try:
-                                new_write_offs.loc[mask, col_name] = pd.to_numeric(value)
-                            except (ValueError, TypeError):
-                                new_write_offs.loc[mask, col_name] = value
-                    
-                    # Рассчитываем дополнительные колонки
-                    new_write_offs['Кол-во, шт'] = new_write_offs.apply(lambda row: self._calculate_pcs(row.to_dict()), axis=1)
-                    new_write_offs['Кол-во в л прод'] = new_write_offs.apply(lambda row: self._calculate_liters(row.to_dict()), axis=1)
-                    
-                    new_write_offs = new_write_offs[[ "Дата_Время", "Документ", "Дата", "Вид операции", "Вид документа", "Код", "Артикул", "Продукт + упаковка", "Вид упаковки", "Упаковка", 
-                                                                        "Кол-во в упак", "Единица измерения", "Склад", "Комментарий", "Приход", "Расход", "Количество", "Тип документа", 
-                                                                        "Контрагент.Код", "Контрагент", "Грузополучатель.Код", "Грузополучатель", "Счет", "Дата счета", "CHECK_write_off" ]]
-                    new_write_offs.to_excel("ERRORs_Write_OFF_new.xlsx", index=False)
-                    self.show_message(
-                        f"Найдено {len(new_write_offs)} новых списаний\n"
-                        "Сохранено в ERRORs_Write_OFF_new.xlsx"
-                    )
+                        df_cust1c = df_cust1c.rename(columns=column_map_1c)[list(column_map_1c.values())]
+                        
+                        # Очистка данных
+                        df_cust1c["Customer_name"] = df_cust1c['Customer_name'].str.replace('не исп_', '', regex=False)
+                        df_cust1c["Holding"] = df_cust1c['Holding'].str.replace('не исп_', '', regex=False)
+                        df_cust1c[['Sector', 'Price_type']] = df_cust1c[['Sector', 'Price_type']].fillna("-")
+                        df_cust1c["Holding"] = np.where(pd.isna(df_cust1c["Holding"]), df_cust1c['Customer_name'], df_cust1c["Holding"])
+                        
+                        # Сохраняем данные в БД
+                        self._save_customer_data(df_cust1c.to_dict('records'))
+                        
+                        # Обновляем словарь клиентов после сохранения
+                        customers = db.query(Customer.id, Customer.Customer_name).all()
+                        customer_dict = {cust[0]: cust[1] for cust in customers}
+                        df["Контрагент.ALLDATA"] = df[customer_id_column].map(customer_dict)
+                        
+                        # Повторно проверяем отсутствующих клиентов
+                        error_find = df[df["Контрагент.ALLDATA"] == "не найден"]
+                
                 except Exception as e:
-                    self.show_error_message(f"Ошибка при записи данных в Excel: {str(e)}")
-                    traceback.print_exc()
-            move_df.to_excel("move_df_w_writeoff.xlsx")
-            return move_df.drop(columns=["merge2", "CHECK_write_off"], errors="ignore")
+                    print(f"Ошибка при чтении файла клиентов: {e}")
             
-        except Exception as e:
-            self.show_error_message(f"Ошибка обработки списаний: {str(e)}")
-            traceback.print_exc()
-            return move_df
-
-    def _update_write_off_in_db(self, write_off_df):
-        """Обновление данных WriteOff в БД с проверкой всех колонок и обработкой NaN"""
-        try:
-            # Проверяем, что DataFrame не пустой
-            if write_off_df.empty:
-                self.show_message("Нет данных для обновления в таблице WriteOff")
-                return
-
-            # Удаляем старые данные за тот же период
-            min_date = write_off_df['Дата'].min()
-            db.query(WriteOff).filter(WriteOff.Date >= min_date).delete()
-
-            # Подготавливаем данные для вставки
-            records = []
-            for _, row in write_off_df.iterrows():
-                try:
-                    # Создаем запись с проверкой наличия всех полей
-                    record = {
-                        'Date_Time': self._convert_to_datetime(row.get('Дата_Время')),
-                        'Document': str(row.get('Документ', '')),
-                        'Date': self._convert_to_date(row.get('Дата')),
-                        'Stock': str(row.get('Склад', '')),
-                        'Comment': str(row.get('Комментарий', None)),
-                        'inComing': self._safe_float(row.get('Приход')),
-                        'outComing': self._safe_float(row.get('Расход')),
-                        'Qty': self._safe_float(row.get('Количество')),
-                        'Reporting': str(row.get('Отчет', 'нет')),
-                        'Doc_based': str(row.get('ДокОсн', None)),
-                        'Date_Doc_based': self._convert_to_date(row.get('Дата ДокОсн')),
-                        'Order': str(row.get('Order N', row.get('Order', None))),
-                        'Shipment': str(row.get('Shipment #', row.get('Shipment', None))),
-                        'Suppl_Inv_N': str(row.get('Вход. док-т', None)),
-                        'Bill': str(row.get('Счет', None)),
-                        'Bill_date': self._convert_to_date(row.get('Дата счета')),
-                        'DocType_id': self._get_doc_type_id(
-                            row.get('Вид документа', ''),
-                            row.get('Вид операции', ''),
-                            row.get('Тип документа', '')
-                        ),
-                        'Material_id': str(row.get('Код', '')),
-                        'Supplier_id': self._safe_supplier_id(row.get('Контрагент.Код'))
+            # Если все еще есть отсутствующие клиенты
+            if not error_find.empty:
+                # Сохраняем ошибки в файл
+                error_data = []
+                for _, row in error_find.iterrows():
+                    error_row = {
+                        'Контрагент.Код': row[customer_id_column],
+                        'Контрагент': row.get('Контрагент', 'неизвестно'),
+                        'Контрагент.ИНН': row.get('Контрагент.ИНН', 'неизвестно'),
+                        'Сектор': row.get('Сектор', 'неизвестно'),
+                        'Договор.Менеджер': row.get('Договор.Менеджер', 'неизвестно')
                     }
-
-                    records.append(record)
-                except Exception as row_error:
-                    error_msg = f"Ошибка обработки строки: {row_error}\nДанные строки: {row.to_dict()}"
-                    self.show_error_message(error_msg)
-                    continue
-
-            # Массовая вставка
-            if records:
-                db.bulk_insert_mappings(WriteOff, records)
-                db.commit()
-                self.show_message(f"Успешно обновлено {len(records)} записей в таблице WriteOff")
-            else:
-                self.show_message("Нет корректных данных для вставки в WriteOff")
-
+                    error_data.append(error_row)
+                
+                error_df = pd.DataFrame(error_data)
+                error_df = error_df.drop_duplicates(subset=[customer_id_column])
+                error_df.to_excel("ERRORs_New_Customer.xlsx", index=False)
+                
+                # Показываем сообщение
+                missing_count = len(error_find[customer_id_column].unique())
+                self.show_message(f"Обнаружено {missing_count} новых клиентов. Данные обновлены из файла 1С.\n"
+                                f"Не найденные клиенты сохранены в файл ERRORs_New_Customer.xlsx")
+                
+                # Удаляем строки с отсутствующими клиентами
+                df = df[df["Контрагент.ALLDATA"] != "не найден"]
+            
+            # Удаляем временный столбец
+            df = df.drop(columns=["Контрагент.ALLDATA"])
+            
+            return df
+            
         except Exception as e:
-            db.rollback()
-            error_msg = f"Ошибка обновления данных WriteOff в БД: {str(e)}\n{traceback.format_exc()}"
-            self.show_error_message(error_msg)
-            raise Exception(error_msg)
+            self.show_error_message(f"Ошибка при проверке клиентов: {e}")
+            return df
 
-    def _write_final_data_to_excel(self, move_df):
-        """Запись финальных данных в Excel с подтягиванием данных из БД и расчётом колонок"""
+    def _check_contracts(self, df, contract_id_column, customer_id_column):
+        """Проверка договоров с использованием функций из customer.py"""
         try:
-            # Получаем уникальные коды материалов из DataFrame
-            material_codes = move_df['Код'].unique().tolist()
+            # Получение существующих договоров
+            existing_contracts = {contract.id for contract in db.query(Contract).all()}
             
-            # Запрашиваем дополнительные данные из БД
-            materials_data = db.query(
-                Materials.Code,
-                Materials.Article,
-                Materials.Package_type,
-                Materials.Items_per_Package,
-                Materials.Package_Volume,
-                Materials.UoM,
-                Product_Names.Product_name
-            ).join(Materials.product_name
-            ).filter(Materials.Code.in_(material_codes)
-            ).all()
-            
-            # Создаём словарь для быстрого доступа к данным по коду материала
-            materials_dict = {
-                m.Code: {
-                    'Артикул': m.Article,
-                    'Продукт + упаковка': m.Product_name,
-                    'Вид упаковки': m.Package_type,
-                    'Упаковка': m.Package_Volume,
-                    'Кол-во в упак': m.Items_per_Package,
-                    'Единица измерения': m.UoM
-                }
-                for m in materials_data
-            }
-            
-            # Добавляем недостающие колонки в DataFrame
-            for code, data in materials_dict.items():
-                mask = move_df['Код'] == code
-                for col_name, value in data.items():
-                    move_df.loc[mask, col_name] = value
-            
-            # Рассчитываем дополнительные колонки
-            move_df['Кол-во, шт'] = move_df.apply(lambda row: self._calculate_pcs(row.to_dict()), axis=1)
-            move_df['Кол-во в л прод'] = move_df.apply(lambda row: self._calculate_liters(row.to_dict()), axis=1)
-            move_df.to_excel("move_df_final.xlsx")
-            # Подготовка финальных данных для записи
-            move_full_to_write = move_df[[
-                "Дата_Время", "Документ", "Дата", "Вид операции", "Вид документа", "ДокОсн", "Дата ДокОсн", 
-                "Тип документа", "Код", "Артикул", "Продукт + упаковка", "Вид упаковки", 
-                "Упаковка", "Кол-во в упак", "Единица измерения", "Склад", "Количество", 
-                "Кол-во, шт", "Кол-во в л прод", "Контрагент.Код", "Контрагент", 
-                "Грузополучатель.Код", "Грузополучатель", "Счет", "Дата счета"]]
-
-            # Запись движений
-            self._write_prod_move(move_full_to_write)
-            
-            # Запись комплектаций
-            complect_df = move_full_to_write[
-                (move_full_to_write['Тип документа'] == '2.0. Комплектация') | 
-                (move_full_to_write['Тип документа'] == '5.0. Списание') | 
-                (move_full_to_write['Тип документа'] == '6.0. Расход') | 
-                (move_full_to_write['Тип документа'] == '7.0. Передача в переработку')
+            # Поиск отсутствующих договоров
+            missing_contracts = df[
+                (df[contract_id_column].notna()) & 
+                (~df[contract_id_column].isin(existing_contracts)) &
+                (df[contract_id_column] != "blank")
             ]
-            self._write_complectations(complect_df)
+            
+            if not missing_contracts.empty:
+                # Получаем уникальные ID отсутствующих договоров
+                missing_contract_ids = missing_contracts[contract_id_column].unique()
+                
+                contract_update = CustomerPage()
+                # Используем готовые функции из customer.py
+                contract_data = contract_update.read_contract_file(Contract_file)
+                contract_df = pd.DataFrame(contract_data)
+                
+                # Фильтруем только отсутствующие договоры
+                contract_df = contract_df[contract_df['id'].isin(missing_contract_ids)]
+                
+                if not contract_df.empty:
+                    # Сохраняем договоры в БД
+                    contract_update.save_Contract(contract_df.to_dict('records'))
+                    
+                    # Обновляем список существующих договоров
+                    existing_contracts = {contract.id for contract in db.query(Contract).all()}
+                    
+                    # Повторно проверяем отсутствующие договоры
+                    missing_contracts = df[
+                        (df[contract_id_column].notna()) & 
+                        (~df[contract_id_column].isin(existing_contracts)) &
+                        (df[contract_id_column] != "blank")
+                    ]
+            
+            # Если все еще есть отсутствующие договоры
+            if not missing_contracts.empty:
+                # Сохраняем ошибки в файл
+                error_find = missing_contracts.drop_duplicates(
+                    subset=[customer_id_column, contract_id_column, "Документ", "Дата"]
+                )[[customer_id_column, "Контрагент", "Контрагент.ИНН", "Договор"]]
+                
+                error_find.to_excel("ERRORs_Contract.xlsx", index=False)
+                
+                # Показываем сообщение
+                missing_count = len(missing_contracts[contract_id_column].unique())
+                self.show_message(f"Обнаружено {missing_count} новых договоров. Данные обновлены из файла 1С.\n"
+                                f"Не найденные договоры сохранены в файл ERRORs_Contract.xlsx")
+                
+                # Удаляем строки с отсутствующими договорами
+                df = df[~df[contract_id_column].isin(missing_contracts[contract_id_column])]
+                    
+            return df
             
         except Exception as e:
-            self.show_error_message(f"Ошибка при записи данных в Excel: {str(e)}")
-            traceback.print_exc()
+            self.show_error_message(f"Ошибка при проверке договоров: {e}")
+            return df
 
-    def _write_prod_move(self, movement_df):
-        """Адаптированная версия функции write_prod_move для класса MovesPage"""
+    def _save_customer_data(self, data):
+        """Сохранение данных клиентов в БД с использованием функций из customer.py"""
+        if not data:
+            return
+        
         try:
-            sheetname = "Движения"
-            cells_num = movement_df.shape[0] + 1
+            cust_update = CustomerPage()
+            # Используем импортированные функции
+            cust_update.save_Sector(data)
+            cust_update.save_Holding(data)
+            cust_update.save_Customer(data)
             
-            with xw.App(add_book=False, visible=False) as app:
-                wb = app.books.open(Complectation_file, update_links=False, read_only=False)
-                ws = wb.sheets[sheetname]
-                ws.api.AutoFilter.ShowAllData()
-                num_col = ws.range("A1").end("right").column
-                num_row = ws.range("A" + str(wb.sheets[sheetname].cells.last_cell.row)).end("up").row
-                ws.range((2, 1), (num_row + 5, num_col)).delete()
-
-                # Установка форматов ячеек
-                ws.range("A2:A" + str(cells_num)).number_format = "ДД.ММ.ГГГГ чч:мм:сс"
-                ws.range("C2:C" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("F2:F" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("I2:I" + str(cells_num)).number_format = "@"
-                ws.range("L2:M" + str(cells_num)).number_format = "0"
-                ws.range("P2:R" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;\"\"-\"\""
-                ws.range("T2:T" + str(cells_num)).number_format = "@"
-                ws.range("U2:U" + str(cells_num)).number_format = "# ##0,0_ ;[Red]-# ##0,0_ ;\"\"-\"\""
-                ws.range("Y2:Y" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                
-                # Запись данных
-                ws.range((2, 1), (cells_num, num_col)).options(index=False, header=False).value = movement_df.values
-
-                wb.save()
-                wb.close()
-                
         except Exception as e:
-            raise Exception(f"Ошибка при записи движений в Excel: {str(e)}")
+            raise Exception(f"Ошибка сохранения клиентов: {str(e)}")
 
-    def _write_complectations(self, movement_df):
-        """Адаптированная версия функции write_complectations для класса MovesPage"""
+    def _check_suppliers(self, df, supplier_id_column):
+        """Проверка наличия поставщиков в БД. Пропускает проверку, если столбец пустой или отсутствует."""
+        # Если столбец не существует в DataFrame, пропускаем проверку
+        if supplier_id_column not in df.columns:
+            print(f"Столбец {supplier_id_column} отсутствует, проверка поставщиков пропущена.")
+            return df
+            
+        # Если все значения в столбце пустые (NaN/null), пропускаем проверку
+        if df[supplier_id_column].isnull().all():
+            print(f"Столбец {supplier_id_column} пуст, проверка поставщиков пропущена.")
+            return df
+            
+        # Фильтруем только строки с непустыми значениями поставщиков для проверки
+        non_empty_suppliers = df[df[supplier_id_column].notna()]
+        empty_suppliers = df[df[supplier_id_column].isna()]
+        
+        # Получаем список всех кодов поставщиков из БД
         try:
-            sheetname = "Комплектации"
-            cells_num = movement_df.shape[0] + 1
-            
-            with xw.App(add_book=False, visible=False) as app:
-                wb = app.books.open(Complectation_file, update_links=False, read_only=False)
-                ws = wb.sheets[sheetname]
-                ws.api.AutoFilter.ShowAllData()
-                num_col = ws.range("A1").end("right").column
-                num_row = ws.range("A" + str(wb.sheets[sheetname].cells.last_cell.row)).end("up").row
-                ws.range((2, 1), (num_row + 5, num_col)).delete()
-
-                # Установка форматов ячеек
-                ws.range("A2:A" + str(cells_num)).number_format = "ДД.ММ.ГГГГ чч:мм:сс"
-                ws.range("C2:C" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("F2:F" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("I2:I" + str(cells_num)).number_format = "@"
-                ws.range("L2:M" + str(cells_num)).number_format = "0"
-                ws.range("P2:R" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;\"\"-\"\""
-                ws.range("T2:T" + str(cells_num)).number_format = "@"
-                ws.range("U2:U" + str(cells_num)).number_format = "# ##0,0_ ;[Red]-# ##0,0_ ;\"\"-\"\""
-                ws.range("Y2:Y" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                
-                # Запись данных
-                ws.range((2, 1), (cells_num, num_col)).options(index=False, header=False).value = movement_df.values
-
-                wb.save()
-                wb.close()
-                
+            existing_suppliers = {str(s[0]) for s in db.query(Supplier.id).all()}
         except Exception as e:
-            raise Exception(f"Ошибка при записи комплектаций в Excel: {str(e)}")
+            self.show_error_message(f"Ошибка при проверке поставщиков в БД: {str(e)}")
+            return pd.DataFrame()
+            
+        # Находим отсутствующих поставщиков только среди непустых значений
+        non_empty_suppliers.loc[:, supplier_id_column] = non_empty_suppliers[supplier_id_column].astype(str)
+        missing_suppliers = set(non_empty_suppliers[supplier_id_column].unique()) - existing_suppliers
+        
+        if missing_suppliers:
+            # Показываем диалог с отсутствующими поставщиками (только реальные коды, не NaN)
+            valid_missing_suppliers = [code for code in missing_suppliers if code != 'nan' and code != 'None']
+            
+            if valid_missing_suppliers:
+                msg = f"Следующие поставщики отсутствуют в БД:\n\n"
+                msg += "\n".join(f"{code}" for code in valid_missing_suppliers)
+                msg += "\n\nПропустить эти записи?"
+                
+                reply = QMessageBox.question(
+                    self, 
+                    "Отсутствующие поставщики", 
+                    msg,
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                
+                if reply == QMessageBox.No:
+                    return pd.DataFrame()
+                else:
+                    # Удаляем строки с отсутствующими поставщиками (только реальные коды)
+                    non_empty_suppliers = non_empty_suppliers[~non_empty_suppliers[supplier_id_column].isin(valid_missing_suppliers)]
+        
+        # Объединяем обратно отфильтрованные непустые поставщики с пустыми
+        df = pd.concat([non_empty_suppliers, empty_suppliers], ignore_index=True)
+        
+        return df
 
     @lru_cache(maxsize=128)
     def _get_doc_type_id(self, document: str, transaction: str, doc_type: str) -> int:
@@ -1801,38 +2215,393 @@ class MovesPage(QWidget):
             db.rollback()
             return None
 
-    def _get_model_for_table(self, table_name: str):
-        """Возвращает модель SQLAlchemy по имени таблицы"""
+    @lru_cache(maxsize=128)
+    def _get_manager_id(self, manager_name):
+        """Получение ID менеджера с кэшированием"""
+        try:
+            manager = db.query(Manager).filter(Manager.Manager_name == manager_name).first()
+            if manager:
+                return manager.id
+            else:
+                # Создаем нового менеджера, если не найден
+                new_manager = Manager(Manager_name=manager_name)
+                db.add(new_manager)
+                db.commit()
+                return new_manager.id
+                
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка при получении/создании менеджера: {e}")
+            return None
+
+    def _get_model_for_table(self, table_name):
+        """Получение модели SQLAlchemy по имени таблицы"""
         models = {
-            "Движения": Movements,
-            "Комплектации": Complects,
-            "Комплектации Ручные": Complects_manual,
-            "Списания": WriteOff
+            "Закупки": temp_Purchase,
+            "Продажи": temp_Sales,
+            "Заказы клиентов": temp_Orders,
+            "Заказы поставщиков": Purchase_Order
         }
         return models.get(table_name)
-        
-    def _convert_to_datetime(self, value):
-        """Конвертирует значение в datetime или возвращает None"""
-        if pd.isna(value) or value is None:
-            return None
-        if isinstance(value, pd.Timestamp):
-            return value.to_pydatetime()
+
+    def _update_temp_purchase_in_db(self, df, report_start_date):
+        """Обновление временной таблицы закупок в БД с добавлением данных из Complects"""
         try:
-            return pd.to_datetime(value).to_pydatetime()
-        except:
-            return None
+            # Чтение данных из таблицы Complects
+            complects_data = db.query(Complects).filter(
+                (Complects.Date > report_start_date) | 
+                (Complects.Date == report_start_date)
+            ).all()
+            
+            # Преобразование данных Complects
+            complects_list = [{
+                'Document': c.Document,
+                'Date': c.Date,
+                'Doc_type_id': c.DocType_id,
+                'Status': 'Склад',
+                'Material_id': c.Material_id,
+                'Stock': c.Stock,
+                'Qty': c.Qty,
+                'Amount_1C': 0,
+                'Currency': 'RUB',
+                'VAT': '20%',
+                'Doc_based': None,
+                'Date_Doc_based': None,
+                'Supplier_id': None,
+                'Country': None,
+                'GTD': None,
+                'FX_rate_1C': 1.0,
+            } for c in complects_data]
+            
+            # Объединение данных
+            if complects_list:
+                complects_df = pd.DataFrame(complects_list)
+                if not complects_df.empty:
+                    df = pd.concat([df, complects_df], axis=0, ignore_index=True)
+            
+            # Обработка числовых колонок
+            numeric_columns = ['FX_rate_1C', 'Qty', 'Amount_1C']
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            # Удаляем старые данные
+            db.query(temp_Purchase).delete()
+            
+            # Подготовка данных для bulk вставки
+            purchase_data = []
+            for _, row in df.iterrows():
+                purchase_data.append({
+                    'Document': self._safe_str(row.get('Document')),
+                    'Date': self._safe_date(row.get('Date')),
+                    'Doc_type_id': self._safe_int(row.get('Doc_type_id')),
+                    'Status': self._safe_str(row.get('Status')),
+                    'Doc_based': self._safe_str(row.get('Doc_based')),
+                    'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
+                    'Supplier_id': self._safe_str(row.get('Supplier_id')),
+                    'Material_id': self._safe_str(row.get('Material_id')),
+                    'Stock': self._safe_str(row.get('Stock')),
+                    'Currency': self._safe_str(row.get('Currency')),
+                    'VAT': self._safe_str(row.get('VAT')),
+                    'Country': self._safe_str(row.get('Country')),
+                    'GTD': self._safe_str(row.get('GTD')),
+                    'FX_rate_1C': self._safe_float(row.get('FX_rate_1C')),
+                    'Qty': self._safe_float(row.get('Qty')),
+                    'Amount_1C': self._safe_float(row.get('Amount_1C'))
+                })
+            
+            # Bulk вставка
+            if purchase_data:
+                db.bulk_insert_mappings(temp_Purchase, purchase_data)
+            
+            db.commit()
+            self.show_error_message(f"Добавлено {len(purchase_data)} записей в temp_Purchase")
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка при обновлении temp_Purchase: {str(e)}")
+            raise e
 
-    def _convert_to_date(self, value):
-        """Конвертирует значение в date или возвращает None"""
-        dt = self._convert_to_datetime(value)
-        return dt.date() if dt else None
+    def _update_temp_sales_in_db(self, df, report_start_date=None):
+        """Обновление временной таблицы продаж в БД"""
+        try:
+            if report_start_date:
+                # Получаем ВСЕ данные из Marketplace с фильтром по дате
+                marketplace_data = db.query(Marketplace).filter(
+                    Marketplace.Date >= report_start_date
+                ).all()
+                
+                # Преобразуем в список словарей ВСЕ поля из Marketplace + добавляем Status
+                marketplace_list = []
+                for m in marketplace_data:
+                    marketplace_list.append({
+                        'Document': m.Document,
+                        'Date': m.Date,
+                        'Qty': m.Qty,
+                        'Amount_1C': m.Amount_1C,
+                        'Price_1C': m.Price_1C,
+                        'Payment_terms': m.Payment_terms,
+                        'Post_payment': m.Post_payment,
+                        'Plan_pay_Date': m.Plan_pay_Date,
+                        'Stock': m.Stock,
+                        'UoM': m.UoM,
+                        'Currency': m.Currency,
+                        'FX_rate': m.FX_rate,
+                        'VAT': m.VAT,
+                        'Calendar_id': m.Calendar_id,
+                        'Material_id': m.Material_id,
+                        'Customer_id': m.Customer_id,
+                        'Manager_id': m.Manager_id,
+                        'Contract_id': m.Contract_id,
+                        'Holding_id': m.Holding_id,
+                        'Sector_id': m.Sector_id,
+                        'DocType_id': m.DocType_id,
+                        'Status': 'Факт'  # Добавляем только эту колонку
+                    })
+                
+                if marketplace_list:
+                    marketplace_df = pd.DataFrame(marketplace_list)
+                    df = pd.concat([df, marketplace_df], axis=0, ignore_index=True)
+            
+            # Удаляем старые данные
+            db.query(temp_Sales).delete()
+            
+            # Подготовка данных для bulk вставки
+            sales_data = []
+            for _, row in df.iterrows():
+                sales_data.append({
+                    'Document': self._safe_str(row.get('Document')),
+                    'Date': self._safe_date(row.get('Date')),
+                    'Doc_type_id': self._safe_int(row.get('DocType_id') or row.get('Doc_type_id')),
+                    'Status': self._safe_str(row.get('Status')),
+                    'Bill': self._safe_str(row.get('Bill')),
+                    'Bill_Date': self._safe_date(row.get('Bill_Date')),
+                    'Doc_based': self._safe_str(row.get('Doc_based')),
+                    'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
+                    'Customer_id': self._safe_str(row.get('Customer_id')),
+                    'Customer_Name': self._safe_str(row.get('Customer_Name')),
+                    'Material_id': self._safe_str(row.get('Material_id')),
+                    'Stock': self._safe_str(row.get('Stock')),
+                    'Delivery_method': self._safe_str(row.get('Delivery_method')),
+                    'Currency': self._safe_str(row.get('Currency')),
+                    'FX_rate_1C': self._safe_float(row.get('FX_rate') or row.get('FX_rate_1C')),
+                    'Qty': self._safe_float(row.get('Qty')),
+                    'Amount_1C': self._safe_float(row.get('Amount_1C')),
+                    'VAT': self._safe_str(row.get('VAT')),
+                    'Recipient': self._safe_str(row.get('Recipient')),
+                    'Recipient_code': self._safe_str(row.get('Recipient_code')),
+                    'Contract_id': self._safe_str(row.get('Contract_id')),
+                    'Manager_id': self._safe_int(row.get('Manager_id')),
+                    'Days_for_Pay': self._safe_int(row.get('Days_for_Pay')),
+                    'Plan_Delivery_Day': self._safe_date(row.get('Plan_Delivery_Day')),
+                    'Plan_Pay_Day': self._safe_date(row.get('Plan_pay_Date') or row.get('Plan_Pay_Day')),
+                    'Post_payment': self._safe_float(row.get('Post_payment')),
+                    'Payment_term': self._safe_str(row.get('Payment_terms') or row.get('Payment_term')),
+                    'Priority': self._safe_str(row.get('Priority')),
+                    'Comment': self._safe_str(row.get('Comment')),
+                    'Sborka': self._safe_str(row.get('Sborka')),
+                    'Spec_Order': self._safe_str(row.get('Spec_Order')),
+                    'Purchase_doc': self._safe_str(row.get('Purchase_doc')),
+                    'Purchase_date': self._safe_date(row.get('Purchase_date')),
+                    'Order': self._safe_str(row.get('Order')),
+                    'k_Movement': self._safe_float(row.get('k_Movement')),
+                    'k_Storage': self._safe_float(row.get('k_Storage')),
+                    'k_Money': self._safe_float(row.get('k_Money'))
+                })
+            
+            # Bulk вставка
+            if sales_data:
+                db.bulk_insert_mappings(temp_Sales, sales_data)
+            
+            db.commit()
+            self.show_error_message(f"Добавлено {len(sales_data)} записей в temp_Sales")
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка при обновлении temp_Sales: {str(e)}")
+            raise e
 
-    def _safe_supplier_id(self, value):
-        """Обрабатывает Supplier_id, заменяя NaN/None на NULL"""
-        if pd.isna(value) or value is None or str(value).strip() in ['', 'nan', 'None']:
-            return None
-        return str(value).strip()
+    def _update_temp_orders_in_db(self, df):
+        """Обновление временной таблицы заказов в БД"""
+        try:
+            # Удаляем старые данные
+            db.query(temp_Orders).delete()
+            
+            # Подготовка данных для bulk вставки
+            orders_data = []
+            for _, row in df.iterrows():
+                orders_data.append({
+                    'Bill': self._safe_str(row.get('Bill')),
+                    'Bill_Date': self._safe_date(row.get('Bill_Date')),
+                    'Status': self._safe_str(row.get('Status')),
+                    'Customer_id': self._safe_str(row.get('Customer_id')),
+                    'Customer_Name': self._safe_str(row.get('Customer_Name')),
+                    'Material_id': self._safe_str(row.get('Material_id')),
+                    'Qty': self._safe_float(row.get('Qty')),
+                    'Amount_1C': self._safe_float(row.get('Amount_1C')),
+                    'VAT': self._safe_str(row.get('VAT')),
+                    'Currency': self._safe_str(row.get('Currency')),
+                    'Recipient': self._safe_str(row.get('Recipient')),
+                    'Recipient_code': self._safe_str(row.get('Recipient_code')),
+                    'Reserve_date': self._safe_date(row.get('Reserve_date')),
+                    'Reserve_days': self._safe_int(row.get('Reserve_days')),
+                    'Contract': self._safe_str(row.get('Contract')),
+                    'Contract_id': self._safe_str(row.get('Contract_id')),
+                    'Manager': self._safe_str(row.get('Manager')),
+                    'Document': self._safe_str(row.get('Document')),
+                    'Date': self._safe_date(row.get('Date')),
+                    'Comment': self._safe_str(row.get('Comment')),
+                    'Days_for_Pay': self._safe_int(row.get('Days_for_Pay')),
+                    'FX_rate_1C': self._safe_float(row.get('FX_rate_1C')),
+                    'Plan_Pay_Day': self._safe_date(row.get('Plan_Pay_Day')),
+                    'Post_payment': self._safe_float(row.get('Post_payment')),
+                    'Priority': self._safe_str(row.get('Priority')),
+                    'Stock': self._safe_str(row.get('Stock')),
+                    'Delivery_method': self._safe_str(row.get('Delivery_method')),
+                    'Pay_status': self._safe_str(row.get('Pay_status')),
+                    'Payment_term': self._safe_str(row.get('Payment_term')),
+                    'Doc_based': self._safe_str(row.get('Doc_based')),
+                    'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
+                    'Sborka': self._safe_str(row.get('Sborka')),
+                    'Spec_Order': self._safe_str(row.get('Spec_Order')),
+                    'Purchase_doc': self._safe_str(row.get('Purchase_doc')),
+                    'Purchase_date': self._safe_date(row.get('Purchase_date')),
+                    'Supplier_id': self._safe_str(row.get('Supplier_id')),
+                    'Order': self._safe_str(row.get('Order')),
+                    'Doc_type_id': self._safe_int(row.get('Doc_type_id')),
+                    'k_Movement': self._safe_float(row.get('k_Movement')),
+                    'k_Storage': self._safe_float(row.get('k_Storage')),
+                    'k_Money': self._safe_float(row.get('k_Money'))
+                })
+            
+            # Bulk вставка
+            if orders_data:
+                db.bulk_insert_mappings(temp_Orders, orders_data)
+            
+            db.commit()
+            self.show_error_message(f"Добавлено {len(orders_data)} записей в temp_Orders")
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка при обновлении temp_Orders: {str(e)}")
+            raise e
+
+    def _update_purchase_order_in_db(self, df):
+        """Обновление таблицы заказов поставщиков в БД"""
+        try:
+            # Удаляем старые данные
+            db.query(Purchase_Order).delete()
+            
+            # Подготовка данных для bulk вставки
+            purchase_order_data = []
+            for _, row in df.iterrows():
+                purchase_order_data.append({
+                    'Status': self._safe_str(row.get('Status')),
+                    'Date': self._safe_date(row.get('Date')),
+                    'Document': self._safe_str(row.get('Document')),
+                    'Supplier_id': self._safe_str(row.get('Supplier_id')),
+                    'Supplier_Name_report': self._safe_str(row.get('Supplier_Name_report')),
+                    'Supplier1': self._safe_str(row.get('Supplier1')),
+                    'Supplier2': self._safe_str(row.get('Supplier2')),
+                    'Order': self._safe_str(row.get('Order')),
+                    'Shipment': self._safe_str(row.get('Shipment')),
+                    'Material_id': self._safe_str(row.get('Material_id')),
+                    'VAT': self._safe_str(row.get('VAT')),
+                    'Currency': self._safe_str(row.get('Currency')),
+                    'Qty': self._safe_float(row.get('Qty')),
+                    'Amount_1C': self._safe_float(row.get('Amount_1C')),
+                    'Price_1C': self._safe_float(row.get('Price_1C')),
+                    'Qty_pcs': self._safe_float(row.get('Qty_pcs')),
+                    'Qty_lt': self._safe_float(row.get('Qty_lt')),
+                    'Payment_FX': self._safe_float(row.get('Payment_FX')),
+                    'Price_pcs_Curr': self._safe_float(row.get('Price_pcs_Curr')),
+                    'Price_lt_Curr': self._safe_float(row.get('Price_lt_Curr')),
+                    'Price_wo_VAT_Rub': self._safe_float(row.get('Price_wo_VAT_Rub')),
+                    'Amount_wo_VAT_Rub': self._safe_float(row.get('Amount_wo_VAT_Rub')),
+                    'Transport_mn': self._safe_float(row.get('Transport_mn')),
+                    'Customs_fee': self._safe_float(row.get('Customs_fee')),
+                    'Customs_docs': self._safe_float(row.get('Customs_docs')),
+                    'Bank_fee': self._safe_float(row.get('Bank_fee')),
+                    'Agency': self._safe_float(row.get('Agency')),
+                    'Add_Services': self._safe_float(row.get('Add_Services')),
+                    'ED': self._safe_float(row.get('ED')),
+                    'Eco_fee': self._safe_float(row.get('Eco_fee')),
+                    'Movement_fee': self._safe_float(row.get('Movement_fee')),
+                    'Load_Unload': self._safe_float(row.get('Load_Unload')),
+                    'LPC_purchase_lt': self._safe_float(row.get('LPC_purchase_lt')),
+                    'LPC_purchase_pcs': self._safe_float(row.get('LPC_purchase_pcs')),
+                    'LPC_purchase_amount': self._safe_float(row.get('LPC_purchase_amount')),
+                    'Qty_after_spec_order': self._safe_float(row.get('Qty_after_spec_order')),
+                    'LPC_purchase_after_spec_order': self._safe_float(row.get('LPC_purchase_after_spec_order')),
+                    'Doc_type_id': self._safe_int(row.get('Doc_type_id'))
+                })
+            
+            # Bulk вставка
+            if purchase_order_data:
+                db.bulk_insert_mappings(Purchase_Order, purchase_order_data)
+            
+            db.commit()
+            self.show_error_message(f"Добавлено {len(purchase_order_data)} записей в Purchase_Order")
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка при обновлении Purchase_Order: {str(e)}")
+            raise e
+
+    def show_message(self, text):
+        """Показать информационное сообщение"""
+        msg = QMessageBox()
+        msg.setWindowTitle("Информация")
+        msg.setIcon(QMessageBox.Information)
         
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
+        
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
+        else:
+            msg.setText(text)
+        
+        # Кнопки
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+        ok_button = msg.addButton(QMessageBox.Ok)
+        
+        def copy_text():
+            QApplication.clipboard().setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        msg.exec_()
+
+    def show_error_message(self, text):
+        """Показать сообщение об ошибке"""
+        msg = QMessageBox()
+        msg.setWindowTitle("Ошибка")
+        msg.setIcon(QMessageBox.Critical)
+        
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
+        
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Произошла ошибка. Подробности ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
+        else:
+            msg.setText(text)
+        
+        # Кнопки
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+        ok_button = msg.addButton(QMessageBox.Ok)
+        
+        def copy_text():
+            QApplication.clipboard().setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        msg.exec_()
+
     def _safe_date(self, value):
         """Безопасное преобразование в date с обработкой некорректных значений"""
         if pd.isna(value) or value is None or str(value) in ['NaT', 'nan', 'None', '']:
@@ -1896,85 +2665,26 @@ class MovesPage(QWidget):
         
         return None
 
-    def _null_if_empty(self, value):
-        """Преобразует пустые/некорректные значения в None"""
-        if pd.isna(value) or value in ['', 'nan', 'None', 'NaT', None]:
+    def _safe_str(self, value):
+        """Безопасное преобразование в строку с обработкой None значений"""
+        if pd.isna(value) or value is None or str(value).lower() in ['nat', 'nan', 'none', '']:
             return None
-        return str(value) if not isinstance(value, (int, float)) else value
+        return str(value)
+
+    def _safe_int(self, value):
+        """Безопасное преобразование в int"""
+        if pd.isna(value) or value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
 
     def _safe_float(self, value):
-        """Безопасное преобразование в float с обработкой ошибок"""
+        """Безопасное преобразование в float"""
         if pd.isna(value) or value is None:
-            return 0.0
+            return None
         try:
             return float(value)
         except (ValueError, TypeError):
-            return 0.0
-
-    def _is_valid_value(self, value):
-        """Проверяет, что значение не пустое и не равно '-'"""
-        return value is not None and str(value).strip() not in ["", "-"]
-
-    def _extract_name(self, combined_value):
-        """Извлекает имя из строки формата 'код - имя' или возвращает исходное значение"""
-        if " - " in combined_value:
-            return combined_value.split(" - ")[-1].strip()
-        return combined_value.strip()
-
-    def show_message(self, text):
-        """Показать информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
-        
-        # Устанавливаем большой минимальный размер
-        msg.setMinimumSize(900, 600)
-        
-        # Всегда используем detailed text для длинных сообщений
-        if len(text) > 500:
-            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
-            msg.setText(short_text)
-            msg.setDetailedText(text)
-        else:
-            msg.setText(text)
-        
-        # Кнопки
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
-        
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        msg.exec_()
-
-    def show_error_message(self, text):
-        """Показать сообщение об ошибке"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Ошибка")
-        msg.setIcon(QMessageBox.Critical)
-        
-        # Устанавливаем большой минимальный размер
-        msg.setMinimumSize(900, 600)
-        
-        # Всегда используем detailed text для длинных сообщений
-        if len(text) > 500:
-            short_text = "Произошла ошибка. Подробности ниже (используйте кнопку 'Show Details')"
-            msg.setText(short_text)
-            msg.setDetailedText(text)
-        else:
-            msg.setText(text)
-        
-        # Кнопки
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
-        
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        msg.exec_()
-
-
-
-
+            return None

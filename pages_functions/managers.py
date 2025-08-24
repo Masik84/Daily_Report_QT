@@ -178,8 +178,6 @@ class ManagersPage(QWidget):
 
         for row in data:
             manager_name = row.get('Manager_name')
-            if not manager_name or manager_name in ('-', 'no'):
-                continue
 
             stl_id = self._get_id(STL, 'STL_name', row.get('STL_name'))
             teamlead_id = self._get_id(TeamLead, 'TeamLead_name', row.get('TeamLead_name'))
@@ -224,9 +222,7 @@ class ManagersPage(QWidget):
 
         for row in data:
             name = row.get(name_field)
-            if not name or name in ('-', 'no'):
-                continue
-
+            
             item_data = {
                 name_field: name,
                 **{k: row.get(v) for k, v in extra_fields.items()}

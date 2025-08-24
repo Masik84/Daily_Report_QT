@@ -683,6 +683,13 @@ QCalendarWidget QSpinBox::down-arrow {
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>Контрагент</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -765,6 +772,16 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
+                <height>25</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="line_customer">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
                 <height>25</height>
                </size>
               </property>

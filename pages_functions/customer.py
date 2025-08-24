@@ -237,7 +237,7 @@ class CustomerPage(QWidget):
                     if not result_df.empty:
                         output_df = result_df[['id', 'Customer_name', 'INN', 'Sector', 'Holding', 'Price_type', 'Несоответствия'] + 
                                     [f"{col}_1C" for col in field_names.keys()]]
-                        output_file = "mismatches_report.xlsx"
+                        output_file = "ERRORs_mismatches_report.xlsx"
                         output_df.to_excel(output_file, index=False)
                         self.show_message(
                             f"Найдено {len(result_df)} несоответствий.\n"
@@ -273,7 +273,7 @@ class CustomerPage(QWidget):
             }
 
             df = df.rename(columns=column_map)[list(column_map.values())]
-            return df[df['id'] != 'n/a'].to_dict('records')
+            return df.to_dict('records')
 
         except Exception as e:
             self.show_error_message(f"Ошибка чтения файла договоров: {str(e)}")
@@ -437,12 +437,22 @@ class CustomerPage(QWidget):
             'missing_fields': 0,
             'skipped': []
         }
+        
+        # Список для хранения пропущенных договоров
+        skipped_contracts = []
 
         try:
             # Получаем справочники из БД
             existing_contracts = {c.id: c for c in db.query(Contract).all()}
             
-            # Важное изменение: создаем словарь для поиска менеджеров по AM_1C_Name
+            # Получаем ID специального менеджера "-"
+            special_manager = db.query(Manager).filter(Manager.AM_1C_Name == "-").first()
+            if not special_manager:
+                raise Exception("В базе не найден специальный менеджер '-' для договоров без менеджера")
+            
+            special_manager_id = special_manager.id
+            
+            # Создаем словарь для поиска менеджеров по AM_1C_Name
             managers = db.query(Manager).all()
             manager_name_to_id = {
                 m.AM_1C_Name: m.id 
@@ -450,14 +460,16 @@ class CustomerPage(QWidget):
                 if m.AM_1C_Name  # Исключаем пустые значения
             }
             
-            # Дополнительный словарь для обратной совместимости (если часть данных использует Manager_name)
+            # Дополнительный словарь для обратной совместимости
             manager_name_fallback = {
                 m.Manager_name: m.id 
                 for m in managers 
                 if m.Manager_name  # Исключаем пустые значения
             }
             
-            customer_ids = {c[0] for c in db.query(Cust_db.id).all()}
+            # Получаем словарь клиентов для отображения названий
+            customers = {c.id: c.Customer_name for c in db.query(Cust_db.id, Cust_db.Customer_name).all()}
+            customer_ids = set(customers.keys())
             
             to_insert = []
             to_update = []
@@ -469,33 +481,64 @@ class CustomerPage(QWidget):
                 required_fields = ['id', 'Contract', 'Contract_Type', 'Customer_id', 'Manager_name']
                 if not all(field in row for field in required_fields):
                     stats['missing_fields'] += 1
-                    stats['skipped'].append(f"Отсутствуют обязательные поля в строке {stats['total']}")
+                    skip_reason = "Отсутствуют обязательные поля"
+                    stats['skipped'].append(skip_reason)
+                    skipped_contracts.append({
+                        'id': row.get('id', 'N/A'),
+                        'Contract': row.get('Contract', 'N/A'),
+                        'Contract_Type': row.get('Contract_Type', 'N/A'),
+                        'Customer_id': row.get('Customer_id', 'N/A'),
+                        'Контрагент': row.get('Контрагент', 'N/A'),
+                        'Manager_name': row.get('Manager_name', 'N/A'),
+                        'Reason': skip_reason
+                    })
                     continue
 
-                # Проверка менеджера (основная логика)
+                # Обработка менеджера
                 manager_name = str(row['Manager_name']).strip()
+                
+                # Если менеджер "-" или пустой, используем специального менеджера
                 if not manager_name or manager_name == '-':
-                    stats['no_manager'] += 1
-                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Пустое имя менеджера)")
-                    continue
+                    manager_id = special_manager_id
+                else:
+                    # Поиск менеджера по AM_1C_Name (основной способ)
+                    manager_id = manager_name_to_id.get(manager_name)
                     
-                # Поиск менеджера по AM_1C_Name (основной способ)
-                manager_id = manager_name_to_id.get(manager_name)
-                
-                # Если не нашли, пробуем найти по Manager_name (для обратной совместимости)
-                if not manager_id:
-                    manager_id = manager_name_fallback.get(manager_name)
-                
-                if not manager_id:
-                    stats['no_manager'] += 1
-                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Менеджер '{manager_name}' не найден ни по AM_1C_Name, ни по Manager_name)")
-                    continue
+                    # Если не нашли, пробуем найти по Manager_name
+                    if not manager_id:
+                        manager_id = manager_name_fallback.get(manager_name)
+                    
+                    # Если менеджер не найден, пропускаем договор
+                    if not manager_id:
+                        stats['no_manager'] += 1
+                        skip_reason = "Менеджер не найден"
+                        stats['skipped'].append(skip_reason)
+                        skipped_contracts.append({
+                            'id': row.get('id', 'N/A'),
+                            'Contract': row.get('Contract', 'N/A'),
+                            'Contract_Type': row.get('Contract_Type', 'N/A'),
+                            'Customer_id': row.get('Customer_id', 'N/A'),
+                            'Контрагент': row.get('Контрагент', 'N/A'),
+                            'Manager_name': manager_name,
+                            'Reason': skip_reason
+                        })
+                        continue
 
                 # Проверка customer_id
                 customer_id = row['Customer_id']
                 if not customer_id or customer_id not in customer_ids:
                     stats['invalid_customer'] += 1
-                    stats['skipped'].append(f"{row.get('Contract', 'Без названия')} (Неверный Customer_id: {customer_id})")
+                    skip_reason = "Клиент не найден"
+                    stats['skipped'].append(skip_reason)
+                    skipped_contracts.append({
+                        'id': row.get('id', 'N/A'),
+                        'Contract': row.get('Contract', 'N/A'),
+                        'Contract_Type': row.get('Contract_Type', 'N/A'),
+                        'Customer_id': customer_id,
+                        'Контрагент': row.get('Контрагент', 'N/A'),
+                        'Manager_name': manager_name,
+                        'Reason': skip_reason
+                    })
                     continue
 
                 # Формирование данных договора
@@ -522,17 +565,41 @@ class CustomerPage(QWidget):
                 db.bulk_update_mappings(Contract, to_update)
             db.commit()
 
+            # Сохранение пропущенных договоров в Excel
+            if skipped_contracts:
+                try:
+                    skipped_df = pd.DataFrame(skipped_contracts)
+                    # Упорядочиваем колонки для лучшего отображения
+                    column_order = ['id', 'Contract', 'Contract_Type', 'Customer_id', 'Контрагент', 'Manager_name', 'Reason']
+                    skipped_df = skipped_df[column_order]
+                    
+                    filename = "ERRORs_skipped_contracts.xlsx"
+                    skipped_df.to_excel(filename, index=False)
+                    
+                    # Добавляем информацию о файле в отчет
+                    skip_info = f"\nПропущенные договоры сохранены в: {filename}"
+                except Exception as e:
+                    skip_info = f"\nОшибка сохранения файла с пропущенными договорами: {str(e)}"
+            else:
+                skip_info = ""
+
             # Формирование отчёта
             report = [
                 f"Всего обработано: {stats['total']}",
-                f"Сохранено договоров: {stats['saved']}"
+                f"Сохранено договоров: {stats['saved']}",
+                f"Пропущено (нет менеджера): {stats['no_manager']}",
+                f"Пропущено (неверный клиент): {stats['invalid_customer']}",
+                f"Пропущено (отсутствуют поля): {stats['missing_fields']}",
+                f"Всего пропущено: {len(skipped_contracts)}" + skip_info
             ]
             
             self.show_message("\n".join(report))
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             db.rollback()
-            error_msg = f"Ошибка сохранения договоров: {str(e)}\n\n{stats}"
+            error_msg = f"Ошибка сохранения договоров: {str(e)}"
+            if "не найден специальный менеджер" in str(e):
+                error_msg += "\n\nСоздайте в базе менеджера с AM_1C_Name = '-'"
             self.show_error_message(error_msg)
         finally:
             db.close()

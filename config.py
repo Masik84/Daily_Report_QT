@@ -16,14 +16,15 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 
 All_data_file = MAIN_FOLDER + "! All DATA !.xlsx"
 AddCosts_File = MAIN_FOLDER + "! ДопРасходы !.xlsx"
+CustDelivery_File = MAIN_FOLDER + "! Доставка клиентам !.xlsx"
 
-Material_file = MAIN_FOLDER + "Выгрузки_new\\Реестр номенклатур XLSX.xlsx"
-Customer_file = MAIN_FOLDER + "Выгрузки_new\\Реестр контрагентов XLSX.xlsx"
-Contract_file = MAIN_FOLDER + "Выгрузки_new\\Реестр договоров XLSX.xlsx"
+Material_file = MAIN_FOLDER + "Выгрузки\\Реестры\\Реестр номенклатур XLSX.xlsx"
+Customer_file = MAIN_FOLDER + "Выгрузки\\Реестры\\Реестр контрагентов XLSX.xlsx"
+Contract_file = MAIN_FOLDER + "Выгрузки\\Реестры\\Реестр договоров XLSX.xlsx"
 
 
 Collection_file = MAIN_FOLDER + "! Сборщик отчета !.xlsx"
-Complectation_file = MAIN_FOLDER + "! Комплектации !_2.xlsx" 
+Complectation_file = MAIN_FOLDER + "! Комплектации !.xlsx" 
 new_Complectation_file = MAIN_FOLDER + "ERRORs_Compectations_new.xlsx"
 
 
@@ -36,7 +37,7 @@ Sales_folder = MAIN_FOLDER + "Выгрузки\\Продажи"
 
 Orders_file = MAIN_FOLDER + "Выгрузки\\Счета\\Заказы.xlsx"
 Reserve_file = MAIN_FOLDER + "Выгрузки\\Счета\\Резервы.xlsx"
-Orders_file_new = MAIN_FOLDER + "Выгрузки\\Заказы.xlsx"
+
 
 OZON_file = MAIN_FOLDER + "WorkFiles\\ОЗОН.xlsm"
 OZON_folder = MAIN_FOLDER + "WorkFiles\\OZON\\Отчет по товарам_нов"

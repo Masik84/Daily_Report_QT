@@ -132,11 +132,10 @@ class AddSupplCostsPage(QWidget):
                     data = self.read_add_suppl_file(file_path)
                     self.save_AddSupplCost(data)
                     db.commit()
-                    
+                    self.show_message('Данные доп расходов успешно загружены!')
                     # Обновляем интерфейс
                     self.refresh_all_comboboxes()
-                    self.show_message('Данные дополнительных расходов успешно загружены!')
-                    
+
                 except Exception as e:
                     db.rollback()
                     raise

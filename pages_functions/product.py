@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidg
                               QTableWidgetItem, QWidget, QApplication)
 from PySide6.QtCore import Qt
 from functools import lru_cache
+import traceback
 
 from wind.pages.products_ui import Ui_Form
 from config import Material_file, All_data_file
