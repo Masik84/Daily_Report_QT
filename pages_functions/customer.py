@@ -269,7 +269,8 @@ class CustomerPage(QWidget):
                 'Наименование': 'Contract',
                 'Тип цен': 'Price_Type', 
                 'Условие оплаты': 'Payment_Condition',
-                'Код контрагента': 'Customer_id'
+                'Код контрагента': 'Customer_id',
+                'Контрагент': 'Контрагент'
             }
 
             df = df.rename(columns=column_map)[list(column_map.values())]
@@ -573,7 +574,7 @@ class CustomerPage(QWidget):
                     column_order = ['id', 'Contract', 'Contract_Type', 'Customer_id', 'Контрагент', 'Manager_name', 'Reason']
                     skipped_df = skipped_df[column_order]
                     
-                    filename = "ERRORs_skipped_contracts.xlsx"
+                    filename = "ERRORs_Contracts_skipped.xlsx"
                     skipped_df.to_excel(filename, index=False)
                     
                     # Добавляем информацию о файле в отчет
