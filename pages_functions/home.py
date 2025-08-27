@@ -9,6 +9,7 @@ from pages_functions.customer import CustomerPage
 from pages_functions.cost import CostsPage
 from pages_functions.supplier import SupplierPage
 from pages_functions.add_costs import AddSupplCostsPage
+from pages_functions.marketplace import MarketplacePage
 
 class Home(QWidget):
     def __init__(self):
@@ -27,7 +28,7 @@ class Home(QWidget):
         self.cost_module = CostsPage()
         self.supplier_module = SupplierPage()
         self.addcosts_module = AddSupplCostsPage()
-        
+        self.marketplace = MarketplacePage()
 
     def setup_ui(self):
         """Настройка интерфейса с кнопками"""
@@ -36,7 +37,7 @@ class Home(QWidget):
         
         # Создаем кнопки
         self.btn_update_all = QPushButton("Обновить все Справочники")
-        self.btn_update_marketplace = QPushButton("Обновить Данные по МакетПлейсам")
+        self.btn_update_marketplace = QPushButton("Обновить МакетПлейсы")
         self.btn_update_purchases = QPushButton("Запустить обновление Закупок/Продаж")
         self.btn_update_main_report = QPushButton("Запустить обновление основного Отчета")
         self.btn_create_manager_files = QPushButton("Запустить формирование файлов для Менеджеров")
@@ -45,6 +46,7 @@ class Home(QWidget):
         
         # Добавляем кнопки в layout
         self.layout.addWidget(self.btn_update_all)
+        self.layout.addWidget(self.btn_update_marketplace)
         self.layout.addWidget(self.btn_update_purchases)
         self.layout.addWidget(self.btn_update_main_report)
         self.layout.addWidget(self.btn_create_manager_files)
@@ -53,7 +55,7 @@ class Home(QWidget):
         
         # Получаем список всех кнопок
         buttons = [
-            self.btn_update_all, self.btn_update_purchases, 
+            self.btn_update_all, self.btn_update_marketplace, self.btn_update_purchases, 
             self.btn_update_main_report, self.btn_create_manager_files,
             self.btn_send_main_report, self.btn_send_manager_reports
         ]
@@ -105,7 +107,6 @@ class Home(QWidget):
             self.managers_module.upload_data()
 
             # Обновляем справочник клиентов и договоров
-            self.customer_module.upload_data()
             self.customer_module.upload_data()
 
             # Обновляем справочник затрат (Costs)

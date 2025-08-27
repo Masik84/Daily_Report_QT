@@ -55,7 +55,7 @@ class MovesPage(QWidget):
         self.ui.line_Mnth.currentTextChanged.connect(self.on_month_changed)
         
         self.ui.btn_find.clicked.connect(self.find_moves_data)
-        self.ui.btn_refresh.clicked.connect(self.refresh_data)
+        self.ui.btn_refresh.clicked.connect(self.upload_data)
     
     def show_context_menu(self, position):
         """Показ контекстного меню для копирования"""
@@ -607,60 +607,51 @@ class MovesPage(QWidget):
             ).join(Materials.product_name)
 
     def _apply_filters(self, query, model):
-        """Применяет фильтры к запросу с полной поддержкой всех моделей"""
-        doc_type = self.ui.line_doc_type.currentText()
+        """Применяет фильтры к запросу с учетом типа модели"""
+        # Фильтр по году
         year = self.ui.line_Year.currentText()
-        month = self.ui.line_Mnth.currentText()
-        customer = self.ui.line_customer.currentText()
-        cust_id = self.ui.line_cust_id.text()
-        article = self.ui.line_article.text()
-        product = self.ui.line_product.currentText()
+        if year != "-":
+            try:
+                year_int = int(year)
+                query = query.filter(extract('year', model.Date) == year_int)
+            except ValueError:
+                pass
         
-        # Общие фильтры для всех моделей
+        # Фильтр по месяцу
+        month = self.ui.line_Mnth.currentText()
+        if month != "-":
+            try:
+                month_int = int(month)
+                query = query.filter(extract('month', model.Date) == month_int)
+            except ValueError:
+                pass
+        
+        # Фильтр по типу документа
+        doc_type = self.ui.line_doc_type.currentText()
         if doc_type != "-":
             query = query.filter(DOCType.Doc_type == doc_type)
         
-        if year != "-":
-            query = query.filter(extract('year', model.Date) == int(year))
+        # Фильтр по контрагенту (клиент или поставщик)
+        customer_supplier = self.ui.line_customer.currentText()
+        if customer_supplier != "-":
+            if model in [temp_Sales, temp_Orders]:
+                # Для моделей с клиентами
+                query = query.join(model.customer).filter(Customer.Customer_name == customer_supplier)
+            elif model in [temp_Purchase, Purchase_Order]:
+                # Для моделей с поставщиками - ТОЛЬКО ЕСЛИ ЕСТЬ Supplier_id
+                query = query.join(model.supplier).filter(
+                    and_(
+                        model.Supplier_id.isnot(None),  # Только записи с поставщиком
+                        Supplier.Supplier_Name == customer_supplier
+                    )
+                )
         
-        if month != "-":
-            query = query.filter(extract('month', model.Date) == int(month))
-        
-        if article:
-            query = query.filter(Materials.Article.like(f"%{article}%"))
-        
+        # Фильтр по продукту
+        product = self.ui.line_product.currentText()
         if product != "-":
-            query = query.filter(Product_Names.Product_name == product)
-        
-        # Специфичные фильтры для Movements
-        if model == Movements:
-            if customer != "-":
-                # Определяем, использовать Supplier или Customer по типу документа
-                supplier_doc_types = [
-                    "1.0. Поступление",
-                    "1.0. Поступление (перераб)",
-                    "1.1. Поступление (корр-ка)",
-                    "7.0. Передача в переработку"
-                ]
-                
-                current_doc_type = self.ui.line_doc_type.currentText()
-                if current_doc_type in supplier_doc_types:
-                    query = query.filter(Supplier.Supplier_Name == customer)
-                else:
-                    query = query.filter(Customer.Customer_name == customer)
-            
-            if cust_id:
-                query = query.filter(
-                    (Customer.id.like(f"%{cust_id}%")) | 
-                    (Supplier.id.like(f"%{cust_id}%")))
-        
-        # Специфичные фильтры для WriteOff
-        elif model == WriteOff:
-            if customer != "-":
-                query = query.filter(Supplier.Supplier_Name == customer)
-            
-            if cust_id:
-                query = query.filter(Supplier.id.like(f"%{cust_id}%"))
+            query = query.join(model.material).join(
+                Product_Names, Materials.Product_Names_id == Product_Names.id
+            ).filter(Product_Names.Product_name == product)
         
         return query
 
@@ -779,11 +770,13 @@ class MovesPage(QWidget):
         self.ui.label_Volume.setText(f"{format_number(volume)} л." if volume != 0 else "0,00 л.")
         self.ui.label_qty_pcs.setText(f"{int(pcs):,} шт".replace(",", " ") if pcs != 0 else "0 шт.")
 
-    def refresh_data(self):
+    def upload_data(self):
         """Обновление данных из файлов и загрузка в БД"""
         try:
             date_start = self.ui.date_Start.date()
-            move_df = self.read_movement_data(date_start)
+            report_start_date = date_start.toPython()
+            report_start_date = pd.to_datetime(report_start_date)
+            move_df = self.read_movement_data(report_start_date)
             
             if move_df.empty:
                 self.show_message("Нет данных для обновления")
@@ -794,13 +787,13 @@ class MovesPage(QWidget):
                 return  # Прекращаем выполнение, если найдены новые поступления
                 
             # Обработка комплектаций и списаний
-            move_df = self._process_complectations(move_df)
+            move_df = self._process_complectations(move_df, report_start_date)
             
             # Обработка списаний
-            move_df = self._process_write_offs(move_df)
+            move_df = self._process_write_offs(move_df, report_start_date)
             
             # Обновление данных в БД
-            self._update_moves_in_db(move_df)
+            self._update_moves_in_db(move_df, report_start_date)
             
             # Запись финальных данных в Excel
             self._write_final_data_to_excel(move_df)
@@ -812,10 +805,8 @@ class MovesPage(QWidget):
             self.show_error_message(f"Ошибка при обновлении данных: {str(e)}")
             traceback.print_exc()
 
-    def read_movement_data(self, date_start: QDate):
+    def read_movement_data(self, report_start_date):
         """Чтение данных о движениях из файлов"""
-        report_start_date = date_start.toPython()
-        report_start_date = pd.to_datetime(report_start_date)
         
         move_df = pd.DataFrame()
         dtypes = {"Артикул": str, "Дата": "datetime64[ns]"}
@@ -1062,32 +1053,15 @@ class MovesPage(QWidget):
         
         return True  # Возвращаем True, если проверка прошла успешно
 
-    def _update_moves_in_db(self, move_df):
+    def _update_moves_in_db(self, move_df, report_start_date):
         """Обновление данных Movements в БД с полной обработкой ошибок"""
         try:
             if move_df.empty:
                 self.show_message("Нет данных для обновления")
                 return
             
-            # Преобразуем все даты в колонке 'Дата' в datetime.date перед вычислением минимума
-            if not move_df['Дата'].empty:
-                move_df['Дата'] = move_df['Дата'].apply(
-                    lambda x: x.date() if isinstance(x, pd.Timestamp) else x
-                )
-                min_date = move_df['Дата'].min()
-            else:
-                min_date = None
-
-            if min_date is None:
-                self.show_message("Нет корректных дат для обновления")
-                return
-            
-            # Удаление старых данных
-            db_min_date = min_date
-            if isinstance(db_min_date, pd.Timestamp):
-                db_min_date = db_min_date.date()
-            
-            db.query(Movements).filter(Movements.Date >= db_min_date).delete()
+            move_df = self._clean_dataframe(move_df)
+            db.query(Movements).filter(Movements.Date >= report_start_date).delete()
 
             # Получаем список существующих клиентов и поставщиков из БД
             existing_customers = {str(c[0]) for c in db.query(Customer.id).all()}
@@ -1099,36 +1073,29 @@ class MovesPage(QWidget):
             
             for idx, row in move_df.iterrows():
                 try:
-                    # Преобразуем даты из DataFrame
-                    date_time = self._safe_datetime(row.get('Дата_Время'))
-                    date = self._safe_date(row.get('Дата'))
-                    date_doc_based = self._safe_date(row.get('Дата ДокОсн'))
-                    bill_date = self._safe_date(row.get('Дата счета'))
                     
                     record = {
-                        'Date_Time': date_time,
-                        'Document': str(row.get('Документ', '')),
-                        'Date': date,
-                        'Doc_based': self._null_if_empty(row.get('ДокОсн')),
-                        'Date_Doc_based': date_doc_based,
-                        'Stock': str(row.get('Склад', '')),
-                        'Qty': self._safe_float(row.get('Количество')),
-                        'Recipient_code': self._null_if_empty(row.get('Грузополучатель.Код')),
-                        'Recipient': self._null_if_empty(row.get('Грузополучатель')),
-                        'Bill': self._null_if_empty(row.get('Счет')),
-                        'Bill_date': bill_date,
+                        'Date_Time': row.get('Дата_Время'),
+                        'Document': row.get('Документ', ''),
+                        'Date': row.get('Дата'),
+                        'Doc_based': row.get('ДокОсн'),
+                        'Date_Doc_based': row.get('Дата ДокОсн'),
+                        'Stock': row.get('Склад', ''),
+                        'Qty': row.get('Количество'),
+                        'Recipient_code': row.get('Грузополучатель.Код'),
+                        'Recipient': row.get('Грузополучатель'),
+                        'Bill': row.get('Счет'),
+                        'Bill_date': row.get('Дата счета'),
                         'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
-                        'Material_id': str(row.get('Код', ''))
+                        'Material_id': row.get('Код', '')
                     }
 
-                    counterparty_code = self._null_if_empty(row.get('Контрагент.Код'))
+                    counterparty_code = row.get('Контрагент.Код')
                     doc_type = row.get('Тип документа')
                     document = row.get('Документ')
                     material = row.get('Код')
                     
-                    # ИСПРАВЛЕНИЕ: Умное определение типа контрагента
                     if counterparty_code is None:
-                        # None разрешено для обоих полей
                         record['Supplier_id'] = None
                         record['Customer_id'] = None
                     else:
@@ -1141,7 +1108,6 @@ class MovesPage(QWidget):
                             record['Supplier_id'] = None
                         else:
                             # Если код не найден ни у клиентов, ни у поставщиков
-                            # Пробуем определить по типу документа как запасной вариант
                             supplier_doc_types = [
                                 "1.0. Поступление",
                                 "1.0. Поступление (перераб)", 
@@ -1149,7 +1115,6 @@ class MovesPage(QWidget):
                                 "7.0. Передача в переработку",
                                 '5.0. Списание (недостача)',
                                 '5.0. Списание (утилизация)'
-                                
                             ]
                             
                             if doc_type in supplier_doc_types:
@@ -1214,102 +1179,158 @@ class MovesPage(QWidget):
             self.show_error_message(error_msg)
             raise Exception(error_msg)
 
-    def _process_complectations(self, move_df):
-        """Обработка данных о комплектациях"""
-        # Проверяем наличие данных в Complects_manual
-        manual_complect_df = pd.DataFrame()
+    def _process_complectations(self, move_df, report_start_date):
+        """Обработка данных о комплектациях с синхронизацией между Excel и БД"""
         try:
-            # Пытаемся получить данные из БД
-            manual_complect_df = pd.read_sql(
-                db.query(Complects_manual).filter(
-                    Complects_manual.Date >= move_df['Дата'].min()
-                ).statement,
-                db.bind
-            )
+            # 1. Читаем данные из Excel файла
+            dtype_compl = {"Артикул": str, "Упаковка": float, "Кол-во в упак": float, "Количество": float}
+            excel_complect_df = pd.read_excel(Complectation_file, sheet_name="ручные компл", dtype=dtype_compl)
             
-            # Переименовываем колонки из БД в русские названия (как в Excel)
-            column_mapping = {
-                'Date_Time': 'Дата_Время',
-                'Document': 'Документ', 
-                'Date': 'Дата',
-                'Stock': 'Склад',
-                'Qty': 'Количество',
-                'DocType_id': 'Тип документа',  # Переименовываем ID в текст
-                'Material_id': 'Код'
-            }
+            # Обрабатываем данные из Excel
+            excel_complect_df["Код"] = excel_complect_df["Код"].str.strip()
+            excel_complect_df["Дата"] = pd.to_datetime(excel_complect_df["Дата"], format="%d.%m.%Y")
+            excel_complect_df["Дата_Время"] = pd.to_datetime(excel_complect_df["Дата_Время"], format="%d.%m.%Y %H:%M:%S")
+            excel_complect_df = excel_complect_df.drop(columns=["Вид упаковки", "Упаковка", "Кол-во в упак"], axis=1, errors="ignore")
+            excel_complect_df = excel_complect_df[(excel_complect_df["Дата"] >= report_start_date)]
             
-            # Переименовываем только те колонки, которые существуют в DataFrame
-            existing_columns = [col for col in column_mapping.keys() if col in manual_complect_df.columns]
-            manual_complect_df = manual_complect_df.rename(columns={col: column_mapping[col] for col in existing_columns})
-            
-            # Теперь нужно получить текстовые значения типов документов вместо ID
-            if 'Тип документа' in manual_complect_df.columns:
-                # Получаем mapping ID -> Doc_type
-                doc_type_mapping = {}
-                try:
-                    doc_types = db.query(DOCType.id, DOCType.Doc_type).all()
-                    doc_type_mapping = {str(doc_id): doc_type for doc_id, doc_type in doc_types}
+            # 2. Получаем данные из БД за тот же период
+            db_complect_df = pd.DataFrame()
+            try:
+                db_complect_df = pd.read_sql(
+                    db.query(Complects_manual).filter(
+                        Complects_manual.Date >= report_start_date
+                    ).statement,
+                    db.bind
+                )
+                db_complect_df['Qty'] = db_complect_df['Qty'].astype(float)
+                
+                # Переименовываем колонки из БД в русские названия
+                column_mapping = {
+                    'Date_Time': 'Дата_Время',
+                    'Document': 'Документ', 
+                    'Date': 'Дата',
+                    'Stock': 'Склад',
+                    'Qty': 'Количество',
+                    'DocType_id': 'Тип документа',
+                    'Material_id': 'Код'
+                }
+                
+                existing_columns = [col for col in column_mapping.keys() if col in db_complect_df.columns]
+                db_complect_df = db_complect_df.rename(columns={col: column_mapping[col] for col in existing_columns})
+                
+                # Получаем текстовые значения типов документов вместо ID
+                if 'Тип документа' in db_complect_df.columns:
+                    doc_type_mapping = {}
+                    try:
+                        doc_types = db.query(DOCType.id, DOCType.Doc_type).all()
+                        doc_type_mapping = {str(doc_id): doc_type for doc_id, doc_type in doc_types}
+                        db_complect_df['Тип документа'] = db_complect_df['Тип документа'].astype(str).map(doc_type_mapping)
+                    except Exception as e:
+                        print(f"Ошибка при получении типов документов: {str(e)}")
+                
+                db_complect_df['Вид операции'] = 'Комплектация'
+                db_complect_df['Вид документа'] = 'Комплектация номенклатуры'
+                
+            except Exception as e:
+                print(f"Ошибка при чтении ручных комплектаций из БД: {e}")
+
+            # 3. Сравниваем данные из Excel и БД
+            if not db_complect_df.empty:
+                # Создаем уникальные идентификаторы для сравнения
+                excel_complect_df["unique_id"] = (
+                    excel_complect_df["Документ"] + "_" + 
+                    excel_complect_df["Дата"].astype(str) + "_" + 
+                    excel_complect_df["Код"] + "_" + 
+                    excel_complect_df["Тип документа"]
+                )
+                
+                db_complect_df["unique_id"] = (
+                    db_complect_df["Документ"] + "_" + 
+                    db_complect_df["Дата"].astype(str) + "_" + 
+                    db_complect_df["Код"] + "_" + 
+                    db_complect_df["Тип документа"]
+                )
+
+                # Находим новые записи в Excel (отсутствующие в БД)
+                new_in_excel = excel_complect_df[~excel_complect_df["unique_id"].isin(db_complect_df["unique_id"])]
+                
+                # Находим записи, удаленные из Excel (присутствующие в БД, но отсутствующие в Excel)
+                deleted_in_excel = db_complect_df[~db_complect_df["unique_id"].isin(excel_complect_df["unique_id"])]
+
+                # 4. Обновляем БД в соответствии с Excel
+                if not new_in_excel.empty or not deleted_in_excel.empty:
+                    # Удаляем старые данные за период
+                    db.query(Complects_manual).filter(Complects_manual.Date >= report_start_date).delete()
                     
-                    # Заменяем ID на текстовые значения
-                    manual_complect_df['Тип документа'] = manual_complect_df['Тип документа'].astype(str).map(doc_type_mapping)
-                    manual_complect_df['Вид операции'] = 'Комплектация'
-                    manual_complect_df['Вид документа'] = 'Комплектация номенклатуры'
-                except Exception as e:
-                    print(f"Ошибка при получении типов документов: {str(e)}")
+                    # Вставляем все актуальные данные из Excel
+                    records = []
+                    for _, row in excel_complect_df.iterrows():
+                        try:
+                            doc_type_id = self._get_doc_type_id(
+                                row.get('Вид документа', ''), 
+                                row.get('Вид операции', ''), 
+                                row.get('Тип документа', '')
+                            )
+                            
+                            record = {
+                                'Date_Time': self._safe_datetime(row.get('Дата_Время')),
+                                'Document': row['Документ'],
+                                'Date': row['Дата'],
+                                'Stock': row['Склад'],
+                                'Qty': row['Количество'],
+                                'DocType_id': doc_type_id,
+                                'Material_id': row['Код'],
+                            }
+                            records.append(record)
+                        except Exception as e:
+                            print(f"Ошибка обработки строки: {e}")
+                            continue
+                    
+                    if records:
+                        db.bulk_insert_mappings(Complects_manual, records)
+                        db.commit()
+
+            else:
+                # Если в БД нет данных, просто вставляем все из Excel
+                self._update_complects_manual_in_db(excel_complect_df, report_start_date)
+            
+            # 5. Добавляем данные из Excel в общий DataFrame движений
+            move_df = pd.concat([move_df, excel_complect_df], axis=0, ignore_index=True)
+            
+            # 6. Обрабатываем автоматические комплектации
+            complect_df = move_df[
+                (move_df['Тип документа'] == '2.0. Комплектация') | 
+                (move_df['Тип документа'] == '5.0. Списание') | 
+                (move_df['Тип документа'] == '6.0. Расход') | 
+                (move_df['Тип документа'] == '7.0. Передача в переработку')
+            ]
+            
+            if not complect_df.empty:
+                self._update_complects_in_db(complect_df, report_start_date)
+            
+            return move_df
             
         except Exception as e:
-            print(f"Ошибка при чтении ручных комплектаций из БД: {e}")
-
-        # Если в БД нет данных или они пустые, читаем из Excel
-        if manual_complect_df.empty:
-            try:
-                dtype_compl = {"Артикул": str, "Упаковка": float, "Кол-во в упак": float, "Количество": float}
-                manual_complect_df = pd.read_excel(Complectation_file, sheet_name="ручные компл", dtype=dtype_compl)
-                manual_complect_df["Код"] = manual_complect_df["Код"].str.strip()
-                manual_complect_df["Дата"] = pd.to_datetime(manual_complect_df["Дата"], format="%d.%m.%Y")
-                manual_complect_df["Дата_Время"] = pd.to_datetime(manual_complect_df["Дата_Время"], format="%d.%m.%Y %H:%M:%S")
-                manual_complect_df["merge"] = manual_complect_df["Документ"] + "_" + manual_complect_df["Дата"].astype(str) + "_" + manual_complect_df["Код"] + "_" + manual_complect_df["Тип документа"]
-                manual_complect_df = manual_complect_df.drop(columns=["Вид упаковки", "Упаковка", "Кол-во в упак"], axis=1)
-                manual_complect_df = manual_complect_df[(manual_complect_df["Дата"] >= move_df['Дата'].min())]
-                
-                # Обновляем данные в БД
-                self._update_complects_manual_in_db(manual_complect_df)
-            except Exception as e:
-                print(f"Ошибка при обработке ручных комплектаций: {str(e)}")
-            
-            move_df = pd.concat([move_df, manual_complect_df], axis=0, ignore_index=True)
-        
-        # Обрабатываем автоматические комплектации
-        complect_df = move_df[
-            (move_df['Тип документа'] == '2.0. Комплектация') | 
-            (move_df['Тип документа'] == '5.0. Списание') | 
-            (move_df['Тип документа'] == '6.0. Расход') | 
-            (move_df['Тип документа'] == '7.0. Передача в переработку')
-        ]
-        
-        if not complect_df.empty:
-            self._update_complects_in_db(complect_df)
-        
-        return move_df
-
-    def _update_complects_in_db(self, df):
+            self.show_error_message(f"Ошибка обработки комплектаций: {str(e)}")
+            traceback.print_exc()
+            return move_df
+    
+    def _update_complects_in_db(self, df, report_start_date):
         """Обновление данных о комплектациях в БД с защитой от ошибок"""
         try:
             if df.empty:
                 return
 
-            # Удаляем старые данные за тот же период
-            min_date = df['Дата'].min()
-            if isinstance(min_date, pd.Timestamp):
-                min_date = min_date.date()
-            db.query(Complects).filter(Complects.Date >= min_date).delete()
+            df = self._clean_dataframe(df)
+            
+            db.query(Complects).filter(Complects.Date >= report_start_date).delete()
 
             # Подготавливаем данные для вставки
             records = []
             for _, row in df.iterrows():
                 try:
                     record = {
-                        'Date_Time': self._safe_datetime(row.get('Date_Time')),
+                        'Date_Time':row.get('Date_Time'),
                         'Document': row['Документ'],
                         'Date': row['Дата'],
                         'Stock': row['Склад'],
@@ -1339,35 +1360,47 @@ class MovesPage(QWidget):
             traceback.print_exc()
             raise Exception(error_msg)
 
-    def _update_complects_manual_in_db(self, df):
+    def _update_complects_manual_in_db(self, df, report_start_date):
         """Обновление данных о ручных комплектациях в БД"""
         try:
-            # Удаляем старые данные за тот же период
-            min_date = df['Дата'].min()
-            db.query(Complects_manual).filter(Complects_manual.Date >= min_date).delete()
+            df = self._clean_dataframe(df)
+            
+            db.query(Complects_manual).filter(Complects_manual.Date >= report_start_date).delete()
             
             # Подготавливаем данные для вставки
             records = []
             for _, row in df.iterrows():
-                record = {
-                    'Date_Time': self._safe_datetime(row.get('Date_Time')),
-                    'Document': row['Документ'],
-                    'Date': row['Дата'],
-                    'Stock': row['Склад'],
-                    'Qty': row['Количество'],
-                    'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
-                    'Material_id': row['Код'],
-                }
-                records.append(record)
+                try:
+                    doc_type_id = self._get_doc_type_id(
+                        row.get('Вид документа', ''), 
+                        row.get('Вид операции', ''), 
+                        row.get('Тип документа', '')
+                    )
+                    
+                    record = {
+                        'Date_Time': self._safe_datetime(row.get('Дата_Время')),
+                        'Document': row['Документ'],
+                        'Date': row['Дата'],
+                        'Stock': row['Склад'],
+                        'Qty': row['Количество'],
+                        'DocType_id': doc_type_id,
+                        'Material_id': row['Код'],
+                    }
+                    records.append(record)
+                except Exception as e:
+                    print(f"Ошибка обработки строки: {e}")
+                    continue
             
             # Массовая вставка
-            db.bulk_insert_mappings(Complects_manual, records)
-            db.commit()
+            if records:
+                db.bulk_insert_mappings(Complects_manual, records)
+                db.commit()
+                
         except Exception as e:
             db.rollback()
             raise Exception(f"Ошибка обновления данных Complects_manual в БД: {e}")
-
-    def _process_write_offs(self, move_df):
+    
+    def _process_write_offs(self, move_df, report_start_date):
         """Обработка списаний с правильной последовательностью операций"""
         try:
             # Получаем дату начала отчета из интерфейса
@@ -1421,7 +1454,7 @@ class MovesPage(QWidget):
             
             # Обновление БД
             if not write_off_for_db.empty:
-                self._update_write_off_in_db(write_off_for_db)
+                self._update_write_off_in_db(write_off_for_db, report_start_date)
             
             # 5. Подготовка данных для проверки новых списаний
             write_off_for_check = write_off_df[["merge2", "CHECK_write_off"]].drop_duplicates()
@@ -1519,7 +1552,7 @@ class MovesPage(QWidget):
             traceback.print_exc()
             return move_df
 
-    def _update_write_off_in_db(self, write_off_df):
+    def _update_write_off_in_db(self, write_off_df, report_start_date):
         """Обновление данных WriteOff в БД с проверкой всех колонок и обработкой NaN"""
         try:
             # Проверяем, что DataFrame не пустой
@@ -1527,9 +1560,9 @@ class MovesPage(QWidget):
                 self.show_message("Нет данных для обновления в таблице WriteOff")
                 return
 
-            # Удаляем старые данные за тот же период
-            min_date = write_off_df['Дата'].min()
-            db.query(WriteOff).filter(WriteOff.Date >= min_date).delete()
+            write_off_df = self._clean_dataframe(write_off_df)
+            
+            db.query(WriteOff).filter(WriteOff.Date >= report_start_date).delete()
 
             # Подготавливаем данные для вставки
             records = []
@@ -1537,25 +1570,25 @@ class MovesPage(QWidget):
                 try:
                     # Создаем запись с проверкой наличия всех полей
                     record = {
-                        'Date_Time': self._safe_datetime(row.get('Date_Time')),
-                        'Document': str(row.get('Документ', '')),
-                        'Date': self._safe_date(row.get('Дата')),
-                        'Stock': str(row.get('Склад', '')),
-                        'Comment': str(row.get('Комментарий', None)),
+                        'Date_Time': row.get('Date_Time'),
+                        'Document': row.get('Документ', ''),
+                        'Date': row.get('Дата'),
+                        'Stock': row.get('Склад', ''),
+                        'Comment': row.get('Комментарий'),
                         'inComing': self._safe_float(row.get('Приход')),
                         'outComing': self._safe_float(row.get('Расход')),
                         'Qty': self._safe_float(row.get('Количество')),
-                        'Reporting': str(row.get('Отчет', 'нет')),
-                        'Doc_based': str(row.get('ДокОсн', None)),
-                        'Date_Doc_based': self._safe_date(row.get('Дата ДокОсн')),
-                        'Order': str(row.get('Order N', row.get('Order', None))),
-                        'Shipment': str(row.get('Shipment #', row.get('Shipment', None))),
-                        'Suppl_Inv_N': str(row.get('Вход. док-т', None)),
-                        'Bill': str(row.get('Счет', None)),
-                        'Bill_date': self._safe_date(row.get('Дата счета')),
+                        'Reporting': row.get('Отчет', 'нет'),
+                        'Doc_based': row.get('ДокОсн', None),
+                        'Date_Doc_based': row.get('Дата ДокОсн'),
+                        'Order': row.get('Order N', row.get('Order')),
+                        'Shipment': row.get('Shipment #', row.get('Shipment', None)),
+                        'Suppl_Inv_N': row.get('Вход. док-т'),
+                        'Bill': row.get('Счет'),
+                        'Bill_date': row.get('Дата счета'),
                         'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
-                        'Material_id': str(row.get('Код', '')),
-                        'Supplier_id': self._safe_supplier_id(row.get('Контрагент.Код'))
+                        'Material_id': row.get('Код'),
+                        'Supplier_id': row.get('Контрагент.Код')
                     }
 
                     records.append(record)
@@ -1568,9 +1601,6 @@ class MovesPage(QWidget):
             if records:
                 db.bulk_insert_mappings(WriteOff, records)
                 db.commit()
-                self.show_message(f"Успешно обновлено {len(records)} записей в таблице WriteOff")
-            else:
-                self.show_message("Нет корректных данных для вставки в WriteOff")
 
         except Exception as e:
             db.rollback()
@@ -1603,18 +1633,21 @@ class MovesPage(QWidget):
                     'Артикул': m.Article,
                     'Продукт + упаковка': m.Product_name,
                     'Вид упаковки': m.Package_type,
-                    'Упаковка': m.Package_Volume,
-                    'Кол-во в упак': m.Items_per_Package,
+                    'Упаковка': self.convert_decimal_to_float(m.Package_Volume),
+                    'Кол-во в упак': self.convert_decimal_to_float(m.Items_per_Package),
                     'Единица измерения': m.UoM
                 }
                 for m in materials_data
             }
-            
+                
             # Добавляем недостающие колонки в DataFrame
             for code, data in materials_dict.items():
                 mask = move_df['Код'] == code
                 for col_name, value in data.items():
-                    move_df.loc[mask, col_name] = value
+                    if col_name in ['Артикул', 'Продукт + упаковка', 'Вид упаковки', 'Единица измерения']:
+                        move_df.loc[mask, col_name] = str(value) if value is not None else ''
+                    else:
+                        move_df.loc[mask, col_name] = float(value) if value is not None else 0.0
             
             # Рассчитываем дополнительные колонки
             move_df['Кол-во, шт'] = move_df.apply(lambda row: self._calculate_pcs(row.to_dict()), axis=1)
@@ -1877,6 +1910,15 @@ class MovesPage(QWidget):
             return combined_value.split(" - ")[-1].strip()
         return combined_value.strip()
 
+    def convert_decimal_to_float(self, value):
+        """Безопасное преобразование Decimal в float"""
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
     def show_message(self, text):
         """Показать информационное сообщение"""
         msg = QMessageBox()
@@ -1931,6 +1973,18 @@ class MovesPage(QWidget):
         copy_button.clicked.connect(copy_text)
         msg.exec_()
 
+    def _clean_dataframe(self, df):
+        """
+        Заменяет все NaN/NaT значения на None используя replace
+        """
+        if df.empty:
+            return df
+        
+        cleaned_df = df.copy()
+        cleaned_df = cleaned_df.replace([np.nan, pd.NaT], None)
+        cleaned_df = cleaned_df.replace(['nan', 'NaN', 'NaT', 'NONE', ''], None)
+        
+        return cleaned_df
 
 
 

@@ -385,19 +385,19 @@ class MarketplacePage(QWidget):
         market_place = self.ui.line_marketPl.currentText()
         
         if market_place == "-":
-            self.show_error_message("Пожалуйста, выберите маркетплейс для обновления")
+            self.update_all_marketplaces()
             return
         
         try:
-            # Получаем данные для выбранного маркетплейса
+            # Получаем и обновляем данные для выбранного маркетплейса
             if market_place == "КЭШ":
                 df = self.read_cash_data()
+                prepared_df = self._prepare_marketplace_data(df)
+                self._update_cash_data_fixed(prepared_df)
             else:
                 df = self._get_marketplace_data(market_place)
-
-            # Подготавливаем и сохраняем данные
-            prepared_df = self._prepare_marketplace_data(df)
-            self._update_marketplace_data(prepared_df, market_place)
+                prepared_df = self._prepare_marketplace_data(df)
+                self._update_marketplace_data(prepared_df, market_place)
             
             self.show_message(f"Данные для {market_place} успешно обновлены")
             self.refresh_all_comboboxes()
@@ -406,6 +406,75 @@ class MarketplacePage(QWidget):
             error_msg = f'Ошибка загрузки данных: {str(e)}'
             traceback.print_exc()
             self.show_error_message(error_msg)
+            # Добавляем откат транзакции в случае ошибки
+            try:
+                db.rollback()
+            except:
+                pass
+        finally:
+            # Всегда закрываем соединение
+            try:
+                db.close()
+            except:
+                pass
+
+    def update_all_marketplaces(self):
+
+        marketplaces = ["OZON", "Wildberries", "Yandex", "СберМегаМаркет", "КЭШ"]
+        results = []
+        
+        for marketplace in marketplaces:
+            try:
+                # Получаем и обновляем данные для каждого маркетплейса
+                if marketplace == "КЭШ":
+                    df = self.read_cash_data()
+                    if df.empty:
+                        results.append(f"{marketplace}: нет данных для обновления")
+                        continue
+                    prepared_df = self._prepare_marketplace_data(df)
+                    self._update_cash_data_fixed(prepared_df)
+                else:
+                    df = self._get_marketplace_data(marketplace)
+                    if df.empty:
+                        results.append(f"{marketplace}: нет данных для обновления")
+                        continue
+                    prepared_df = self._prepare_marketplace_data(df)
+                    self._update_marketplace_data(prepared_df, marketplace)
+                
+                results.append(f"{marketplace}: успешно обновлен")
+                
+            except Exception as e:
+                error_msg = f"{marketplace}: ошибка - {str(e)}"
+                results.append(error_msg)
+                traceback.print_exc()
+                # Откатываем транзакцию при ошибке
+                try:
+                    db.rollback()
+                except:
+                    pass
+            finally:
+                # Всегда закрываем соединение
+                try:
+                    db.close()
+                except:
+                    pass
+        
+        # Формируем итоговое сообщение
+        success_count = sum(1 for r in results if "успешно" in r)
+        error_count = sum(1 for r in results if "ошибка" in r)
+        no_data_count = sum(1 for r in results if "нет данных" in r)
+
+        detailed_results = "\n".join(results)
+        
+        full_message = f"{detailed_results}"
+        
+        # Показываем сообщение прямо здесь!
+        if error_count == 0:
+            self.show_message(full_message)
+        else:
+            self.show_error_message(full_message)
+        
+        return (error_count == 0, full_message)
 
     def _get_marketplace_data(self, market_place):
         """Возвращает данные для указанного маркетплейса с проверкой продуктов в БД"""
@@ -534,11 +603,6 @@ class MarketplacePage(QWidget):
             cash_df["Date"] = pd.to_datetime(cash_df["Date"], errors="coerce")
             cash_df["Qty"] = cash_df["Qty"].fillna(0)
             cash_df["Amount_1C"] = cash_df["Amount_1C"].fillna(0)
-            cash_df["Price_1C"] = np.where(
-                cash_df["Qty"] != 0, 
-                round(cash_df["Amount_1C"] / cash_df["Qty"], 2), 
-                0
-            )
             
             # Добавляем стандартные значения для КЭШ
             cash_df["Stock"] = "-"
@@ -606,9 +670,10 @@ class MarketplacePage(QWidget):
         
         if not missing_codes:
             return df
-            
+        
         # Фильтруем строки с отсутствующими продуктами
         missing_df = df[df['Код'].isin(missing_codes)]
+        print(missing_df.dtypes)
         missing_products = missing_df[['Артикул', 'Код', 'Продукт']].drop_duplicates()
         
         # Формируем сообщение с информацией об отсутствующих продуктах
@@ -749,13 +814,13 @@ class MarketplacePage(QWidget):
         df["Price_1C"] = np.where(df["Qty"] != 0, round(df["Amount_1C"] / df["Qty"], 2), 0)
         
         # Оставляем только нужные колонки
-        df = df[[
-            "Document", "Date", "Material_id", "Qty", "Amount_1C", "Price_1C",
-            "Customer_id", "Manager_name", "Contract_id", "Holding_name",
-            "Sector_name", "Payment_terms", "Post_payment", "Plan_pay_Date",
-            "Document_type", "Transaction_type", "Doc_type", "Stock", "UoM",
-            "Currency", "FX_rate", "VAT"
-        ]]
+        # df = df[[
+        #     "Document", "Date", "Material_id", "Qty", "Amount_1C", "Price_1C",
+        #     "Customer_id", "Manager_name", "Contract_id", "Holding_name",
+        #     "Sector_name", "Payment_terms", "Post_payment", "Plan_pay_Date",
+        #     "Document_type", "Transaction_type", "Doc_type", "Stock", "UoM",
+        #     "Currency", "FX_rate", "VAT"
+        # ]]
         
         # Замена NaN на None
         df = df.where(pd.notnull(df), None)
@@ -877,6 +942,111 @@ class MarketplacePage(QWidget):
             raise Exception(f"Ошибка обновления данных {marketplace_name} в базе данных: {e}")
         finally:
             db.close()
+
+    def _update_cash_data_fixed(self, df):
+        """Специальный метод для обновления данных КЭШ без дублирования"""
+        # Для КЭШ используем более простой ключ уникальности
+        existing_records = {
+            (r.Document, r.Date, r.Material_id, r.Customer_id): r.id 
+            for r in db.query(
+                Marketplace.Document, 
+                Marketplace.Date, 
+                Marketplace.Material_id,
+                Marketplace.Customer_id,
+                Marketplace.id
+            ).filter(Marketplace.doc_type.has(DOCType.Doc_type == "4.0. Реализация (кэш)"))
+        }
+        
+        new_records = []
+        updated_records = []
+        
+        for _, row in df.iterrows():
+            # Упрощенный ключ для КЭШ
+            record_key = (
+                row['Document'],
+                row['Date'],
+                row['Material_id'],
+                row['Customer_id']
+            )
+            
+            # Получаем ID связанных сущностей
+            calendar_id = self._get_id(Calendar, Day=row['Date'])
+            material_id = row['Material_id']
+            customer_id = row['Customer_id']
+            manager_id = self._get_id(Manager, Manager_name=row['Manager_name'])
+            contract_id = row['Contract_id']
+            holding_id = self._get_id(Holding, Holding_name=row['Holding_name'])
+            sector_id = self._get_id(Sector, Sector_name=row['Sector_name'])
+            
+            # Для КЭШ всегда используем определенный тип документа
+            doc_type_id = self._get_id(DOCType, Doc_type="4.0. Реализация (кэш)")
+            
+            if record_key in existing_records:
+                # Обновляем существующую запись
+                record_id = existing_records[record_key]
+                db.query(Marketplace).filter(Marketplace.id == record_id).update({
+                    'Qty': row['Qty'],
+                    'Amount_1C': row['Amount_1C'],
+                    'Price_1C': row['Price_1C'],
+                    'Payment_terms': row['Payment_terms'],
+                    'Post_payment': row['Post_payment'],
+                    'Plan_pay_Date': row['Plan_pay_Date'],
+                    'Stock': row['Stock'],
+                    'UoM': row['UoM'],
+                    'Currency': row['Currency'],
+                    'FX_rate': row['FX_rate'],
+                    'VAT': row['VAT'],
+                    'Calendar_id': calendar_id,
+                    'Contract_id': contract_id,
+                    'Sector_id': sector_id,
+                    'Manager_id': manager_id
+                })
+                updated_records.append(record_id)
+            else:
+                # Создаем новую запись
+                new_records.append(Marketplace(
+                    Document=row['Document'],
+                    Date=row['Date'],
+                    Qty=row['Qty'],
+                    Amount_1C=row['Amount_1C'],
+                    Price_1C=row['Price_1C'],
+                    Payment_terms=row['Payment_terms'],
+                    Post_payment=row['Post_payment'],
+                    Plan_pay_Date=row['Plan_pay_Date'],
+                    Stock=row['Stock'],
+                    UoM=row['UoM'],
+                    Currency=row['Currency'],
+                    FX_rate=row['FX_rate'],
+                    VAT=row['VAT'],
+                    Calendar_id=calendar_id,
+                    Material_id=material_id,
+                    Customer_id=customer_id,
+                    Manager_id=manager_id,
+                    Contract_id=contract_id,
+                    Holding_id=holding_id,
+                    Sector_id=sector_id,
+                    DocType_id=doc_type_id
+                ))
+        
+        # Массовое добавление новых записей
+        if new_records:
+            db.bulk_save_objects(new_records)
+        
+        # Удаляем записи, которых нет в новых данных (только для текущей даты)
+        current_dates = set(df['Date'].unique())
+        records_to_delete = [
+            record_id for record_id in existing_records.values() 
+            if record_id not in updated_records
+        ]
+        
+        if records_to_delete:
+            # Удаляем только записи с датами, которые присутствуют в новых данных
+            db.query(Marketplace).filter(
+                Marketplace.id.in_(records_to_delete),
+                Marketplace.Date.in_(current_dates)
+            ).delete(synchronize_session=False)
+        
+        db.commit()
 
     @lru_cache(maxsize=128)
     def _get_id(self, model, **filters):

@@ -11,7 +11,7 @@ import sys
 
 from db import db
 from models import (temp_Purchase, temp_Sales, temp_Orders, Purchase_Order, DOCType, Materials, 
-        Customer, Supplier, Contract, Manager, Product_Names, Complects, Sector, Holding, Marketplace, Hyundai_Dealer)
+        Customer, Supplier, Contract, Manager, Product_Names, Complects, Complects_manual, Holding, Marketplace, Hyundai_Dealer)
 from config import Purchase_folder, Sales_folder, Orders_file, Reserve_file, Customer_file, Contract_file, AddCosts_File, CustDelivery_File
 from wind.pages.temp_tables_ui import Ui_Form
 from pages_functions.product import ProductsPage
@@ -23,8 +23,18 @@ class TempTablesPage(QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        self.ui.date_Start.dateChanged.connect(self.on_date_changed)
         self.ui.date_Start.setDate(QDate(2022, 1, 1))
+        
+        # self.ui.date_Start.dateChanged.connect(self.on_date_changed)
+        # today = datetime.datetime.now()
+        # if today.day > 5:
+        #     target_date = QDate(today.year, today.month, 1)
+        # else:
+        #     # Получаем первый день прошлого месяца
+        #     first_day_prev_month = today.replace(day=1) - datetime.timedelta(days=1)
+        #     target_date = QDate(first_day_prev_month.year, first_day_prev_month.month, 1)
+
+        # self.ui.date_Start.setDate(target_date)
         
         self._setup_ui()
         self._setup_connections()
@@ -57,7 +67,7 @@ class TempTablesPage(QWidget):
         self.ui.line_customer.currentTextChanged.connect(self.on_supplier_changed)
         
         self.ui.btn_find.clicked.connect(self.find_temp_data)
-        self.ui.btn_refresh.clicked.connect(self.refresh_data)
+        self.ui.btn_refresh.clicked.connect(self.upload_data)
         
     def show_context_menu(self, position):
         """Показ контекстного меню для копирования"""
@@ -164,7 +174,8 @@ class TempTablesPage(QWidget):
                 
             # Получаем уникальные месяцы из временной таблицы
             months = db.query(extract('month', model.Date)).distinct().all()
-            months_list = sorted([str(int(m[0])) for m in months if m[0] is not None])
+
+            months_list = sorted([str(m[0]) for m in months if m[0] is not None and str(m[0]).strip()])
             
             self._fill_combobox(self.ui.line_Mnth, months_list)
         except Exception as e:
@@ -185,7 +196,7 @@ class TempTablesPage(QWidget):
                 return
                 
             # Получаем уникальные типы документов через связь с doc_type
-            query = db.query(DOCType.Doc_type).join(model, model.Doc_type_id == DOCType.id)
+            query = db.query(DOCType.Doc_type).join(model, model.DocType_id == DOCType.id)
             doc_types = query.distinct().all()
             doc_types_list = sorted([d[0] for d in doc_types if d[0] is not None])
             
@@ -258,7 +269,7 @@ class TempTablesPage(QWidget):
             # Применяем фильтр по типу документа, если выбран
             doc_type = self.ui.line_doc_type.currentText()
             if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
                     DOCType.Doc_type == doc_type
                 )
             
@@ -343,7 +354,7 @@ class TempTablesPage(QWidget):
             # Применяем фильтр по типу документа, если выбран
             doc_type = self.ui.line_doc_type.currentText()
             if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
                     DOCType.Doc_type == doc_type
                 )
             
@@ -422,7 +433,7 @@ class TempTablesPage(QWidget):
             # Применяем фильтр по типу документа, если выбран
             doc_type = self.ui.line_doc_type.currentText()
             if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.Doc_type_id == DOCType.id).filter(
+                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
                     DOCType.Doc_type == doc_type
                 )
             
@@ -633,31 +644,27 @@ class TempTablesPage(QWidget):
             except ValueError:
                 pass
         
-        # Фильтр по типу документа
+        # Фильтр по типу документа - УБИРАЕМ ДУБЛИРОВАНИЕ
         doc_type = self.ui.line_doc_type.currentText()
         if doc_type != "-":
-            query = query.join(model.doc_type).filter(DOCType.Doc_type == doc_type)
+            query = query.filter(DOCType.Doc_type == doc_type)
         
         # Фильтр по контрагенту (клиент или поставщик в зависимости от модели)
-        if model in [temp_Sales, temp_Orders]:
-            # Для моделей с клиентами
-            customer = self.ui.line_customer.currentText()
-            if customer != "-" and hasattr(model, 'customer'):
-                customer_id = customer.split(" - ")[0]
-                query = query.join(model.customer).filter(Customer.id == customer_id)
-        
-        elif model in [temp_Purchase, Purchase_Order]:
-            # Для моделей с поставщиками
-            supplier = self.ui.line_customer.currentText()
-            if supplier != "-" and hasattr(model, 'supplier'):
-                supplier_id = supplier.split(" - ")[0]
-                query = query.join(model.supplier).filter(Supplier.id == supplier_id)
+        customer_supplier = self.ui.line_customer.currentText()
+        if customer_supplier != "-":
+            if model in [temp_Sales, temp_Orders]:
+                # Для моделей с клиентами
+                query = query.join(model.customer).filter(Customer.Customer_name == customer_supplier)
+            elif model in [temp_Purchase, Purchase_Order]:
+                # Для моделей с поставщиками
+                query = query.join(model.supplier).filter(Supplier.Supplier_Name == customer_supplier)
         
         # Фильтр по продукту
         product = self.ui.line_product.currentText()
         if product != "-":
-            product_code = product.split(" - ")[0]
-            query = query.join(model.material).filter(Materials.Code == product_code)
+            query = query.join(model.material).join(
+                Product_Names, Materials.Product_Names_id == Product_Names.id
+            ).filter(Product_Names.Product_name == product)
         
         return query
 
@@ -706,8 +713,6 @@ class TempTablesPage(QWidget):
         # Обновляем информацию в интерфейсе
         self.ui.label_qty_pcs.setText(f"{format_number(qty_pcs, True)} шт.")
         self.ui.label_Volume.setText(f"{format_number(volume_liters)} л.")
-        self.ui.label_Amount.setText(f"{format_number(amount)} руб.")
-        self.ui.label_Count.setText(f"{len(df)} записей")
 
     def _get_volume_unit(self, model):
         """Возвращает единицу измерения объема в зависимости от модели"""
@@ -813,7 +818,7 @@ class TempTablesPage(QWidget):
         
         self.table.resizeColumnsToContents()
 
-    def refresh_data(self):
+    def upload_data(self):
         """Обновление данных из файлов и загрузка в БД"""
         try:
             date_start = self.ui.date_Start.date()
@@ -824,22 +829,40 @@ class TempTablesPage(QWidget):
             table = self.ui.line_table.currentText()
             
             if table == '-':
-                self.show_message("Таблица для обновления не выбрана!")
+                purchase_df = self.read_purchase_data(date_start)
+                if not purchase_df.empty:
+                    self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
+                    self.show_message("Данные о закупках успешно обновлены")
+                    
+                sales_df = self.read_sales_data(date_start)
+                if not sales_df.empty:
+                    self._update_temp_sales_in_db(sales_df)
+                    self.show_message("Данные о продажах успешно обновлены")
+                    
+                orders_df = self.read_orders_data(date_start)
+                if not orders_df.empty:
+                    self._update_temp_orders_in_db(orders_df)
+                    self.show_message("Данные о заказах успешно обновлены")
+                    
+                purchase_order_df = self.read_purchase_order_data()
+                if not purchase_order_df.empty:
+                    self._update_purchase_order_in_db(purchase_order_df)
+                    self.show_message("Данные о заказах поставщиков успешно обновлены")
                 
             elif table == "Закупки":
-                purchase_df = self.read_purchase_data(date_start)  # Передаем date_start
+                purchase_df = self.read_purchase_data(date_start)
                 if not purchase_df.empty:
                     self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
                     self.show_message("Данные о закупках успешно обновлены")
             
             elif table == "Продажи":
-                sales_df = self.read_sales_data(date_start)  # Передаем date_start
+                sales_df = self.read_sales_data(date_start)
                 if not sales_df.empty:
-                    self._update_temp_sales_in_db(sales_df, self.report_start_date)  # Добавлен report_start_date
+                    self._update_temp_sales_in_db(sales_df)
                     self.show_message("Данные о продажах успешно обновлены")
             
             elif table == "Заказы клиентов":
-                orders_df = self.read_orders_data(date_start)  # Передаем date_start
+                orders_df = self.read_orders_data(date_start)
                 if not orders_df.empty:
                     self._update_temp_orders_in_db(orders_df)
                     self.show_message("Данные о заказах успешно обновлены")
@@ -946,7 +969,7 @@ class TempTablesPage(QWidget):
         df["Статус"] = np.where(df["Тип документа"].str.contains("Поступление"), "Закуп", "Склад")
             
         # Получение ID типа документа
-        df['Doc_type_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+        df['DocType_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
 
         # Проверка продуктов
         self._check_products(df)
@@ -1078,20 +1101,20 @@ class TempTablesPage(QWidget):
         # Удаление пустых документов
         df["doc"] = np.where(pd.isnull(df["Количество"]) & pd.isnull(df["Сумма 1С"]), "yes", "no")
         df = df[df["doc"] != "yes"]
-        
+
         doc_types = db.query(DOCType).all()
 
         doc_type_df = pd.DataFrame([{
-            'Doc_type_id': item.id,
+            'DocType_id': item.id,
             'Document': item.Document, 
             'Transaction': item.Transaction,
             'Тип документа': item.Doc_type} for item in doc_types])
-
+        doc_type_df
         # Merge с df
         df = pd.merge(df, doc_type_df,
             left_on=['Вид документа', 'Вид операции'],
             right_on=['Document', 'Transaction'],how='left').drop(['Document', 'Transaction'], axis=1)
-        
+
         # Расчет цены 1С
         df["Цена 1С"] = np.where(df["Количество"] != 0.0, round(df["Сумма 1С"] / df["Количество"], 2), 0.0)
         df["Код"] = df["Код"].str.strip()
@@ -1137,11 +1160,34 @@ class TempTablesPage(QWidget):
         doc_type_choices = ["4.0. Реализация (ОЗОН 1P)", "4.0. Реализация (Yandex)", "4.0. Реализация (корр-ка Yandex)"]
         df["Тип документа"] = np.select(doc_type_conditions, doc_type_choices, default=df["Тип документа"])
         
+        operation_conditions = [
+            df["Тип документа"] == "4.0. Реализация (ОЗОН 1P)",
+            df["Тип документа"] == "4.0. Реализация (Yandex)",
+            df["Тип документа"] == "4.0. Реализация (корр-ка Yandex)"
+        ]
+
+        # Определяем соответствующие значения для "Вид операции"
+        operation_choices = [
+            "Товары ОЗОН 1P",
+            "Товары Yandex", 
+            "Товары Yandex"
+        ]
+
+        # Применяем условия с помощью np.select
+        df["Вид операции"] = np.select(operation_conditions, operation_choices, default=df["Вид операции"])
+
         # Объединение с коррекцией
         df = df.merge(sales_corr, how="left", on=["Документ", "Дата", "Контрагент.Код"])
         df["Курс взаиморасчетов"] = df["Курс взаиморасчетов_corr"].fillna(df["Курс взаиморасчетов"])
         df = df.drop(columns=["Курс взаиморасчетов_corr", "НДС"])
         
+        df['data_source'] = '1C'
+
+        marketplace_df = self.get_marketplace_data(report_start_date)
+        if not marketplace_df.empty:
+            marketplace_df['Дата'] = pd.to_datetime(marketplace_df['Дата'], errors='coerce')
+            df = pd.concat([df, marketplace_df], ignore_index=True)
+
         # Заполнение пустых значений
         df[["Курс взаиморасчетов", "Валюта", "% НДС"]] = df[["Курс взаиморасчетов", "Валюта", "% НДС"]].fillna({
             "Курс взаиморасчетов": 1.0, 
@@ -1153,7 +1199,7 @@ class TempTablesPage(QWidget):
         df = df.merge(корр_Сборка, how="left", on=["Документ", "Контрагент.Код"])
         df["Сборка_корр"] = df["Сборка_корр"].fillna("-")
         df["Сборка"] = np.where(df["Сборка_корр"] != "-", df["Сборка_корр"], df["Сборка"])
-        
+
         # Условия оплаты
         conditions_pay_terms = [
             (df["Договор"] == "КЭШ"), 
@@ -1183,19 +1229,19 @@ class TempTablesPage(QWidget):
         df["Кол-во дней на оплату"] = np.select(
             conditions_plan_pay_date, 
             choices_plan_pay_date,
-            default=(df["Плановая дата оплаты"] - df["Дата"]).dt.days
+            default=(pd.to_datetime(df["Плановая дата оплаты"]) - pd.to_datetime(df["Дата"])).dt.days
         )
         
         # Заполнение пустых значений
         df["Сборка"] = df["Сборка"].fillna("-")
         df["Счет"] = df["Счет"].fillna("-")
         df["Статус"] = "Факт"
-        
+
         # Дополнительная коррекция
         df = df.merge(sales_corr, how="left", on=["Документ", "Дата", "Контрагент.Код"])
         df["Курс взаиморасчетов"] = df["Курс взаиморасчетов_corr"].fillna(df["Курс взаиморасчетов"])
         df = df.drop(columns=["Курс взаиморасчетов_corr"])
-        
+
         # Проверка продуктов
         self._check_products(df)
         
@@ -1223,9 +1269,8 @@ class TempTablesPage(QWidget):
             sales_grouped[col] = df.groupby(group_columns)[col].first().values
         
         df = sales_grouped.copy()
-        
+
         СпецЗаказы = self.read_special_orders(AddCosts_File)
-        
         # Анализ специальных заказов
         error_file_name = "ERRORs_Spec_Orders_Sales.xlsx"
         keys_spec = set(zip(СпецЗаказы['Счет'], СпецЗаказы['Дата счета'], СпецЗаказы['Код']))
@@ -1236,7 +1281,7 @@ class TempTablesPage(QWidget):
         df_not_processed = df[~mask].copy()
 
         df = pd.concat([processed_df, df_not_processed], ignore_index=True)
-        
+
         # Преобразование дат
         df["Дата"] = pd.to_datetime(df["Дата"], format='%d.%m.%Y', errors="coerce")
         df["Дата счета"] = pd.to_datetime(df["Дата счета"], format='%d.%m.%Y', errors="coerce")
@@ -1246,6 +1291,24 @@ class TempTablesPage(QWidget):
         
         df["Приоритет"] = df["Приоритет"].fillna("-")
 
+        # ПОДБОР ТОЛЬКО ДЛЯ ДАННЫХ ИЗ 1С (НЕ ИЗ MARKETPLACE)
+        is_1c_data = df['data_source'] == '1C'
+        
+        # Подбор DocType_id только для данных из 1С
+        if is_1c_data.any():
+            df.loc[is_1c_data, 'DocType_id'] = df[is_1c_data].apply(
+                lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+        
+        # Подбор Manager_id только для данных из 1С
+        if is_1c_data.any() and 'Договор.Менеджер' in df.columns:
+            managers = db.query(Manager.AM_1C_Name, Manager.id).all()
+            manager_dict = {m.AM_1C_Name: m.id for m in managers if m.AM_1C_Name}
+            
+            df.loc[is_1c_data, 'Manager_id'] = df[is_1c_data]['Договор.Менеджер'].map(manager_dict)
+        
+        # Удаляем временный столбец
+        df = df.drop(columns=['data_source'])
+        
         column_mapping = {
             'Документ': 'Document',
             'Дата': 'Date',
@@ -1287,7 +1350,7 @@ class TempTablesPage(QWidget):
         }
         
         df = df.rename(columns=column_mapping)
-        
+        df.to_excel('test_sales.xlsx')
         return df
     
     def read_orders_data(self, date_start: QDate):
@@ -1425,17 +1488,17 @@ class TempTablesPage(QWidget):
                                 (ord_df["Контрагент"].str.strip() == "OZON") & (ord_df["Договор.Код"].str.strip() == "ОП-000953") & (ord_df["Статус"] == "Заказ"),
                                 (ord_df["Контрагент"].str.strip() != "OZON") & (ord_df["Статус"] == "Резерв"),]
         
-        choices = ["7.0. Счет (услуги)", 
+        choices = ["9.0. Счет (услуги)", 
                             "7.1. Счет (ОЗОН комм-р)", 
                             "7.1. Счет (ОЗОН 1P)",
-                            "7.0. Счет (резерв)"]
+                            "9.0. Счет (резерв)"]
         ord_df["Тип документа"] = np.select(conditions, choices, default="7.1. Счет (не отгружено)")
         ord_df['Вид документа'] = 'Счет'
         
         conditions = [
-            ord_df["Тип документа"] == "7.0. Счет (не отгружено)",
-            ord_df["Тип документа"] == "7.0. Счет (ОЗОН 1P)",
-            ord_df["Тип документа"] == "7.0. Счет (ОЗОН комм-р)"]
+            ord_df["Тип документа"] == "9.0. Счет (не отгружено)",
+            ord_df["Тип документа"] == "9.0. Счет (ОЗОН 1P)",
+            ord_df["Тип документа"] == "9.0. Счет (ОЗОН комм-р)"]
 
         choices = [
             "Клиенты",
@@ -1444,8 +1507,11 @@ class TempTablesPage(QWidget):
 
         ord_df["Вид операции"] = np.select(conditions, choices, default="")
 
-        ord_df["Кол-во дней на оплату"] = np.where( (ord_df["Договор"] == "blank") | (ord_df["Условие оплаты"] == "blank"),
-                                                                            30, (ord_df["Плановая дата оплаты"] - ord_df["Дата счета"]).dt.days )
+        ord_df["Кол-во дней на оплату"] = np.where( 
+                (ord_df["Договор"] == "blank") | (ord_df["Условие оплаты"] == "blank"),
+                30, 
+                (pd.to_datetime(ord_df["Плановая дата оплаты"]) - pd.to_datetime(ord_df["Дата счета"])).dt.days 
+            )
         
         agg_columns = ['Количество', 'Сумма 1С']
         group_columns = ['Счет', 'Дата счета', 'Код', 'Цена 1С']
@@ -1495,9 +1561,15 @@ class TempTablesPage(QWidget):
         ord_df["Дата Поставки"] = pd.to_datetime(ord_df["Дата Поставки"], format='%d.%m.%Y', errors="coerce")
         ord_df["Order N Поставки"] = ord_df["Order N Поставки"].astype(str)
         
-        df['Doc_type_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+        df['DocType_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
         
-        # Переименование колонок согласно соответствию
+        # ДОБАВИТЬ ПОДБОР Manager_id (после подбора DocType_id)
+        if 'Договор.Менеджер' in df.columns:
+            managers = db.query(Manager.AM_1C_Name, Manager.id).all()
+            manager_dict = {m.AM_1C_Name: m.id for m in managers if m.AM_1C_Name}
+            
+            df['Manager_id'] = df['Договор.Менеджер'].map(manager_dict)
+
         column_mapping = {
             'Счет': 'Bill',
             'Дата счета': 'Bill_Date',
@@ -1546,18 +1618,14 @@ class TempTablesPage(QWidget):
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
         
-        # Получение ID типа документа
-        df['Doc_type_id'] = df.apply(
-            lambda row: self._get_doc_type_id(row.get('Тип документа', ''), row.get('Вид операции', ''),row.get('Тип документа', '')), axis=1)
-        
         # Проверка продуктов
-        df = self._check_products(df, 'Material_id')
+        self._check_products(df, 'Material_id')
         
         # Проверка клиентов
-        df = self._check_customers(df, 'Customer_id')
+        self._check_customers(df, 'Customer_id')
         
         # Проверка договоров
-        df = self._check_contracts(df, 'Contract_id', 'Customer_id', 'Manager')
+        self._check_contracts(df, 'Contract_id', 'Customer_id', 'Manager')
         
         return df
 
@@ -1654,7 +1722,7 @@ class TempTablesPage(QWidget):
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         
         # Получение ID типа документа (всегда "1.0. Поступление (транзит)")
-        df['Doc_type_id'] = self._get_doc_type_id("Транзит", "Транзит", "1.0. Поступление (транзит)")
+        df['DocType_id'] = self._get_doc_type_id("Транзит", "Транзит", "1.0. Поступление (транзит)")
         df['Status'] = 'Закуп'
         
         # Проверка продуктов
@@ -1837,12 +1905,101 @@ class TempTablesPage(QWidget):
         # Возвращаем DataFrame
         return df
     
+    def get_marketplace_data(self, start_date):
+        """Получение данных Marketplace с информацией из DOCType и переименованными колонками"""
+        try:
+            # Получаем ВСЕ данные из Marketplace с фильтром по дате
+            marketplace_data = db.query(Marketplace).filter(
+                Marketplace.Date >= start_date
+            ).all()
+            
+            # Получаем словарь DocType для быстрого доступа
+            doc_types = db.query(DOCType).all()
+            doc_type_dict = {dt.id: dt for dt in doc_types}
+            
+            managers = db.query(Manager).all()
+            manager_dict = {m.id: m for m in managers}
+            
+            # Преобразуем в список словарей ВСЕ поля из Marketplace + добавляем информацию из DOCType
+            marketplace_list = []
+            for m in marketplace_data:
+                doc_type_info = doc_type_dict.get(m.DocType_id)
+                manager_info = manager_dict.get(m.Manager_id)
+                
+                marketplace_list.append({
+                    # Основные поля Marketplace
+                    'Document': m.Document,  # Документ
+                    'Date': m.Date,  # Дата
+                    'Qty': self.convert_decimal_to_float(m.Qty),  # Количество
+                    'Amount_1C': self.convert_decimal_to_float(m.Amount_1C),  # Сумма 1С
+                    'Price_1C': self.convert_decimal_to_float(m.Price_1C),  # Цена 1С
+                    'Payment_terms': m.Payment_terms,  # Условие оплаты
+                    'Post_payment': self.convert_decimal_to_float(m.Post_payment),  # Постоплата%
+                    'Plan_pay_Date': m.Plan_pay_Date,  # Плановая дата оплаты
+                    'Stock': m.Stock,  # Склад
+                    'UoM': m.UoM,  # Единица измерения
+                    'Currency': m.Currency,  # Валюта
+                    'FX_rate': self.convert_decimal_to_float(m.FX_rate),  # Курс взаиморасчетов
+                    'VAT': m.VAT,  # % НДС
+                    
+                    # Внешние ключи
+                    'Material_id': m.Material_id,
+                    'Customer_id': m.Customer_id,
+                    'Manager_id': m.Manager_id,
+                    'Contract_id': m.Contract_id,
+                    'DocType_id': m.DocType_id,
+                    'Договор.Менеджер': manager_info.AM_1C_Name if manager_info else None,
+                    # Информация из DOCType
+                    'Вид документа': doc_type_info.Document if doc_type_info else None,
+                    'Вид операции': doc_type_info.Transaction if doc_type_info else None,
+                    'Тип документа': doc_type_info.Doc_type if doc_type_info else None,
+                    
+                })
+            
+            # Создаем DataFrame
+            if marketplace_list:
+                marketplace_df = pd.DataFrame(marketplace_list)
+                
+                # Переименовываем колонки согласно комментариям
+                column_mapping = {
+                    'Document': 'Документ',
+                    'Date': 'Дата',
+                    'Qty': 'Количество',
+                    'Amount_1C': 'Сумма 1С',
+                    'Price_1C': 'Цена 1С',
+                    'Payment_terms': 'Условие оплаты',
+                    'Post_payment': 'Постоплата%',
+                    'Plan_pay_Date': 'Плановая дата оплаты',
+                    'Stock': 'Склад',
+                    'UoM': 'Единица измерения',
+                    'Currency': 'Валюта',
+                    'FX_rate': 'Курс взаиморасчетов',
+                    'VAT': '% НДС',
+
+                    'Material_id': 'Код',
+                    'Customer_id': 'Контрагент.Код',
+                    'Manager_id': 'Manager_id',
+                    'Contract_id': 'Договор.Код',
+                }
+                
+                marketplace_df = marketplace_df.rename(columns=column_mapping)
+                marketplace_df[['Количество', 'Сумма 1С', 'Цена 1С', 'Курс взаиморасчетов', 'Постоплата%']] = marketplace_df[[
+                        'Количество', 'Сумма 1С', 'Цена 1С', 'Курс взаиморасчетов', 'Постоплата%']].astype(float)
+                
+                return marketplace_df
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            self.show_error_message(f"Ошибка при получении данных Marketplace: {str(e)}")
+            return pd.DataFrame()
+
     def _check_hyundai_dealers(self, sales_df):
         """Проверка HYUNDAI дилеров"""
         try:
             # Чтение данных о дилерах из БД
             dealers = db.query(Hyundai_Dealer).all()
-            dealer_codes = {dealer.Hyundai_code: dealer.Name for dealer in dealers}
+            dealer_codes = {dealer.Dealer_code: dealer.Name for dealer in dealers}
             
             # Проверка для контрагента ОП-000291
             hyundai_sales = sales_df[sales_df["Контрагент.Код"] == "ОП-000291"]
@@ -2248,43 +2405,56 @@ class TempTablesPage(QWidget):
         """Обновление временной таблицы закупок в БД с добавлением данных из Complects"""
         try:
             # Чтение данных из таблицы Complects
-            complects_data = db.query(Complects).filter(
-                (Complects.Date > report_start_date) | 
-                (Complects.Date == report_start_date)
-            ).all()
-            
+            complects_data = db.query(Complects).filter(Complects.Date >= report_start_date).all()
+            manual_data = db.query(Complects_manual).filter(Complects_manual.Date >= report_start_date).all()
             # Преобразование данных Complects
             complects_list = [{
                 'Document': c.Document,
                 'Date': c.Date,
-                'Doc_type_id': c.DocType_id,
+                'DocType_id': c.DocType_id,
                 'Status': 'Склад',
                 'Material_id': c.Material_id,
                 'Stock': c.Stock,
-                'Qty': c.Qty,
+                'Qty': self.convert_decimal_to_float(c.Qty),
                 'Amount_1C': 0,
                 'Currency': 'RUB',
                 'VAT': '20%',
-                'Doc_based': None,
-                'Date_Doc_based': None,
-                'Supplier_id': None,
-                'Country': None,
-                'GTD': None,
-                'FX_rate_1C': 1.0,
-            } for c in complects_data]
+                'FX_rate_1C': 1.0,} for c in complects_data]
+            
+            manual_list = [{
+                'Document': c.Document,
+                'Date': c.Date,
+                'DocType_id': c.DocType_id,
+                'Status': 'Склад',
+                'Material_id': c.Material_id,
+                'Stock': c.Stock,
+                'Qty': self.convert_decimal_to_float(c.Qty),
+                'Amount_1C': 0,
+                'Currency': 'RUB',
+                'VAT': '20%',
+                'FX_rate_1C': 1.0,} for c in manual_data]
             
             # Объединение данных
             if complects_list:
                 complects_df = pd.DataFrame(complects_list)
+                complects_df['Qty'] = complects_df['Qty'].astype(float)
                 if not complects_df.empty:
                     df = pd.concat([df, complects_df], axis=0, ignore_index=True)
+                    
+            if manual_list:
+                manual_df = pd.DataFrame(manual_list)
+                manual_df['Qty'] = manual_df['Qty'].astype(float)
+                if not manual_df.empty:
+                    df = pd.concat([df, manual_df], axis=0, ignore_index=True)
             
             # Обработка числовых колонок
             numeric_columns = ['FX_rate_1C', 'Qty', 'Amount_1C']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
+                    
+            df = self._clean_dataframe(df)
+                
             # Удаляем старые данные
             db.query(temp_Purchase).delete()
             
@@ -2292,77 +2462,37 @@ class TempTablesPage(QWidget):
             purchase_data = []
             for _, row in df.iterrows():
                 purchase_data.append({
-                    'Document': self._safe_str(row.get('Document')),
-                    'Date': self._safe_date(row.get('Date')),
-                    'Doc_type_id': self._safe_int(row.get('Doc_type_id')),
-                    'Status': self._safe_str(row.get('Status')),
-                    'Doc_based': self._safe_str(row.get('Doc_based')),
-                    'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
-                    'Supplier_id': self._safe_str(row.get('Supplier_id')),
-                    'Material_id': self._safe_str(row.get('Material_id')),
-                    'Stock': self._safe_str(row.get('Stock')),
-                    'Currency': self._safe_str(row.get('Currency')),
-                    'VAT': self._safe_str(row.get('VAT')),
-                    'Country': self._safe_str(row.get('Country')),
-                    'GTD': self._safe_str(row.get('GTD')),
-                    'FX_rate_1C': self._safe_float(row.get('FX_rate_1C')),
-                    'Qty': self._safe_float(row.get('Qty')),
-                    'Amount_1C': self._safe_float(row.get('Amount_1C'))
-                })
+                    'Document': row.get('Document'),
+                    'Date': row.get('Date'),
+                    'DocType_id':row.get('DocType_id'),
+                    'Status': row.get('Status'),
+                    'Doc_based': row.get('Doc_based'),
+                    'Date_Doc_based': row.get('Date_Doc_based'),
+                    'Supplier_id': row.get('Supplier_id'),
+                    'Material_id': row.get('Material_id'),
+                    'Stock': row.get('Stock'),
+                    'Currency': row.get('Currency'),
+                    'VAT': row.get('VAT'),
+                    'Country': row.get('Country'),
+                    'GTD': row.get('GTD'),
+                    'FX_rate_1C': row.get('FX_rate_1C'),
+                    'Qty': row.get('Qty'),
+                    'Amount_1C': row.get('Amount_1C')})
             
             # Bulk вставка
             if purchase_data:
                 db.bulk_insert_mappings(temp_Purchase, purchase_data)
             
             db.commit()
-            self.show_error_message(f"Добавлено {len(purchase_data)} записей в temp_Purchase")
             
         except Exception as e:
             db.rollback()
             self.show_error_message(f"Ошибка при обновлении temp_Purchase: {str(e)}")
-            raise e
+            return
 
-    def _update_temp_sales_in_db(self, df, report_start_date=None):
+    def _update_temp_sales_in_db(self, df):
         """Обновление временной таблицы продаж в БД"""
         try:
-            if report_start_date:
-                # Получаем ВСЕ данные из Marketplace с фильтром по дате
-                marketplace_data = db.query(Marketplace).filter(
-                    Marketplace.Date >= report_start_date
-                ).all()
-                
-                # Преобразуем в список словарей ВСЕ поля из Marketplace + добавляем Status
-                marketplace_list = []
-                for m in marketplace_data:
-                    marketplace_list.append({
-                        'Document': m.Document,
-                        'Date': m.Date,
-                        'Qty': m.Qty,
-                        'Amount_1C': m.Amount_1C,
-                        'Price_1C': m.Price_1C,
-                        'Payment_terms': m.Payment_terms,
-                        'Post_payment': m.Post_payment,
-                        'Plan_pay_Date': m.Plan_pay_Date,
-                        'Stock': m.Stock,
-                        'UoM': m.UoM,
-                        'Currency': m.Currency,
-                        'FX_rate': m.FX_rate,
-                        'VAT': m.VAT,
-                        'Calendar_id': m.Calendar_id,
-                        'Material_id': m.Material_id,
-                        'Customer_id': m.Customer_id,
-                        'Manager_id': m.Manager_id,
-                        'Contract_id': m.Contract_id,
-                        'Holding_id': m.Holding_id,
-                        'Sector_id': m.Sector_id,
-                        'DocType_id': m.DocType_id,
-                        'Status': 'Факт'  # Добавляем только эту колонку
-                    })
-                
-                if marketplace_list:
-                    marketplace_df = pd.DataFrame(marketplace_list)
-                    df = pd.concat([df, marketplace_df], axis=0, ignore_index=True)
-            
             # Удаляем старые данные
             db.query(temp_Sales).delete()
             
@@ -2370,40 +2500,40 @@ class TempTablesPage(QWidget):
             sales_data = []
             for _, row in df.iterrows():
                 sales_data.append({
-                    'Document': self._safe_str(row.get('Document')),
+                    'Document': row.get('Document'),
                     'Date': self._safe_date(row.get('Date')),
-                    'Doc_type_id': self._safe_int(row.get('DocType_id') or row.get('Doc_type_id')),
-                    'Status': self._safe_str(row.get('Status')),
-                    'Bill': self._safe_str(row.get('Bill')),
-                    'Bill_Date': self._safe_date(row.get('Bill_Date')),
-                    'Doc_based': self._safe_str(row.get('Doc_based')),
+                    'DocType_id': self._safe_int(row.get('DocType_id')),
+                    'Status': row.get('Status'),
+                    'Bill': row.get('Bill'),
+                    'Bill_Date': row.get('Bill_Date'),
+                    'Doc_based': row.get('Doc_based'),
                     'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
-                    'Customer_id': self._safe_str(row.get('Customer_id')),
-                    'Customer_Name': self._safe_str(row.get('Customer_Name')),
-                    'Material_id': self._safe_str(row.get('Material_id')),
-                    'Stock': self._safe_str(row.get('Stock')),
-                    'Delivery_method': self._safe_str(row.get('Delivery_method')),
-                    'Currency': self._safe_str(row.get('Currency')),
+                    'Customer_id': row.get('Customer_id'),
+                    'Customer_Name': row.get('Customer_Name'),
+                    'Material_id': row.get('Material_id'),
+                    'Stock': row.get('Stock'),
+                    'Delivery_method': row.get('Delivery_method'),
+                    'Currency': row.get('Currency'),
                     'FX_rate_1C': self._safe_float(row.get('FX_rate') or row.get('FX_rate_1C')),
                     'Qty': self._safe_float(row.get('Qty')),
                     'Amount_1C': self._safe_float(row.get('Amount_1C')),
-                    'VAT': self._safe_str(row.get('VAT')),
-                    'Recipient': self._safe_str(row.get('Recipient')),
-                    'Recipient_code': self._safe_str(row.get('Recipient_code')),
-                    'Contract_id': self._safe_str(row.get('Contract_id')),
+                    'VAT': row.get('VAT'),
+                    'Recipient': row.get('Recipient'),
+                    'Recipient_code': row.get('Recipient_code'),
+                    'Contract_id': row.get('Contract_id'),
                     'Manager_id': self._safe_int(row.get('Manager_id')),
-                    'Days_for_Pay': self._safe_int(row.get('Days_for_Pay')),
+                    'Days_for_Pay': self._safe_float(row.get('Days_for_Pay')),
                     'Plan_Delivery_Day': self._safe_date(row.get('Plan_Delivery_Day')),
-                    'Plan_Pay_Day': self._safe_date(row.get('Plan_pay_Date') or row.get('Plan_Pay_Day')),
+                    'Plan_Pay_Day': self._safe_date(row.get('Plan_Pay_Day')),
                     'Post_payment': self._safe_float(row.get('Post_payment')),
-                    'Payment_term': self._safe_str(row.get('Payment_terms') or row.get('Payment_term')),
-                    'Priority': self._safe_str(row.get('Priority')),
-                    'Comment': self._safe_str(row.get('Comment')),
-                    'Sborka': self._safe_str(row.get('Sborka')),
-                    'Spec_Order': self._safe_str(row.get('Spec_Order')),
-                    'Purchase_doc': self._safe_str(row.get('Purchase_doc')),
+                    'Payment_term': row.get('Payment_terms'),
+                    'Priority': row.get('Priority'),
+                    'Comment': row.get('Comment'),
+                    'Sborka': row.get('Sborka'),
+                    'Spec_Order': row.get('Spec_Order'),
+                    'Purchase_doc': row.get('Purchase_doc'),
                     'Purchase_date': self._safe_date(row.get('Purchase_date')),
-                    'Order': self._safe_str(row.get('Order')),
+                    'Order': row.get('Order'),
                     'k_Movement': self._safe_float(row.get('k_Movement')),
                     'k_Storage': self._safe_float(row.get('k_Storage')),
                     'k_Money': self._safe_float(row.get('k_Money'))
@@ -2414,12 +2544,11 @@ class TempTablesPage(QWidget):
                 db.bulk_insert_mappings(temp_Sales, sales_data)
             
             db.commit()
-            self.show_error_message(f"Добавлено {len(sales_data)} записей в temp_Sales")
             
         except Exception as e:
             db.rollback()
             self.show_error_message(f"Ошибка при обновлении temp_Sales: {str(e)}")
-            raise e
+            return
 
     def _update_temp_orders_in_db(self, df):
         """Обновление временной таблицы заказов в БД"""
@@ -2431,44 +2560,44 @@ class TempTablesPage(QWidget):
             orders_data = []
             for _, row in df.iterrows():
                 orders_data.append({
-                    'Bill': self._safe_str(row.get('Bill')),
+                    'Bill': row.get('Bill'),
                     'Bill_Date': self._safe_date(row.get('Bill_Date')),
-                    'Status': self._safe_str(row.get('Status')),
-                    'Customer_id': self._safe_str(row.get('Customer_id')),
-                    'Customer_Name': self._safe_str(row.get('Customer_Name')),
-                    'Material_id': self._safe_str(row.get('Material_id')),
+                    'Status': row.get('Status'),
+                    'Customer_id': row.get('Customer_id'),
+                    'Customer_Name': row.get('Customer_Name'),
+                    'Material_id': row.get('Material_id'),
                     'Qty': self._safe_float(row.get('Qty')),
                     'Amount_1C': self._safe_float(row.get('Amount_1C')),
-                    'VAT': self._safe_str(row.get('VAT')),
-                    'Currency': self._safe_str(row.get('Currency')),
-                    'Recipient': self._safe_str(row.get('Recipient')),
-                    'Recipient_code': self._safe_str(row.get('Recipient_code')),
+                    'VAT': row.get('VAT'),
+                    'Currency': row.get('Currency'),
+                    'Recipient': row.get('Recipient'),
+                    'Recipient_code': row.get('Recipient_code'),
                     'Reserve_date': self._safe_date(row.get('Reserve_date')),
-                    'Reserve_days': self._safe_int(row.get('Reserve_days')),
-                    'Contract': self._safe_str(row.get('Contract')),
-                    'Contract_id': self._safe_str(row.get('Contract_id')),
-                    'Manager': self._safe_str(row.get('Manager')),
-                    'Document': self._safe_str(row.get('Document')),
+                    'Reserve_days': self._safe_float(row.get('Reserve_days')),
+                    'Contract': row.get('Contract'),
+                    'Contract_id': row.get('Contract_id'),
+                    'Manager': row.get('Manager'),
+                    'Document': row.get('Document'),
                     'Date': self._safe_date(row.get('Date')),
-                    'Comment': self._safe_str(row.get('Comment')),
-                    'Days_for_Pay': self._safe_int(row.get('Days_for_Pay')),
+                    'Comment': row.get('Comment'),
+                    'Days_for_Pay': self._safe_float(row.get('Days_for_Pay')),
                     'FX_rate_1C': self._safe_float(row.get('FX_rate_1C')),
-                    'Plan_Pay_Day': self._safe_date(row.get('Plan_Pay_Day')),
+                    'Plan_Pay_Day': row.get('Plan_Pay_Day'),
                     'Post_payment': self._safe_float(row.get('Post_payment')),
-                    'Priority': self._safe_str(row.get('Priority')),
-                    'Stock': self._safe_str(row.get('Stock')),
-                    'Delivery_method': self._safe_str(row.get('Delivery_method')),
-                    'Pay_status': self._safe_str(row.get('Pay_status')),
-                    'Payment_term': self._safe_str(row.get('Payment_term')),
-                    'Doc_based': self._safe_str(row.get('Doc_based')),
+                    'Priority': row.get('Priority'),
+                    'Stock': row.get('Stock'),
+                    'Delivery_method': row.get('Delivery_method'),
+                    'Pay_status': row.get('Pay_status'),
+                    'Payment_term': row.get('Payment_term'),
+                    'Doc_based': row.get('Doc_based'),
                     'Date_Doc_based': self._safe_date(row.get('Date_Doc_based')),
-                    'Sborka': self._safe_str(row.get('Sborka')),
-                    'Spec_Order': self._safe_str(row.get('Spec_Order')),
-                    'Purchase_doc': self._safe_str(row.get('Purchase_doc')),
+                    'Sborka': row.get('Sborka'),
+                    'Spec_Order': row.get('Spec_Order'),
+                    'Purchase_doc': row.get('Purchase_doc'),
                     'Purchase_date': self._safe_date(row.get('Purchase_date')),
-                    'Supplier_id': self._safe_str(row.get('Supplier_id')),
-                    'Order': self._safe_str(row.get('Order')),
-                    'Doc_type_id': self._safe_int(row.get('Doc_type_id')),
+                    'Supplier_id': row.get('Supplier_id'),
+                    'Order': row.get('Order'),
+                    'DocType_id': self._safe_int(row.get('DocType_id')),
                     'k_Movement': self._safe_float(row.get('k_Movement')),
                     'k_Storage': self._safe_float(row.get('k_Storage')),
                     'k_Money': self._safe_float(row.get('k_Money'))
@@ -2479,12 +2608,11 @@ class TempTablesPage(QWidget):
                 db.bulk_insert_mappings(temp_Orders, orders_data)
             
             db.commit()
-            self.show_error_message(f"Добавлено {len(orders_data)} записей в temp_Orders")
             
         except Exception as e:
             db.rollback()
             self.show_error_message(f"Ошибка при обновлении temp_Orders: {str(e)}")
-            raise e
+            return
 
     def _update_purchase_order_in_db(self, df):
         """Обновление таблицы заказов поставщиков в БД"""
@@ -2533,7 +2661,7 @@ class TempTablesPage(QWidget):
                     'LPC_purchase_amount': self._safe_float(row.get('LPC_purchase_amount')),
                     'Qty_after_spec_order': self._safe_float(row.get('Qty_after_spec_order')),
                     'LPC_purchase_after_spec_order': self._safe_float(row.get('LPC_purchase_after_spec_order')),
-                    'Doc_type_id': self._safe_int(row.get('Doc_type_id'))
+                    'DocType_id': self._safe_int(row.get('DocType_id'))
                 })
             
             # Bulk вставка
@@ -2541,12 +2669,11 @@ class TempTablesPage(QWidget):
                 db.bulk_insert_mappings(Purchase_Order, purchase_order_data)
             
             db.commit()
-            self.show_error_message(f"Добавлено {len(purchase_order_data)} записей в Purchase_Order")
             
         except Exception as e:
             db.rollback()
             self.show_error_message(f"Ошибка при обновлении Purchase_Order: {str(e)}")
-            raise e
+            return
 
     def show_message(self, text):
         """Показать информационное сообщение"""
@@ -2602,89 +2729,29 @@ class TempTablesPage(QWidget):
         copy_button.clicked.connect(copy_text)
         msg.exec_()
 
-    def _safe_date(self, value):
-        """Безопасное преобразование в date с обработкой некорректных значений"""
-        if pd.isna(value) or value is None or str(value) in ['NaT', 'nan', 'None', '']:
-            return None
-        
-        # Если значение уже является датой
-        if isinstance(value, (datetime.date, pd.Timestamp)):
-            if isinstance(value, pd.Timestamp):
-                return value.date()
-            return value
-        
-        # Если значение - строка, проверяем, является ли оно датой
-        if isinstance(value, str):
-            # Пропускаем явно не датовые значения
-            if any(char in value for char in ['СЧ', 'ОП', 'НМ', '-', '/', '\\']):
-                return None
-            
-            try:
-                # Пробуем разные форматы дат
-                for fmt in ['%d.%m.%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
-                    try:
-                        return datetime.datetime.strptime(value, fmt).date()
-                    except ValueError:
-                        continue
-                # Если ни один формат не подошел
-                return None
-            except (ValueError, TypeError):
-                return None
-        
-        return None
-
-    def _safe_datetime(self, value):
-        """Безопасное преобразование в datetime с обработкой некорректных значений"""
-        if pd.isna(value) or value is None or str(value) in ['NaT', 'nan', 'None', '']:
-            return None
-        
-        # Если значение уже является datetime
-        if isinstance(value, (datetime.datetime, pd.Timestamp)):
-            if isinstance(value, pd.Timestamp):
-                return value.to_pydatetime()
-            return value
-        
-        # Если значение - строка, проверяем, является ли оно датой/временем
-        if isinstance(value, str):
-            # Пропускаем явно не датовые значения
-            if any(char in value for char in ['СЧ', 'ОП', 'НМ', '-', '/', '\\']):
-                return None
-            
-            try:
-                # Пробуем разные форматы дат/времени
-                for fmt in ['%d.%m.%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%d.%m.%Y', '%Y-%m-%d']:
-                    try:
-                        dt = datetime.datetime.strptime(value, fmt)
-                        return dt
-                    except ValueError:
-                        continue
-                # Если ни один формат не подошел
-                return None
-            except (ValueError, TypeError):
-                return None
-        
-        return None
-
-    def _safe_str(self, value):
-        """Безопасное преобразование в строку с обработкой None значений"""
-        if pd.isna(value) or value is None or str(value).lower() in ['nat', 'nan', 'none', '']:
-            return None
-        return str(value)
-
-    def _safe_int(self, value):
-        """Безопасное преобразование в int"""
-        if pd.isna(value) or value is None:
-            return None
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return None
-
-    def _safe_float(self, value):
-        """Безопасное преобразование в float"""
-        if pd.isna(value) or value is None:
-            return None
+    def convert_decimal_to_float(self, value):
+        """Безопасное преобразование Decimal в float"""
+        if value is None:
+            return 0.0
         try:
             return float(value)
-        except (ValueError, TypeError):
-            return None
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _clean_dataframe(self, df):
+        """
+        Заменяет все NaN/NaT значения на None используя replace
+        """
+        if df.empty:
+            return df
+        
+        cleaned_df = df.copy()
+        cleaned_df = cleaned_df.replace([np.nan, pd.NaT], None)
+        cleaned_df = cleaned_df.replace(['nan', 'NaN', 'NaT', 'NONE', ''], None)
+        
+        return cleaned_df
+
+
+
+
+

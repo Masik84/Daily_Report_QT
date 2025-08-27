@@ -237,7 +237,7 @@ class CustomerPage(QWidget):
                     if not result_df.empty:
                         output_df = result_df[['id', 'Customer_name', 'INN', 'Sector', 'Holding', 'Price_type', 'Несоответствия'] + 
                                     [f"{col}_1C" for col in field_names.keys()]]
-                        output_file = "ERRORs_mismatches_report.xlsx"
+                        output_file = "ERRORs_Customer_mismatches.xlsx"
                         output_df.to_excel(output_file, index=False)
                         self.show_message(
                             f"Найдено {len(result_df)} несоответствий.\n"

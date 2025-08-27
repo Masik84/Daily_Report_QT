@@ -678,7 +678,7 @@ class temp_Purchase(Base):
     Amount_1C = Column(Numeric)                                                 # Сумма 1С
 
     # Внешние ключи
-    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_purchase_doctype'))
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_purchase_doctype'))
     Supplier_id = Column(String, ForeignKey('suppliers.id', name='fk_temp_purchase_supplier'), nullable=True)
     Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_purchase_material'))
     
@@ -724,7 +724,7 @@ class temp_Sales(Base):
     k_Money = Column(Numeric)                                                           # к_Ст-ть Денег, л
     
     # Внешние ключи
-    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_sales_doctype'))
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_sales_doctype'))
     Customer_id = Column(String, ForeignKey('customers.id', name='fk_temp_sales_customer'), nullable=True)      # Контрагент.Код
     Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_sales_material'))                                # Код
     Contract_id = Column(String, ForeignKey('contracts.id', name='fk_temp_sales_contract'), nullable=True)          # Договор.Код
@@ -776,7 +776,7 @@ class temp_Orders(Base):
     k_Money = Column(Numeric)                                                           # к_Ст-ть Денег, л
     
     # Внешние ключи
-    Doc_type_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_orders_doctype'))
+    DocType_id = Column(Integer, ForeignKey('doc_type.id', name='fk_temp_orders_doctype'))
     Customer_id = Column(String, ForeignKey('customers.id', name='fk_temp_orders_customer'))                        # Контрагент.Код
     Material_id = Column(String, ForeignKey('material.Code', name='fk_temp_orders_material'))                          # Код
     Contract_id = Column(String, ForeignKey('contracts.id', name='fk_temp_orders_contract'), nullable=True)     # Договор.Код

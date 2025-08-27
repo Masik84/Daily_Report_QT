@@ -572,6 +572,13 @@ QPushButton:pressed {
              </widget>
             </item>
             <item>
+             <widget class="QPushButton" name="btn_MarketPlace">
+              <property name="text">
+               <string>Маркет Плейсы</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="btn_Moves">
               <property name="text">
                <string>Движения / Комплекты</string>
@@ -589,6 +596,13 @@ QPushButton:pressed {
              <widget class="QPushButton" name="btn_CustDelivery">
               <property name="text">
                <string>Доставка до клиента</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btn_Comission">
+              <property name="text">
+               <string>Комиссии клиентов</string>
               </property>
              </widget>
             </item>
@@ -685,13 +699,6 @@ QPushButton:pressed {
               </property>
               <property name="text">
                <string>Заказы клиентов</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="btn_MarketPlace">
-              <property name="text">
-               <string>Маркет Плейсы</string>
               </property>
              </widget>
             </item>
@@ -817,7 +824,7 @@ QPushButton:pressed {
          <number>0</number>
         </property>
         <property name="rightMargin">
-         <number>0</number>
+         <number>6</number>
         </property>
         <property name="bottomMargin">
          <number>0</number>
