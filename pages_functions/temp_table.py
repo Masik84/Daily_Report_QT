@@ -4,7 +4,7 @@ import os
 import datetime
 from sqlalchemy import extract, and_
 from PySide6.QtWidgets import QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget
-from PySide6.QtCore import Qt, QDate
+from PySide6.QtCore import Qt, QDate, QTimer
 from functools import lru_cache
 import traceback
 import sys
@@ -38,7 +38,12 @@ class TempTablesPage(QWidget):
         
         self._setup_ui()
         self._setup_connections()
-        self.refresh_all_comboboxes()
+        
+        self.table_data_cache = {}
+        self.current_table_data = None
+        
+        # Инициализация вместо полного обновления
+        self._initialize_comboboxes()
     
     def _setup_ui(self):
         """Настройка интерфейса"""
@@ -100,23 +105,6 @@ class TempTablesPage(QWidget):
             
             clipboard.setText(text.strip())
     
-    def on_date_changed(self, date):
-        """Функция, вызываемая при изменении даты."""
-        self.report_start_date = date
-        self.report_start_date = self.report_start_date.toPython()
-        self.report_start_date = pd.to_datetime(self.report_start_date)
-        print(f"Выбрана дата: {self.report_start_date}")
-
-        self.do_something_with_date()
-
-    def do_something_with_date(self):
-        """Функция, использующая дату."""
-        if self.report_start_date:  # Проверяем, что дата была установлена
-            print(f"Обработка даты: {self.report_start_date}")
-            # Здесь ваш код, который использует self.report_start_date
-        else:
-            print("Дата еще не выбрана.")
-
     def _fill_combobox(self, combobox, items):
         """Заполнение выпадающего списка элементами с обязательным первым элементом '-'"""
         current_text = combobox.currentText()
@@ -136,347 +124,370 @@ class TempTablesPage(QWidget):
             combobox.setCurrentText(current_text)
         else:
             combobox.setCurrentIndex(0)  # Устанавливаем на "-"
+
+    def _initialize_comboboxes(self):
+        """Инициализация комбобоксов без загрузки данных"""
+        models = {
+            "Закупки": temp_Purchase,
+            "Продажи": temp_Sales,
+            "Заказы клиентов": temp_Orders,
+            "Заказы поставщиков": Purchase_Order
+        }
+        self._fill_combobox(self.ui.line_table, ["-"] + list(models.keys()))
         
-    def fill_year_list(self):
-        """Заполнение списка годов из выбранной временной таблицы"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_Year, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_Year, [])
-                return
-                
-            # Получаем уникальные годы из временной таблицы
-            years = db.query(extract('year', model.Date)).distinct().all()
-            years_list = sorted([str(int(y[0])) for y in years if y[0] is not None])
-            
-            self._fill_combobox(self.ui.line_Year, years_list)
-        except Exception as e:
-            print(f"Ошибка при загрузке списка годов: {str(e)}")
-            self._fill_combobox(self.ui.line_Year, [])
-
-    def fill_month_list(self):
-        """Заполнение списка месяцев из выбранной временной таблицы"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_Mnth, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_Mnth, [])
-                return
-                
-            # Получаем уникальные месяцы из временной таблицы
-            months = db.query(extract('month', model.Date)).distinct().all()
-
-            months_list = sorted([str(m[0]) for m in months if m[0] is not None and str(m[0]).strip()])
-            
-            self._fill_combobox(self.ui.line_Mnth, months_list)
-        except Exception as e:
-            print(f"Ошибка при загрузке списка месяцев: {str(e)}")
-            self._fill_combobox(self.ui.line_Mnth, [])
-
-    def fill_doc_type_list(self):
-        """Заполнение списка типов документов из выбранной временной таблицы"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_doc_type, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_doc_type, [])
-                return
-                
-            # Получаем уникальные типы документов через связь с doc_type
-            query = db.query(DOCType.Doc_type).join(model, model.DocType_id == DOCType.id)
-            doc_types = query.distinct().all()
-            doc_types_list = sorted([d[0] for d in doc_types if d[0] is not None])
-            
-            self._fill_combobox(self.ui.line_doc_type, doc_types_list)
-        except Exception as e:
-            print(f"Ошибка при загрузке списка типов документов: {str(e)}")
-            self._fill_combobox(self.ui.line_doc_type, [])
-
-    def fill_product_list(self):
-        """Заполнение списка продуктов из выбранной временной таблицы - только названия"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_product, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_product, [])
-                return
-                
-            # Получаем названия продуктов через связь с Materials и Product_Names
-            # ИСПРАВЛЕНО: используем правильные имена полей для каждой модели
-            if model == temp_Purchase:
-                query = db.query(Product_Names.Product_name).join(
-                    Materials, Materials.Product_Names_id == Product_Names.id
-                ).join(
-                    model, model.Material_id == Materials.Code
-                )
-            elif model == temp_Sales:
-                query = db.query(Product_Names.Product_name).join(
-                    Materials, Materials.Product_Names_id == Product_Names.id
-                ).join(
-                    model, model.Material_id == Materials.Code
-                )
-            elif model == temp_Orders:
-                query = db.query(Product_Names.Product_name).join(
-                    Materials, Materials.Product_Names_id == Product_Names.id
-                ).join(
-                    model, model.Material_id == Materials.Code
-                )
-            elif model == Purchase_Order:
-                query = db.query(Product_Names.Product_name).join(
-                    Materials, Materials.Product_Names_id == Product_Names.id
-                ).join(
-                    model, model.Material_id == Materials.Code
-                )
-            else:
-                self._fill_combobox(self.ui.line_product, [])
-                return
-            
-            # Применяем фильтры по дате, если выбраны
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
-            
-            if year != "-" and year != "":
-                try:
-                    year_int = int(year)
-                    query = query.filter(extract('year', model.Date) == year_int)
-                except ValueError:
-                    pass
-            
-            if month != "-" and month != "":
-                try:
-                    month_int = int(month)
-                    query = query.filter(extract('month', model.Date) == month_int)
-                except ValueError:
-                    pass
-            
-            # Применяем фильтр по типу документа, если выбран
-            doc_type = self.ui.line_doc_type.currentText()
-            if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
-                    DOCType.Doc_type == doc_type
-                )
-            
-            # Для клиентов/поставщиков применяем дополнительный фильтр
-            if model in [temp_Sales, temp_Orders]:
-                customer = self.ui.line_customer.currentText()
-                if customer != "-" and customer != "":
-                    # ИСПРАВЛЕНО: правильные имена полей для связей
-                    if model == temp_Sales:
-                        query = query.join(model.customer).filter(Customer.Customer_name == customer)
-                    elif model == temp_Orders:
-                        query = query.join(model.customer).filter(Customer.Customer_name == customer)
-            
-            elif model in [temp_Purchase, Purchase_Order]:
-                supplier = self.ui.line_customer.currentText()
-                if supplier != "-" and supplier != "":
-                    # ИСПРАВЛЕНО: правильные имена полей для связей
-                    if model == temp_Purchase:
-                        query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier)
-                    elif model == Purchase_Order:
-                        query = query.join(model.supplier).filter(Supplier.Supplier_Name == supplier)
-            
-            products = query.distinct().all()
-            products_list = sorted([p.Product_name for p in products if p.Product_name])
-            
-            self._fill_combobox(self.ui.line_product, products_list)
-            
-        except Exception as e:
-            self.show_error_message(f"Ошибка при загрузке списка продуктов: {str(e)}\n{traceback.format_exc()}")
-            self._fill_combobox(self.ui.line_product, [])
-
-    def fill_customer_list(self):
-        """Заполнение списка клиентов из временной таблицы Продажи/Заказы - только названия"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            # Только для моделей с клиентами
-            if model not in [temp_Sales, temp_Orders]:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            # Получаем названия клиентов из временной таблицы
-            # ИСПРАВЛЕНО: правильные имена полей для связей
-            if model == temp_Sales:
-                query = db.query(Customer.Customer_name).join(
-                    model, model.Customer_id == Customer.id
-                )
-            elif model == temp_Orders:
-                query = db.query(Customer.Customer_name).join(
-                    model, model.Customer_id == Customer.id
-                )
-            else:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-            
-            # Применяем фильтры по дате, если выбраны
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
-            
-            if year != "-" and year != "":
-                try:
-                    year_int = int(year)
-                    query = query.filter(extract('year', model.Date) == year_int)
-                except ValueError:
-                    pass
-            
-            if month != "-" and month != "":
-                try:
-                    month_int = int(month)
-                    query = query.filter(extract('month', model.Date) == month_int)
-                except ValueError:
-                    pass
-            
-            # Применяем фильтр по типу документа, если выбран
-            doc_type = self.ui.line_doc_type.currentText()
-            if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
-                    DOCType.Doc_type == doc_type
-                )
-            
-            # Применяем фильтр по продукту, если выбран
-            product = self.ui.line_product.currentText()
-            if product != "-" and product != "":
-                # ИСПРАВЛЕНО: правильные имена полей для связей
-                if model == temp_Sales:
-                    query = query.join(Materials, model.Material_id == Materials.Code).join(
-                        Product_Names, Materials.Product_Names_id == Product_Names.id
-                    ).filter(Product_Names.Product_name == product)
-                elif model == temp_Orders:
-                    query = query.join(Materials, model.Material_id == Materials.Code).join(
-                        Product_Names, Materials.Product_Names_id == Product_Names.id
-                    ).filter(Product_Names.Product_name == product)
-            
-            customers = query.distinct().all()
-            customers_list = sorted([c.Customer_name for c in customers if c.Customer_name])
-            
-            self._fill_combobox(self.ui.line_customer, customers_list)
-            
-        except Exception as e:
-            self.show_error_message(f"Ошибка при загрузке списка клиентов: {str(e)}\n{traceback.format_exc()}")
-            self._fill_combobox(self.ui.line_customer, [])
-
-    def fill_supplier_list(self):
-        """Заполнение списка поставщиков из временной таблицы Закупки/Заказы поставщиков - только названия"""
-        try:
-            table = self.ui.line_table.currentText()
-            if table == "-":
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            model = self._get_model_for_table(table)
-            if not model:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            # Только для моделей с поставщиками
-            if model not in [temp_Purchase, Purchase_Order]:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-                
-            # Получаем названия поставщиков из временной таблицы
-            # ИСПРАВЛЕНО: правильные имена полей для связей
-            if model == temp_Purchase:
-                query = db.query(Supplier.Supplier_Name).join(
-                    model, model.Supplier_id == Supplier.id
-                )
-            elif model == Purchase_Order:
-                query = db.query(Supplier.Supplier_Name).join(
-                    model, model.Supplier_id == Supplier.id
-                )
-            else:
-                self._fill_combobox(self.ui.line_customer, [])
-                return
-            
-            # Применяем фильтры по дате, если выбраны
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
-            
-            if year != "-" and year != "":
-                try:
-                    year_int = int(year)
-                    query = query.filter(extract('year', model.Date) == year_int)
-                except ValueError:
-                    pass
-            
-            if month != "-" and month != "":
-                try:
-                    month_int = int(month)
-                    query = query.filter(extract('month', model.Date) == month_int)
-                except ValueError:
-                    pass
-            
-            # Применяем фильтр по типу документа, если выбран
-            doc_type = self.ui.line_doc_type.currentText()
-            if doc_type != "-" and doc_type != "":
-                query = query.join(DOCType, model.DocType_id == DOCType.id).filter(
-                    DOCType.Doc_type == doc_type
-                )
-            
-            # Применяем фильтр по продукту, если выбран
-            product = self.ui.line_product.currentText()
-            if product != "-" and product != "":
-                # ИСПРАВЛЕНО: правильные имена полей для связей
-                if model == temp_Purchase:
-                    query = query.join(Materials, model.Material_id == Materials.Code).join(
-                        Product_Names, Materials.Product_Names_id == Product_Names.id
-                    ).filter(Product_Names.Product_name == product)
-                elif model == Purchase_Order:
-                    query = query.join(Materials, model.Material_id == Materials.Code).join(
-                        Product_Names, Materials.Product_Names_id == Product_Names.id
-                    ).filter(Product_Names.Product_name == product)
-            
-            suppliers = query.distinct().all()
-            suppliers_list = sorted([s.Supplier_Name for s in suppliers if s.Supplier_Name])
-            
-            self._fill_combobox(self.ui.line_customer, suppliers_list)
-            
-        except Exception as e:
-            self.show_error_message(f"Ошибка при загрузке списка поставщиков: {str(e)}\n{traceback.format_exc()}")
-            self._fill_combobox(self.ui.line_customer, [])
-
-    def on_table_changed(self):
-        """Обработчик изменения таблицы"""
-        self.fill_doc_type_list()
+        # Очищаем остальные комбобоксы
+        self._fill_combobox(self.ui.line_doc_type, ["-"])
+        self._fill_combobox(self.ui.line_Year, ["-"])
+        self._fill_combobox(self.ui.line_Mnth, ["-"])
+        self._fill_combobox(self.ui.line_customer, ["-"])
+        self._fill_combobox(self.ui.line_product, ["-"])
+    
+    def _update_comboboxes_from_cache(self):
+        """Обновление комбобоксов из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+            return
+        
+        df = self.current_table_data
+        
+        # Обновляем год и месяц
         self.fill_year_list()
         self.fill_month_list()
         
-        # В зависимости от выбранной таблицы заполняем соответствующий список
-        table = self.ui.line_table.currentText()
-        model = self._get_model_for_table(table)
+        # Обновляем тип документа
+        self.fill_doc_type_list()
         
-        if model in [temp_Sales, temp_Orders]:
+        # Обновляем клиента/поставщика в зависимости от типа таблицы
+        table = self.ui.line_table.currentText()
+        if table in ["Продажи", "Заказы клиентов"]:
             self.fill_customer_list()
-            
-        elif model in [temp_Purchase, Purchase_Order]:
+        elif table in ["Закупки", "Заказы поставщиков"]:
             self.fill_supplier_list()
         
+        # Обновляем продукт
         self.fill_product_list()
     
+    def fill_year_list(self):
+        """Заполнение списка годов из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            return
+        
+        df = self.current_table_data
+        if 'Date' not in df.columns:
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            return
+        
+        years = df['Date'].dropna().apply(lambda x: x.year).unique()
+        years_list = sorted([str(int(y)) for y in years if y is not None])
+        self._fill_combobox(self.ui.line_Year, ["-"] + years_list)
+
+    def fill_month_list(self):
+        """Заполнение списка месяцев из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            return
+        
+        df = self.current_table_data
+        if 'Date' not in df.columns:
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            return
+        
+        months = df['Date'].dropna().apply(lambda x: x.month).unique()
+        months_list = sorted([str(int(m)) for m in months if m is not None])
+        self._fill_combobox(self.ui.line_Mnth, ["-"] + months_list)
+
+    def fill_doc_type_list(self):
+        """Заполнение списка типов документов из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            return
+        
+        try:
+            df = self.current_table_data
+            if 'DocType_id' not in df.columns:
+                self._fill_combobox(self.ui.line_doc_type, ["-"])
+                return
+            
+            # Преобразуем numpy.int64 в обычные Python int
+            doc_type_ids = df['DocType_id'].dropna().unique()
+            doc_type_ids = [int(id) for id in doc_type_ids]  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+            
+            if len(doc_type_ids) == 0:
+                self._fill_combobox(self.ui.line_doc_type, ["-"])
+                return
+            
+            # Получаем соответствующие типы документов из БД
+            doc_types = db.query(DOCType.Doc_type).filter(DOCType.id.in_(doc_type_ids)).distinct().all()
+            doc_types_list = sorted([d[0] for d in doc_types if d[0] is not None])
+            
+            self._fill_combobox(self.ui.line_doc_type, ["-"] + doc_types_list)
+        except Exception as e:
+            print(f"Ошибка при загрузке списка типов документов: {str(e)}")
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+
+    def fill_customer_list(self):
+        """Заполнение списка клиентов из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            return
+        
+        try:
+            df = self.current_table_data
+            if 'Customer_id' not in df.columns:
+                self._fill_combobox(self.ui.line_customer, ["-"])
+                return
+            
+            # Преобразуем numpy типы в строки
+            customer_ids = df['Customer_id'].dropna().unique()
+            customer_ids = [str(id) for id in customer_ids]  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+            
+            if len(customer_ids) == 0:
+                self._fill_combobox(self.ui.line_customer, ["-"])
+                return
+            
+            # Получаем названия клиентов из БД
+            customers = db.query(Customer.id, Customer.Customer_name).filter(
+                Customer.id.in_(customer_ids)
+            ).distinct().all()
+            
+            customers_list = sorted([f"{c.id} - {c.Customer_name}" for c in customers if c.Customer_name])
+            self._fill_combobox(self.ui.line_customer, ["-"] + customers_list)
+            
+        except Exception as e:
+            self._fill_combobox(self.ui.line_customer, ["-"])
+
+    def fill_supplier_list(self):
+        """Заполнение списка поставщиков из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            return
+        
+        try:
+            df = self.current_table_data
+            if 'Supplier_id' not in df.columns:
+                self._fill_combobox(self.ui.line_customer, ["-"])
+                return
+            
+            # Преобразуем numpy типы в строки
+            supplier_ids = df['Supplier_id'].dropna().unique()
+            supplier_ids = [str(id) for id in supplier_ids]  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+            
+            if len(supplier_ids) == 0:
+                self._fill_combobox(self.ui.line_customer, ["-"])
+                return
+            
+            # Получаем названия поставщиков из БД
+            suppliers = db.query(Supplier.id, Supplier.Supplier_Name).filter(
+                Supplier.id.in_(supplier_ids)
+            ).distinct().all()
+            
+            suppliers_list = sorted([f"{s.id} - {s.Supplier_Name}" for s in suppliers if s.Supplier_Name])
+            self._fill_combobox(self.ui.line_customer, ["-"] + suppliers_list)
+            
+        except Exception as e:
+            self._fill_combobox(self.ui.line_customer, ["-"])
+
+    def fill_product_list(self):
+        """Заполнение списка продуктов из кэшированных данных"""
+        if self.current_table_data is None or self.current_table_data.empty:
+            self._fill_combobox(self.ui.line_product, ["-"])
+            return
+        
+        try:
+            df = self.current_table_data
+            if 'Material_id' not in df.columns:
+                self._fill_combobox(self.ui.line_product, ["-"])
+                return
+            
+            # Преобразуем numpy типы в строки
+            material_ids = df['Material_id'].dropna().unique()
+            material_ids = [str(id) for id in material_ids]  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
+            
+            if len(material_ids) == 0:
+                self._fill_combobox(self.ui.line_product, ["-"])
+                return
+            
+            # Получаем названия продуктов из БД
+            products = db.query(
+                Materials.Code, 
+                Product_Names.Product_name
+            ).join(
+                Materials.product_name
+            ).filter(
+                Materials.Code.in_(material_ids)
+            ).distinct().all()
+            
+            products_list = sorted([p.Product_name for p in products if p.Product_name])
+            self._fill_combobox(self.ui.line_product, ["-"] + products_list)
+            
+        except Exception as e:
+            self._fill_combobox(self.ui.line_product, ["-"])
+
+    def refresh_all_comboboxes(self):
+        """Обновление всех выпадающих списков с кэшированием данных"""
+        table = self.ui.line_table.currentText()
+        
+        # Всегда обновляем список таблиц
+        models = {
+            "Закупки": temp_Purchase,
+            "Продажи": temp_Sales,
+            "Заказы клиентов": temp_Orders,
+            "Заказы поставщиков": Purchase_Order
+        }
+        self._fill_combobox(self.ui.line_table, list(models.keys()))
+        
+        if table == "-":
+            # Если таблица не выбрана, очищаем остальные комбобоксы
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+            return
+        
+        # Если данные уже в кэше - используем их
+        if table in self.table_data_cache:
+            df = self.table_data_cache[table]
+            self.current_table_data = df
+            
+            # Обновляем комбобоксы из кэшированных данных
+            self.fill_year_list()
+            self.fill_month_list()
+            self.fill_doc_type_list()
+            
+            # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
+            if table in ["Продажи", "Заказы клиентов"]:
+                self.fill_customer_list()
+            elif table in ["Закупки", "Заказы поставщиков"]:
+                self.fill_supplier_list()
+            
+            self.fill_product_list()
+            return
+        
+        # Если нет в кэше - загружаем из БД один раз
+        try:
+            model = self._get_model_for_table(table)
+            if not model:
+                return
+                
+            # Загружаем минимальные данные таблицы в DataFrame
+            query = db.query(
+                model.Date,
+                model.DocType_id,
+                model.Customer_id if hasattr(model, 'Customer_id') else None,
+                model.Supplier_id if hasattr(model, 'Supplier_id') else None,
+                model.Material_id
+            )
+            
+            # Преобразуем в DataFrame
+            data = []
+            for row in query.all():
+                row_data = {
+                    'Date': row.Date,
+                    'DocType_id': row.DocType_id
+                }
+                if hasattr(row, 'Customer_id') and row.Customer_id:
+                    row_data['Customer_id'] = row.Customer_id
+                if hasattr(row, 'Supplier_id') and row.Supplier_id:
+                    row_data['Supplier_id'] = row.Supplier_id
+                if hasattr(row, 'Material_id') and row.Material_id:
+                    row_data['Material_id'] = row.Material_id
+                data.append(row_data)
+            
+            df = pd.DataFrame(data)
+            
+            # Сохраняем в кэш
+            self.table_data_cache[table] = df
+            self.current_table_data = df
+            
+            # Обновляем комбобоксы из DataFrame
+            self.fill_year_list()
+            self.fill_month_list()
+            self.fill_doc_type_list()
+            
+            # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
+            if table in ["Продажи", "Заказы клиентов"]:
+                self.fill_customer_list()
+            elif table in ["Закупки", "Заказы поставщиков"]:
+                self.fill_supplier_list()
+            
+            self.fill_product_list()
+            
+        except Exception as e:
+            print(f"Ошибка при загрузке данных таблицы: {str(e)}")
+            # В случае ошибки очищаем комбобоксы
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+
+    def on_table_changed(self):
+        """Обработчик изменения таблицы - с кэшированием данных"""
+        table = self.ui.line_table.currentText()
+        if table == "-":
+            self.current_table_data = None
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+            return
+        
+        # Если данные уже в кэше - используем их
+        if table in self.table_data_cache:
+            self.current_table_data = self.table_data_cache[table]
+            self._update_comboboxes_from_cache()  # Этот метод должен обновлять из кэша
+            return
+        
+        # Если нет в кэше - загружаем из БД один раз
+        try:
+            model = self._get_model_for_table(table)
+            if not model:
+                return
+                
+            # Загружаем минимальные данные таблицы в DataFrame
+            query = db.query(
+                model.Date,
+                model.DocType_id,
+                model.Customer_id if hasattr(model, 'Customer_id') else None,
+                model.Supplier_id if hasattr(model, 'Supplier_id') else None,
+                model.Material_id
+            )
+            
+            # Преобразуем в DataFrame
+            data = []
+            for row in query.all():
+                row_data = {
+                    'Date': row.Date,
+                    'DocType_id': row.DocType_id
+                }
+                if hasattr(row, 'Customer_id') and row.Customer_id:
+                    row_data['Customer_id'] = row.Customer_id
+                if hasattr(row, 'Supplier_id') and row.Supplier_id:
+                    row_data['Supplier_id'] = row.Supplier_id
+                if hasattr(row, 'Material_id') and row.Material_id:
+                    row_data['Material_id'] = row.Material_id
+                data.append(row_data)
+            
+            df = pd.DataFrame(data)
+            
+            # Сохраняем в кэш
+            self.table_data_cache[table] = df
+            self.current_table_data = df
+            
+            # Обновляем комбобоксы из DataFrame
+            self._update_comboboxes_from_cache()  # Этот метод должен обновлять из кэша
+            
+        except Exception as e:
+            print(f"Ошибка при загрузке данных таблицы: {str(e)}")
+            self.current_table_data = None
+
     def on_doc_type_changed(self):
         """Обработчик изменения типа документа"""
         self.fill_year_list()
@@ -507,7 +518,10 @@ class TempTablesPage(QWidget):
         self.fill_product_list()
 
     def refresh_all_comboboxes(self):
-        """Обновление всех выпадающих списков"""
+        """Обновление всех выпадающих списков с кэшированием данных"""
+        table = self.ui.line_table.currentText()
+        
+        # Всегда обновляем список таблиц
         models = {
             "Закупки": temp_Purchase,
             "Продажи": temp_Sales,
@@ -516,12 +530,91 @@ class TempTablesPage(QWidget):
         }
         self._fill_combobox(self.ui.line_table, list(models.keys()))
         
-        self.fill_doc_type_list()
-        self.fill_year_list()
-        self.fill_month_list()
-        self.fill_customer_list()
-        self.fill_supplier_list()
-        self.fill_product_list()
+        if table == "-":
+            # Если таблица не выбрана, очищаем остальные комбобоксы
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+            return
+        
+        # Если данные уже в кэше - используем их
+        if table in self.table_data_cache:
+            df = self.table_data_cache[table]
+            self.current_table_data = df
+            
+            # Обновляем комбобоксы из кэшированных данных
+            self.fill_year_list()
+            self.fill_month_list()
+            self.fill_doc_type_list()
+            
+            # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
+            if table in ["Продажи", "Заказы клиентов"]:
+                self.fill_customer_list()
+            elif table in ["Закупки", "Заказы поставщиков"]:
+                self.fill_supplier_list()
+            
+            self.fill_product_list()
+            return
+        
+        # Если нет в кэше - загружаем из БД один раз
+        try:
+            model = self._get_model_for_table(table)
+            if not model:
+                return
+                
+            # Загружаем минимальные данные таблицы в DataFrame
+            query = db.query(
+                model.Date,
+                model.DocType_id,
+                model.Customer_id if hasattr(model, 'Customer_id') else None,
+                model.Supplier_id if hasattr(model, 'Supplier_id') else None,
+                model.Material_id
+            )
+            
+            # Преобразуем в DataFrame
+            data = []
+            for row in query.all():
+                row_data = {
+                    'Date': row.Date,
+                    'DocType_id': row.DocType_id
+                }
+                if hasattr(row, 'Customer_id') and row.Customer_id:
+                    row_data['Customer_id'] = row.Customer_id
+                if hasattr(row, 'Supplier_id') and row.Supplier_id:
+                    row_data['Supplier_id'] = row.Supplier_id
+                if hasattr(row, 'Material_id') and row.Material_id:
+                    row_data['Material_id'] = row.Material_id
+                data.append(row_data)
+            
+            df = pd.DataFrame(data)
+            
+            # Сохраняем в кэш
+            self.table_data_cache[table] = df
+            self.current_table_data = df
+            
+            # Обновляем комбобоксы из DataFrame
+            self.fill_year_list()
+            self.fill_month_list()
+            self.fill_doc_type_list()
+            
+            # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
+            if table in ["Продажи", "Заказы клиентов"]:
+                self.fill_customer_list()
+            elif table in ["Закупки", "Заказы поставщиков"]:
+                self.fill_supplier_list()
+            
+            self.fill_product_list()
+            
+        except Exception as e:
+            print(f"Ошибка при загрузке данных таблицы: {str(e)}")
+            # В случае ошибки очищаем комбобоксы
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
 
     def find_temp_data(self):
         """Поиск данных по заданным критериям с улучшенной обработкой"""
@@ -549,7 +642,8 @@ class TempTablesPage(QWidget):
             result = query.all()
             
             if not result:
-                self.show_message("Данные не найдены")
+                total_count = db.query(model).count()
+                self.show_message(f"Данные не найдены с текущими фильтрами.\nВсего записей в таблице: {total_count}")
                 return
             
             # Преобразуем результат в DataFrame
@@ -573,13 +667,16 @@ class TempTablesPage(QWidget):
                     row_data['Продукт + упаковка'] = row.material.product_name.Product_name if row.material.product_name else ""
                     row_data['Package_Volume'] = row.material.Package_Volume if row.material.Package_Volume else 0
                 
+                # ВАЖНО: Добавляем правильные названия контрагентов
                 if hasattr(row, 'customer') and row.customer:
                     row_data['Контрагент.Код'] = row.customer.id
                     row_data['Контрагент'] = row.customer.Customer_name
+                    row_data['Customer_Name'] = row.customer.Customer_name  # Добавляем для унификации
                 
                 if hasattr(row, 'supplier') and row.supplier:
                     row_data['Поставщик.Код'] = row.supplier.id
                     row_data['Поставщик'] = row.supplier.Supplier_Name
+                    row_data['Supplier_Name'] = row.supplier.Supplier_Name  # Добавляем для унификации
                 
                 if hasattr(row, 'doc_type') and row.doc_type:
                     row_data['Тип документа'] = row.doc_type.Doc_type
@@ -604,23 +701,16 @@ class TempTablesPage(QWidget):
             self._update_summary(df, model)
             
         except Exception as e:
-            self.show_error_message(f"Ошибка при поиске данных: {str(e)}")
-            traceback.print_exc()
+            error_msg = f"Ошибка при поиске данных: {str(e)}"
+            self.show_error_message(error_msg)
 
     def _build_base_query(self, model):
         """Создает базовый запрос в зависимости от модели"""
-        # Базовый запрос с основными полями
+        # Базовый запрос только с нужными полями, без лишних JOIN'ов
         query = db.query(model)
         
-        # Добавляем joins для связанных данных в зависимости от модели
-        if model == temp_Purchase:
-            query = query.join(model.material).join(model.supplier).join(model.doc_type)
-        elif model == temp_Sales:
-            query = query.join(model.material).join(model.customer).join(model.doc_type)
-        elif model == temp_Orders:
-            query = query.join(model.material).join(model.customer).join(model.doc_type)
-        elif model == Purchase_Order:
-            query = query.join(model.material).join(model.supplier).join(model.doc_type)
+        # Добавляем только JOIN с doc_type для фильтрации по типу документа
+        query = query.join(DOCType, model.DocType_id == DOCType.id)
         
         return query
 
@@ -628,7 +718,7 @@ class TempTablesPage(QWidget):
         """Применяет фильтры к запросу с учетом типа модели"""
         # Фильтр по году
         year = self.ui.line_Year.currentText()
-        if year != "-":
+        if year != "-" and year != "":
             try:
                 year_int = int(year)
                 query = query.filter(extract('year', model.Date) == year_int)
@@ -637,34 +727,39 @@ class TempTablesPage(QWidget):
         
         # Фильтр по месяцу
         month = self.ui.line_Mnth.currentText()
-        if month != "-":
+        if month != "-" and month != "":
             try:
                 month_int = int(month)
                 query = query.filter(extract('month', model.Date) == month_int)
             except ValueError:
                 pass
         
-        # Фильтр по типу документа - УБИРАЕМ ДУБЛИРОВАНИЕ
+        # Фильтр по типу документа
         doc_type = self.ui.line_doc_type.currentText()
-        if doc_type != "-":
-            query = query.filter(DOCType.Doc_type == doc_type)
+        if doc_type != "-" and doc_type != "":
+            # Получаем все DocType_id, соответствующие выбранному Doc_type
+            doc_type_ids = db.query(DOCType.id).filter(DOCType.Doc_type == doc_type).all()
+            doc_type_ids = [doc_id[0] for doc_id in doc_type_ids]
+            
+            if doc_type_ids:
+                query = query.filter(model.DocType_id.in_(doc_type_ids))
         
-        # Фильтр по контрагенту (клиент или поставщик в зависимости от модели)
+        # Фильтр по контрагенту (клиент или поставщик) - добавляем JOIN только если нужен
         customer_supplier = self.ui.line_customer.currentText()
-        if customer_supplier != "-":
+        if customer_supplier != "-" and customer_supplier != "":
             if model in [temp_Sales, temp_Orders]:
-                # Для моделей с клиентами
-                query = query.join(model.customer).filter(Customer.Customer_name == customer_supplier)
+                query = query.join(Customer, model.Customer_id == Customer.id)
+                query = query.filter(Customer.Customer_name == customer_supplier)
             elif model in [temp_Purchase, Purchase_Order]:
-                # Для моделей с поставщиками
-                query = query.join(model.supplier).filter(Supplier.Supplier_Name == customer_supplier)
+                query = query.join(Supplier, model.Supplier_id == Supplier.id)
+                query = query.filter(Supplier.Supplier_Name == customer_supplier)
         
-        # Фильтр по продукту
+        # Фильтр по продукту - добавляем JOIN только если нужен
         product = self.ui.line_product.currentText()
-        if product != "-":
-            query = query.join(model.material).join(
-                Product_Names, Materials.Product_Names_id == Product_Names.id
-            ).filter(Product_Names.Product_name == product)
+        if product != "-" and product != "":
+            query = query.join(Materials, model.Material_id == Materials.Code)
+            query = query.join(Product_Names, Materials.Product_Names_id == Product_Names.id)
+            query = query.filter(Product_Names.Product_name == product)
         
         return query
 
@@ -727,69 +822,80 @@ class TempTablesPage(QWidget):
         return "ед."
 
     def _display_data(self, df):
-        """Отображение данных в таблице с вычислением Кол-во, шт и Кол-во, л"""
+        """Отображение данных в таблице с сортировкой и переименованными колонками"""
         self.table.clearContents()
-        
+
         # Добавляем вычисляемые колонки если их нет
         if 'Кол-во, шт' not in df.columns and 'Qty' in df.columns:
             df['Кол-во, шт'] = df['Qty']
-        
+
         if 'Кол-во, л' not in df.columns and 'Qty' in df.columns and 'Package_Volume' in df.columns:
             df['Кол-во, л'] = df['Qty'] * df['Package_Volume']
-        
-        # Выбираем колонки для отображения
-        display_columns = []
-        preferred_columns = [
-            'Документ', 'Date', 'Дата', 'Код', 'Артикул', 'Продукт + упаковка',
-            'Кол-во, шт', 'Кол-во, л', 'Сумма 1С', 'Amount_1C', 'Контрагент',
-            'Поставщик', 'Валюта', 'Склад', 'Статус'
+
+        # Определяем какие колонки мы хотим показать
+        base_columns_to_show = [
+            'Document', 'Date', 'Status', 'Тип документа', 'Код', 'Артикул',
+            'Продукт + упаковка', 'Кол-во, шт', 'Кол-во, л', 'Amount_1C'
         ]
+
+        # Добавляем колонку контрагента в зависимости от типа таблицы
+        table = self.ui.line_table.currentText()
+        if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in df.columns:
+            base_columns_to_show.append('Supplier_Name')
+        elif table in ["Продажи", "Заказы клиентов"] and 'Customer_Name' in df.columns:
+            base_columns_to_show.append('Customer_Name')
+
+        # Фильтруем только существующие колонки
+        columns_to_show = [col for col in base_columns_to_show if col in df.columns]
+
+        # Создаем DataFrame только с нужными колонками
+        display_df = df[columns_to_show].copy()
+
+        # Переименовываем колонки для отображения
+        column_rename_map = {
+            'Document': 'Документ',
+            'Date': 'Дата',
+            'Status': 'Статус',
+            'Amount_1C': 'Сумма 1С'
+        }
+
+        # Переименовываем колонку контрагента
+        if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in display_df.columns:
+            column_rename_map['Supplier_Name'] = 'Контрагент'
+        elif table in ["Продажи", "Заказы клиентов"] and 'Customer_Name' in display_df.columns:
+            column_rename_map['Customer_Name'] = 'Контрагент'
+
+        # Применяем переименование
+        display_df = display_df.rename(columns=column_rename_map)
+        display_df['Дата'] = pd.to_datetime(display_df['Дата'], format='%d.%m.%Y', errors='coerce')
+        display_df = display_df.sort_values(by=['Дата', 'Тип документа', 'Документ', 'Кол-во, шт'], ascending=[True, True, True, True])
+        display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
         
-        for col in preferred_columns:
-            if col in df.columns:
-                display_columns.append(col)
-        
-        # Добавляем остальные колонки
-        for col in df.columns:
-            if col not in display_columns and col not in ['Кол-во, шт', 'Кол-во, л']:
-                display_columns.append(col)
-        
-        # Убедимся что нужные колонки есть
-        if 'Кол-во, шт' in df.columns and 'Кол-во, шт' not in display_columns:
-            display_columns.insert(0, 'Кол-во, шт')
-        if 'Кол-во, л' in df.columns and 'Кол-во, л' not in display_columns:
-            display_columns.insert(1, 'Кол-во, л')
-        
+        # display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
+        display_columns = list(display_df.columns)
+
+        # Устанавливаем колонки и строки
         self.table.setColumnCount(len(display_columns))
-        self.table.setRowCount(len(df))
+        self.table.setRowCount(len(display_df))
         self.table.setHorizontalHeaderLabels(display_columns)
-        
-        numeric_cols = ["Кол-во, шт", "Кол-во, л", "Qty", "Amount_1C", "Сумма 1С", "Qty_pcs", 
-                    "Qty_lt", "Price_1C", "FX_rate_1C", "Payment_FX", "Price_pcs_Curr", 
-                    "Price_lt_Curr", "Price_wo_VAT_Rub", "Amount_wo_VAT_Rub", "Transport_mn", 
-                    "Customs_fee", "Customs_docs", "Bank_fee", "Agency", "Add_Services", 
-                    "ED", "Eco_fee", "Movement_fee", "Load_Unload", "LPC_purchase_lt", 
-                    "LPC_purchase_pcs", "LPC_purchase_amount", "Qty_after_spec_order", 
-                    "LPC_purchase_after_spec_order"]
-        
-        date_cols = ["Date", "Дата", "Bill_Date", "Date_Doc_based", "Plan_Delivery_Day", 
-                    "Plan_Pay_Day", "Purchase_date", "Reserve_date", "Bill_date"]
-        
-        for row_idx, row in df.iterrows():
+
+        numeric_cols = ["Кол-во, шт", "Кол-во, л", "Сумма 1С"]
+        # Заполняем таблицу данными
+        for row_idx in range(len(display_df)):
             for col_idx, col_name in enumerate(display_columns):
-                value = row[col_name] if col_name in row else ''
-                
+                value = display_df.iloc[row_idx][col_name]
+
                 # Преобразуем None/NaN в пустую строку
                 if pd.isna(value) or value is None or str(value) in ['None', 'nan', 'NaT']:
                     value = ''
-                
+
                 item = QTableWidgetItem(str(value))
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-                
+
                 # Форматирование числовых колонок
                 if col_name in numeric_cols and pd.notna(value) and value != '':
                     try:
-                        if col_name in ["Кол-во, шт", "Qty", "Qty_pcs", "Qty_after_spec_order"]:
+                        if col_name in ["Кол-во, шт"]:
                             # Целочисленные значения
                             item.setText(f"{int(float(value)):,}".replace(",", " "))
                             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -799,28 +905,29 @@ class TempTablesPage(QWidget):
                             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                     except (ValueError, TypeError):
                         pass
-                
-                # Форматирование дат
-                elif col_name in date_cols and pd.notna(value) and value != '':
-                    try:
-                        if isinstance(value, str):
-                            # Пытаемся преобразовать строку в дату
-                            date_obj = datetime.datetime.strptime(value, "%d.%m.%Y")
-                            item.setText(date_obj.strftime("%d.%m.%Y"))
-                        elif isinstance(value, datetime.date):
-                            item.setText(value.strftime("%d.%m.%Y"))
-                        elif isinstance(value, pd.Timestamp):
-                            item.setText(value.strftime("%d.%m.%Y"))
-                    except (ValueError, TypeError):
-                        pass
-                
+
                 self.table.setItem(row_idx, col_idx, item)
-        
+
+        # Включаем сортировку
+        self.table.setSortingEnabled(True)
+
+        # Настраиваем resize mode для колонок
+        for i in range(self.table.columnCount()):
+            self.table.horizontalHeader().setSectionResizeMode(i, QHeaderView.Interactive)
+
+        # Делаем последнюю колонку растяжимой
+        self.table.horizontalHeader().setStretchLastSection(True)
+
+        # Автоподбор ширины колонок
         self.table.resizeColumnsToContents()
 
     def upload_data(self):
         """Обновление данных из файлов и загрузка в БД"""
         try:
+            # Очищаем кэш при обновлении данных
+            self.table_data_cache = {}
+            self.current_table_data = None
+            
             date_start = self.ui.date_Start.date()
             self.report_start_date = date_start.toPython()
             self.report_start_date = pd.to_datetime(self.report_start_date)
@@ -873,7 +980,24 @@ class TempTablesPage(QWidget):
                     self._update_purchase_order_in_db(purchase_order_df)
                     self.show_message("Данные о заказах поставщиков успешно обновлены")
             
-            self.refresh_all_comboboxes()
+            # После обновления данных обновляем только базовые комбобоксы
+            models = {
+                "Закупки": temp_Purchase,
+                "Продажи": temp_Sales,
+                "Заказы клиентов": temp_Orders,
+                "Заказы поставщиков": Purchase_Order
+            }
+            self._fill_combobox(self.ui.line_table, list(models.keys()))
+            
+            # Остальные списки очищаем
+            self._fill_combobox(self.ui.line_doc_type, ["-"])
+            self._fill_combobox(self.ui.line_Year, ["-"])
+            self._fill_combobox(self.ui.line_Mnth, ["-"])
+            self._fill_combobox(self.ui.line_customer, ["-"])
+            self._fill_combobox(self.ui.line_product, ["-"])
+            
+            # Показываем сообщение о завершении
+            self.show_message("Все данные успешно обновлены. Выберите таблицу для работы.")
             
         except Exception as e:
             self.show_error_message(f"Ошибка при обновлении данных: {str(e)}")
@@ -970,6 +1094,7 @@ class TempTablesPage(QWidget):
             
         # Получение ID типа документа
         df['DocType_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
+        df['Количество'] = np.where(df['Тип документа'] == '7.0. Передача в переработку', -df['Количество'], df['Количество'])
 
         # Проверка продуктов
         self._check_products(df)
