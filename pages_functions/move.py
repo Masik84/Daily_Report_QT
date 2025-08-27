@@ -1070,7 +1070,7 @@ class MovesPage(QWidget):
                 return
             
             move_df = self._clean_dataframe(move_df)
-            move_df.to_excel('test_move.xlsx')
+
             db.query(Movements).filter(Movements.Date >= report_start_date).delete()
 
             # Получаем список существующих клиентов и поставщиков из БД
@@ -1237,7 +1237,7 @@ class MovesPage(QWidget):
                 return
 
             df = self._clean_dataframe(df)
-            df.to_excel('test_complect.xlsx')
+
             db.query(Complects).filter(Complects.Date >= report_start_date).delete()
 
             # Подготавливаем данные для вставки
@@ -1282,8 +1282,6 @@ class MovesPage(QWidget):
             
             df['Вид операции'] = 'Комплектация'
             df['Вид документа'] = 'Комплектация номенклатуры'
-            
-            df.to_excel('test_complect_man.xlsx')
             
             db.query(Complects_manual).filter(Complects_manual.Date >= report_start_date).delete()
             
