@@ -38,8 +38,8 @@ class Home(QWidget):
         # Создаем кнопки
         self.btn_update_all = QPushButton("Обновить все Справочники")
         self.btn_update_marketplace = QPushButton("Обновить МакетПлейсы")
-        self.btn_update_purchases = QPushButton("Запустить обновление Закупок/Продаж")
-        self.btn_update_main_report = QPushButton("Запустить обновление основного Отчета")
+        self.btn_update_purchases = QPushButton("Обновить Закупи/Продажи/Счета")
+        self.btn_update_main_report = QPushButton("Обновить основной Отчет")
         self.btn_create_manager_files = QPushButton("Запустить формирование файлов для Менеджеров")
         self.btn_send_main_report = QPushButton("Отправить Основной Отчет")
         self.btn_send_manager_reports = QPushButton("Отправить Отчеты для Менеджеров")

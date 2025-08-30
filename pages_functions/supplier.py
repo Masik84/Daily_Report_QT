@@ -284,15 +284,6 @@ class SupplierPage(QWidget):
 
             db.commit()
 
-            report = [
-                f"Всего обработано: {stats['total']}",
-                f"Сохранено схем: {stats['saved']}",
-                f"Пропущено из-за неверного Supplier_id: {stats['invalid_supplier']}",
-                f"Пропущено из-за некорректных данных: {len([x for x in stats['skipped'] if 'данные' in x])}"
-            ]
-            
-            self.show_message("\n".join(report))
-
         except SQLAlchemyError as e:
             db.rollback()
             error_msg = f"Ошибка сохранения схем: {str(e)}\n\n{stats}"

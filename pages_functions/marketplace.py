@@ -534,8 +534,10 @@ class MarketplacePage(QWidget):
         # Стандартная обработка данных
         df["Дата"] = pd.to_datetime(df["Дата"], errors="coerce")
         df["Плановая дата оплаты"] = pd.to_datetime(df["Плановая дата оплаты"], errors="coerce")
-        df["Количество"] = df["Количество"].fillna(0)
-        df["Сумма 1С"] = df["Сумма 1С"].fillna(0)
+        df["Количество"] = df["Количество"].fillna(0.0)
+        df["Сумма 1С"] = df["Сумма 1С"].fillna(0.0)
+        df['Артикул'] = df['Артикул'].fillna('-')
+        
         
         # Добавление стандартных значений
         df["Склад"] = market_place_name
@@ -553,7 +555,7 @@ class MarketplacePage(QWidget):
         group_cols = [col for col in df.columns if col not in numeric_cols]
         
         df = df.groupby(group_cols, as_index=False)[numeric_cols].sum()
-        
+        df.to_excel('test_ya.xlsx')
         return df
         
     def read_cash_data(self):

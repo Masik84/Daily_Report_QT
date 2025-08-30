@@ -844,12 +844,12 @@ class Purchase_Order(Base):
 
 
     __table_args__ = (
-        Index('idx_purchase_order_unique', 'Order', 'Document', 'Date', unique=True),
+        
         Index('idx_purchase_order_supplier', 'Supplier_id'),
         Index('idx_purchase_order_material', 'Material_id'),
     )
 
-
+# Index('idx_purchase_order_unique', 'Order', 'Document', 'Date', 'Material_id', 'Supplier_id', unique=True),
 
 from sqlalchemy.orm import configure_mappers
 configure_mappers()

@@ -43,8 +43,8 @@ Purchase_folder = MAIN_FOLDER / "Выгрузки" / "Закупки"
 Sales_folder = MAIN_FOLDER / "Выгрузки" / "Продажи"
 
 # Файлы счетов
-Orders_file = MAIN_FOLDER / "Выгрузки" / "Счета" / "Заказы.xlsx"
-Reserve_file = MAIN_FOLDER / "Выгрузки" / "Счета" / "Резервы.xlsx"
+Orders_file = MAIN_FOLDER / "Выгрузки" / "Счета" / "Заказ_для отчета XLSX.xlsx"
+Reserve_file = MAIN_FOLDER / "Выгрузки" / "Счета" / "Резервы_для отчета XLSX.xlsx"
 
 # WorkFiles
 OZON_file = MAIN_FOLDER / "WorkFiles" / "ОЗОН.xlsm"

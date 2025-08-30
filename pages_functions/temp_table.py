@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import os
 import datetime
-from sqlalchemy import extract, and_
+from sqlalchemy import extract
 from PySide6.QtWidgets import QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget
-from PySide6.QtCore import Qt, QDate, QTimer
+from PySide6.QtCore import Qt, QDate
 from functools import lru_cache
 import traceback
 import sys
@@ -12,7 +12,7 @@ import sys
 from db import db
 from models import (temp_Purchase, temp_Sales, temp_Orders, Purchase_Order, DOCType, Materials, 
         Customer, Supplier, Contract, Manager, Product_Names, Complects, Complects_manual, Holding, Marketplace, Hyundai_Dealer)
-from config import Purchase_folder, Sales_folder, Orders_file, Reserve_file, Customer_file, Contract_file, AddCosts_File, CustDelivery_File
+from config import Purchase_folder, Sales_folder, Orders_file, Reserve_file, Customer_file, Contract_file, AddCosts_File, CustDelivery_File, All_data_file
 from wind.pages.temp_tables_ui import Ui_Form
 from pages_functions.product import ProductsPage
 from pages_functions.customer import CustomerPage
@@ -81,29 +81,35 @@ class TempTablesPage(QWidget):
         copy_action.triggered.connect(self.copy_cell_content)
         menu.exec_(self.table.viewport().mapToGlobal(position))
     
-    def copy_cell_content(self):
-        """Копирование содержимого выделенных ячеек"""
-        selected_items = self.table.selectedItems()
-        if selected_items:
-            clipboard = QApplication.clipboard()
-            if len(selected_items) == 1:
-                text = selected_items[0].text()
+    def copy_content(self):
+        """Копирование содержимого в зависимости от выделения"""
+        selected_ranges = self.table.selectedRanges()
+
+        if not selected_ranges:
+            return  # Ничего не выделено
+
+        # Проверяем, выделена ли полностью строка
+        if self.table.selectionBehavior() == QTableWidget.SelectRows:
+            row = self.table.currentRow()
+            if row >= 0:
+                row_values = []
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    if item is not None:
+                        row_values.append(item.text())
+                    else:
+                        row_values.append("")
+                text_to_copy = "\t".join(row_values) #Табуляция между значениями
+        else: # Выделена ячейка или несколько ячеек
+            selected_items = self.table.selectedItems()
+            if selected_items:
+                text_to_copy = selected_items[0].text() #Копируем только первую выделенную ячейку
             else:
-                rows = {}
-                for item in selected_items:
-                    row = item.row()
-                    col = item.column()
-                    if row not in rows:
-                        rows[row] = {}
-                    rows[row][col] = item.text()
-                
-                sorted_rows = sorted(rows.items())
-                text = ""
-                for row, cols in sorted_rows:
-                    sorted_cols = sorted(cols.items())
-                    text += "\t".join([text for col, text in sorted_cols]) + "\n"
-            
-            clipboard.setText(text.strip())
+                return
+
+        # Копируем текст в буфер обмена
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text_to_copy)
     
     def _fill_combobox(self, combobox, items):
         """Заполнение выпадающего списка элементами с обязательным первым элементом '-'"""
@@ -662,10 +668,14 @@ class TempTablesPage(QWidget):
                 
                 # Добавляем связанные данные
                 if hasattr(row, 'material') and row.material:
-                    row_data['Код'] = row.material.Code
                     row_data['Артикул'] = row.material.Article
                     row_data['Продукт + упаковка'] = row.material.product_name.Product_name if row.material.product_name else ""
-                    row_data['Package_Volume'] = row.material.Package_Volume if row.material.Package_Volume else 0
+                    row_data['Упаковка'] = row.material.Package_Volume if row.material.Package_Volume else 0
+                    row_data['Кол-во в упак'] = row.material.Items_per_Package if row.material.Items_per_Package else 1
+                    row_data['Единица измерения'] = row.material.UoM if row.material.UoM else ""
+                    row_data['Вид упаковки'] = row.material.Package_type if row.material.Package_type else ""
+                    row_data['Type'] = row.material.Product_type if row.material.Product_type else ""
+                    row_data['Шт в комплекте'] = row.material.Items_per_Set if row.material.Items_per_Set else 1
                 
                 # ВАЖНО: Добавляем правильные названия контрагентов
                 if hasattr(row, 'customer') and row.customer:
@@ -682,14 +692,59 @@ class TempTablesPage(QWidget):
                     row_data['Тип документа'] = row.doc_type.Doc_type
                 
                 # Вычисляем Кол-во, шт и Кол-во, л если нужно
-                if 'Qty' in row_data and 'Package_Volume' in row_data:
-                    row_data['Кол-во, шт'] = row_data['Qty']
-                    row_data['Кол-во, л'] = row_data['Qty'] * row_data['Package_Volume']
-                
+                if 'Qty' in row_data and 'Упаковка' in row_data:
+                    # Защита от деления на ноль
+                    packaging = float(row_data['Упаковка']) if row_data['Упаковка'] else 1.0
+                    qty = float(row_data['Qty']) if row_data['Qty'] else 0.0
+                    
+                    # Условия для расчета количества в штуках
+                    conditions_quantity = [
+                        row_data.get('Type') == 'Услуги',
+                        row_data.get('Вид упаковки') == 'комплект',
+                        row_data.get('Единица измерения') == 'шт',
+                        row_data.get('Единица измерения') == 'л',
+                        row_data.get('Единица измерения') == 'кг',
+                        row_data.get('Единица измерения') == 'т'
+                    ]
+
+                    choices_quantity = [
+                        0,  # Для услуг
+                        qty * float(row_data.get('Шт в комплекте', 1)),  # Для комплектов
+                        qty,  # Для штук
+                        qty / packaging if packaging != 0 else 0,  # Для литров
+                        qty / packaging if packaging != 0 else 0,  # Для килограммов
+                        round(qty * 1000 / packaging, 0) if packaging != 0 else 0  # Для тонн
+                    ]
+
+                    # Вычисляем количество в штуках
+                    qty_pcs_result = np.select(conditions_quantity, choices_quantity, default=qty)
+                    # Преобразуем numpy array в скалярное значение
+                    qty_pcs = float(qty_pcs_result) if hasattr(qty_pcs_result, '__len__') else qty_pcs_result
+                    
+                    # Вычисляем количество в литрах
+                    if row_data.get('Единица измерения') == 'л':
+                        qty_liters = qty
+                    elif row_data.get('Единица измерения') == 'кг':
+                        qty_liters = qty  # Предполагаем эквивалентность
+                    elif row_data.get('Единица измерения') == 'т':
+                        qty_liters = qty * 1000
+                    else:
+                        qty_liters = qty_pcs * packaging
+
+                    row_data['Кол-во, шт'] = qty_pcs
+                    row_data['Кол-во, л'] = qty_liters
+
                 data.append(row_data)
             
             df = pd.DataFrame(data)
             
+            # Безопасное преобразование числовых колонок
+            numeric_columns = ['Qty', 'Упаковка', 'Кол-во, шт', 'Кол-во, л']
+            for col in numeric_columns:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            
+            df.to_excel('test_display.xlsx')
             if df.empty:
                 self.show_message("Данные не найдены")
                 return
@@ -809,32 +864,13 @@ class TempTablesPage(QWidget):
         self.ui.label_qty_pcs.setText(f"{format_number(qty_pcs, True)} шт.")
         self.ui.label_Volume.setText(f"{format_number(volume_liters)} л.")
 
-    def _get_volume_unit(self, model):
-        """Возвращает единицу измерения объема в зависимости от модели"""
-        if model == temp_Purchase:
-            return "ед."
-        elif model == temp_Sales:
-            return "ед."
-        elif model == temp_Orders:
-            return "ед."
-        elif model == Purchase_Order:
-            return "ед."
-        return "ед."
-
     def _display_data(self, df):
         """Отображение данных в таблице с сортировкой и переименованными колонками"""
         self.table.clearContents()
 
-        # Добавляем вычисляемые колонки если их нет
-        if 'Кол-во, шт' not in df.columns and 'Qty' in df.columns:
-            df['Кол-во, шт'] = df['Qty']
-
-        if 'Кол-во, л' not in df.columns and 'Qty' in df.columns and 'Package_Volume' in df.columns:
-            df['Кол-во, л'] = df['Qty'] * df['Package_Volume']
-
         # Определяем какие колонки мы хотим показать
         base_columns_to_show = [
-            'Document', 'Date', 'Status', 'Тип документа', 'Код', 'Артикул',
+            'Document', 'Date', 'Bill', 'Bill_Date', 'Status', 'Тип документа', 'Material_id', 'Артикул',
             'Продукт + упаковка', 'Кол-во, шт', 'Кол-во, л', 'Amount_1C'
         ]
 
@@ -855,6 +891,9 @@ class TempTablesPage(QWidget):
         column_rename_map = {
             'Document': 'Документ',
             'Date': 'Дата',
+            'Bill': 'Счет',
+            'Bill_Date': 'Дата счета',
+            'Material_id': 'Код',
             'Status': 'Статус',
             'Amount_1C': 'Сумма 1С'
         }
@@ -868,8 +907,11 @@ class TempTablesPage(QWidget):
         # Применяем переименование
         display_df = display_df.rename(columns=column_rename_map)
         display_df['Дата'] = pd.to_datetime(display_df['Дата'], format='%d.%m.%Y', errors='coerce')
-        display_df = display_df.sort_values(by=['Дата', 'Тип документа', 'Документ', 'Кол-во, шт'], ascending=[True, True, True, True])
+        display_df['Дата счета'] = pd.to_datetime(display_df['Дата счета'], format='%d.%m.%Y', errors='coerce')
+        display_df = display_df.sort_values(by=['Дата', 'Тип документа', 'Документ', 'Дата счета', 'Счет', 'Кол-во, шт'], ascending=[True, True, True, True, True, True])
+        
         display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
+        display_df['Дата счета'] = display_df['Дата счета'].dt.strftime('%d.%m.%Y')
         
         # display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
         display_columns = list(display_df.columns)
@@ -936,17 +978,17 @@ class TempTablesPage(QWidget):
             table = self.ui.line_table.currentText()
             
             if table == '-':
-                purchase_df = self.read_purchase_data(date_start)
+                purchase_df = self.read_purchase_data(self.report_start_date)
                 if not purchase_df.empty:
                     self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
                     self.show_message("Данные о закупках успешно обновлены")
                     
-                sales_df = self.read_sales_data(date_start)
+                sales_df = self.read_sales_data(self.report_start_date)
                 if not sales_df.empty:
                     self._update_temp_sales_in_db(sales_df)
                     self.show_message("Данные о продажах успешно обновлены")
                     
-                orders_df = self.read_orders_data(date_start)
+                orders_df = self.read_orders_data()
                 if not orders_df.empty:
                     self._update_temp_orders_in_db(orders_df)
                     self.show_message("Данные о заказах успешно обновлены")
@@ -957,19 +999,19 @@ class TempTablesPage(QWidget):
                     self.show_message("Данные о заказах поставщиков успешно обновлены")
                 
             elif table == "Закупки":
-                purchase_df = self.read_purchase_data(date_start)
+                purchase_df = self.read_purchase_data(self.report_start_date)
                 if not purchase_df.empty:
                     self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
                     self.show_message("Данные о закупках успешно обновлены")
             
             elif table == "Продажи":
-                sales_df = self.read_sales_data(date_start)
+                sales_df = self.read_sales_data(self.report_start_date)
                 if not sales_df.empty:
                     self._update_temp_sales_in_db(sales_df)
                     self.show_message("Данные о продажах успешно обновлены")
             
             elif table == "Заказы клиентов":
-                orders_df = self.read_orders_data(date_start)
+                orders_df = self.read_orders_data()
                 if not orders_df.empty:
                     self._update_temp_orders_in_db(orders_df)
                     self.show_message("Данные о заказах успешно обновлены")
@@ -995,19 +1037,14 @@ class TempTablesPage(QWidget):
             self._fill_combobox(self.ui.line_Mnth, ["-"])
             self._fill_combobox(self.ui.line_customer, ["-"])
             self._fill_combobox(self.ui.line_product, ["-"])
-            
-            # Показываем сообщение о завершении
-            self.show_message("Все данные успешно обновлены. Выберите таблицу для работы.")
-            
+
         except Exception as e:
             self.show_error_message(f"Ошибка при обновлении данных: {str(e)}")
             traceback.print_exc()
 
-    def read_purchase_data(self, date_start: QDate):
+    def read_purchase_data(self, report_start_date):
         """Чтение данных о закупках"""
-        report_start_date = date_start.toPython()
-        report_start_date = pd.to_datetime(report_start_date)
-        
+
         purchase_df = pd.DataFrame()
         dtypes = {"Номер документа сторонней организации": str, "Артикул": str, "Курс взаиморасчетов": float, 
                     "Цена": float, "% НДС": str, "Количество": float, "Сумма без НДС": float}
@@ -1126,9 +1163,7 @@ class TempTablesPage(QWidget):
 
         return df
 
-    def read_sales_data(self, date_start: QDate):
-        report_start_date = date_start.toPython()
-        report_start_date = pd.to_datetime(report_start_date)
+    def read_sales_data(self, report_start_date):
         
         """Чтение данных о продажах"""
         sales_df = pd.DataFrame()
@@ -1214,7 +1249,9 @@ class TempTablesPage(QWidget):
         
         # Фильтрация по дате
         df = df[df["Дата"] >= report_start_date]
-
+        
+        df['Артикул'] = df['Артикул'].fillna('-')
+        
         # Фильтрация исключений
         df = df[
             (df["Документ"] != "Итого") &
@@ -1311,6 +1348,7 @@ class TempTablesPage(QWidget):
         marketplace_df = self.get_marketplace_data(report_start_date)
         if not marketplace_df.empty:
             marketplace_df['Дата'] = pd.to_datetime(marketplace_df['Дата'], errors='coerce')
+            
             df = pd.concat([df, marketplace_df], ignore_index=True)
 
         # Заполнение пустых значений
@@ -1407,7 +1445,18 @@ class TempTablesPage(QWidget):
 
         df = pd.concat([processed_df, df_not_processed], ignore_index=True)
 
-        # Преобразование дат
+        columns_to_check = [
+            'к_Транспорт (перемещ), л',
+            'к_Хранение, л',
+            'к_Ст-ть Денег, л'
+        ]
+
+        for col in columns_to_check:
+            if col not in df.columns:
+                df[col] = pd.Series(dtype=float)
+                
+        df.loc[:, "columns_to_check"] = df["columns_to_check"].astype(float).fillna(1.0)
+
         df["Дата"] = pd.to_datetime(df["Дата"], format='%d.%m.%Y', errors="coerce")
         df["Дата счета"] = pd.to_datetime(df["Дата счета"], format='%d.%m.%Y', errors="coerce")
         df["Дата ДокОсн"] = pd.to_datetime(df["Дата ДокОсн"], format='%d.%m.%Y', errors="coerce")
@@ -1478,15 +1527,15 @@ class TempTablesPage(QWidget):
         df.to_excel('test_sales.xlsx')
         return df
     
-    def read_orders_data(self, date_start: QDate):
+    def read_orders_data(self):
         """Чтение данных о заказах"""
         max_date = db.query(temp_Sales.Date).order_by(temp_Sales.Date.desc()).first()
         if max_date:
             sales_max_date = max_date[0]
             sales_max_date = pd.to_datetime(sales_max_date)
         else:
-            report_start_date = date_start.toPython()
-            sales_max_date = pd.to_datetime(report_start_date)
+            report_start_date = datetime.datetime.now()
+            report_start_date = pd.to_datetime(report_start_date)
         
         dtypes = {
             "Номер": str, "ИНН": str, "Номенклатура1 артикул": str,
@@ -1563,9 +1612,16 @@ class TempTablesPage(QWidget):
 
         ord_wo_reserve = ord_df.merge(reserve_for_check, how="left", on=["Счет", "Дата счета", "Контрагент.Код", "Договор.Код", "Код"])
         ord_wo_reserve[["ОстЗак", "Резерв"]] = ord_wo_reserve[["ОстЗак", "Резерв"]].astype(float).fillna(0.0)
-        ord_wo_reserve["Остаток"] = np.where( ord_wo_reserve["Резерв"] == 0, ord_wo_reserve["ОстЗак"], 
-                                                        np.where( ord_wo_reserve["Резерв"] == ord_wo_reserve["ОстЗак"], 0,
-                                                        ord_wo_reserve["ОстЗак"] - ord_wo_reserve["Резерв"] ))
+        conditions = [
+                ord_wo_reserve["Резерв"] == 0,
+                ord_wo_reserve["Резерв"] == ord_wo_reserve["ОстЗак"]
+            ]
+        choices = [
+                ord_wo_reserve["ОстЗак"],
+                0
+            ]
+        ord_wo_reserve["Остаток"] = np.select(conditions, choices, default=ord_wo_reserve["ОстЗак"] - ord_wo_reserve["Резерв"])
+            
         ord_wo_reserve = ord_wo_reserve[ord_wo_reserve["Остаток"] > 0]
         ord_wo_reserve["Статус"] = "Заказ"
         ord_wo_reserve = ord_wo_reserve.rename(columns={"Остаток": "Количество"})
@@ -1574,28 +1630,28 @@ class TempTablesPage(QWidget):
         ord_wo_reserve.loc[ord_wo_reserve["Дата"] < report_day, "Дата"] = report_day
         ord_wo_reserve["Сумма 1С"] = ord_wo_reserve["Сумма"] / ord_wo_reserve["Заказано"] * ord_wo_reserve["Количество"]
 
-        ord_df = pd.concat([ord_w_reserve, ord_wo_reserve], axis=0)
+        df = pd.concat([ord_w_reserve, ord_wo_reserve], axis=0)
         
         exclude_codes = ["ОЛ-000220", "ОП-007777", "ОП-001518", "ОП-000220"]
         exclude_kod = ["НМ-00003477", "НМ-00004559", "ОП-000040", "ОП-000041", "ОП-000042", "ОП-000043"]
 
-        filters = (~ord_df["Контрагент.Код"].isin(exclude_codes) & 
-                (ord_df["Контрагент"] != "тест") & 
-                (ord_df["Пометка удаления"] != "Да") & 
-                (ord_df["Проведен"] != "Нет") &
-                (ord_df["Статус оплаты"] != "Отменен") & 
-                (ord_df["Технический счет"] != "Да") & 
-                (ord_df["Закрытие заказа"] != "Да") & 
-                (~ord_df["Код"].isin(exclude_kod)) & 
-                (ord_df["Номенклатура"] != "агентские услуги"))
+        filters = (~df["Контрагент.Код"].isin(exclude_codes) & 
+                (df["Контрагент"] != "тест") & 
+                (df["Пометка удаления"] != "Да") & 
+                (df["Проведен"] != "Нет") &
+                (df["Статус оплаты"] != "Отменен") & 
+                (df["Технический счет"] != "Да") & 
+                (df["Закрытие заказа"] != "Да") & 
+                (~df["Код"].isin(exclude_kod)) & 
+                (df["Номенклатура"] != "агентские услуги"))
 
-        ord_df = ord_df[filters]
+        df = df[filters]
         
         cols_to_check = ["Счет", "Код"]
-        ord_df = ord_df[~ord_df[cols_to_check].isnull().apply(lambda row: all(row), axis=1)]
+        df = df[~df[cols_to_check].isnull().apply(lambda row: all(row), axis=1)]
         
-        ord_df["Цена 1С"] = np.round(ord_df["Сумма 1С"] / ord_df["Количество"], 2).fillna(0).astype(float)
-        ord_df["Документ"] = "-"
+        df["Цена 1С"] = np.round(df["Сумма 1С"] / df["Количество"], 2).fillna(0).astype(float)
+        df["Документ"] = "-"
         
         corr_name = {"Розничный покупатель": "Yandex", 
                             "ЯНДЕКС ООО": "Yandex", 
@@ -1604,87 +1660,102 @@ class TempTablesPage(QWidget):
                             "РВБ ООО": "Wildberries", 
                             "ИНТЕРНЕТ РЕШЕНИЯ ООО": "OZON", 
                             "МАРКЕТПЛЕЙС ООО": "СберМегаМаркет" }
-        ord_df["Контрагент"] = ord_df["Контрагент"].replace(corr_name)
+        df["Контрагент"] = df["Контрагент"].replace(corr_name)
         
-        ord_df["Курс взаиморасчетов"] = ord_df["Курс взаиморасчетов"].fillna(1.0)
+        df["Курс взаиморасчетов"] = df["Курс взаиморасчетов"].fillna(1.0)
     
-        conditions = [ord_df["Вид номенклатуры"] == "Услуги",
-                                (ord_df["Контрагент"].str.strip() == "OZON") & (ord_df["Договор.Код"].str.strip() == "ОП-000644") & (ord_df["Статус"] == "Заказ"),
-                                (ord_df["Контрагент"].str.strip() == "OZON") & (ord_df["Договор.Код"].str.strip() == "ОП-000953") & (ord_df["Статус"] == "Заказ"),
-                                (ord_df["Контрагент"].str.strip() != "OZON") & (ord_df["Статус"] == "Резерв"),]
+        conditions = [df["Вид номенклатуры"] == "Услуги",
+                                (df["Контрагент"].str.strip() == "OZON") & (df["Договор.Код"].str.strip() == "ОП-000644") & (df["Статус"] == "Заказ"),
+                                (df["Контрагент"].str.strip() == "OZON") & (df["Договор.Код"].str.strip() == "ОП-000953") & (df["Статус"] == "Заказ"),
+                                (df["Контрагент"].str.strip() != "OZON") & (df["Статус"] == "Резерв"),]
         
         choices = ["9.0. Счет (услуги)", 
-                            "7.1. Счет (ОЗОН комм-р)", 
-                            "7.1. Счет (ОЗОН 1P)",
+                            "9.0. Счет (ОЗОН комм-р)", 
+                            "9.0. Счет (ОЗОН 1P)",
                             "9.0. Счет (резерв)"]
-        ord_df["Тип документа"] = np.select(conditions, choices, default="7.1. Счет (не отгружено)")
-        ord_df['Вид документа'] = 'Счет'
+        df["Тип документа"] = np.select(conditions, choices, default="9.0. Счет (не отгружено)")
+        df['Вид документа'] = 'Счет'
         
         conditions = [
-            ord_df["Тип документа"] == "9.0. Счет (не отгружено)",
-            ord_df["Тип документа"] == "9.0. Счет (ОЗОН 1P)",
-            ord_df["Тип документа"] == "9.0. Счет (ОЗОН комм-р)"]
+            df["Тип документа"] == "9.0. Счет (не отгружено)",
+            df["Тип документа"] == "9.0. Счет (услуги)",
+            df["Тип документа"] == "9.0. Счет (резерв)",
+            df["Тип документа"] == "9.0. Счет (ОЗОН 1P)",
+            df["Тип документа"] == "9.0. Счет (ОЗОН комм-р)"]
 
         choices = [
-            "Клиенты",
+            "Заказ",
+            'Услуги',
+            'Резерв',
             "ОЗОН 1P", 
             "ОЗОН комиссионер"]
 
-        ord_df["Вид операции"] = np.select(conditions, choices, default="")
+        df["Вид операции"] = np.select(conditions, choices, default="")
 
-        ord_df["Кол-во дней на оплату"] = np.where( 
-                (ord_df["Договор"] == "blank") | (ord_df["Условие оплаты"] == "blank"),
+        df["Кол-во дней на оплату"] = np.where( 
+                (df["Договор"] == "blank") | (df["Условие оплаты"] == "blank"),
                 30, 
-                (pd.to_datetime(ord_df["Плановая дата оплаты"]) - pd.to_datetime(ord_df["Дата счета"])).dt.days 
+                (pd.to_datetime(df["Плановая дата оплаты"]) - pd.to_datetime(df["Дата счета"])).dt.days 
             )
         
         agg_columns = ['Количество', 'Сумма 1С']
         group_columns = ['Счет', 'Дата счета', 'Код', 'Цена 1С']
 
         # Определяем остальные колонки
-        other_columns = ord_df.columns.difference(group_columns + agg_columns)
-        ord_df_grouped = ord_df.groupby(group_columns, as_index=False).agg({'Количество': 'sum', 'Сумма 1С': 'sum'})
+        other_columns = df.columns.difference(group_columns + agg_columns)
+        df_grouped = df.groupby(group_columns, as_index=False).agg({'Количество': 'sum', 'Сумма 1С': 'sum'})
         
         for col in other_columns:
-            ord_df_grouped[col] = ord_df.groupby(group_columns)[col].first().values
+            df_grouped[col] = df.groupby(group_columns)[col].first().values
 
-        ord_df = ord_df_grouped.copy()
-        ord_df = ord_df.sort_values(by=["Дата", "Дата счета", "Счет", "Продукт + упаковка"], ascending=[True, True, True, True])
+        df = df_grouped.copy()
         
         # Проверка продуктов
-        self._check_products(ord_df)
+        self._check_products(df)
         
         # Проверка клиентов
-        self._check_customers(ord_df, 'Контрагент.Код')
+        self._check_customers(df, 'Контрагент.Код')
         
         # Проверка HYUNDAI дилеров
-        self._check_hyundai_dealers(ord_df)
+        self._check_hyundai_dealers(df)
         
         # Проверка договоров
-        self._check_contracts(ord_df, 'Договор.Код', 'Контрагент.Код')
+        self._check_contracts(df, 'Договор.Код', 'Контрагент.Код')
         
-        ord_df["ДокОсн"] = "-"
-        ord_df["Дата ДокОсн"] = None
-        ord_df["Сборка"] = "-"
-        ord_df["Приоритет"] = ord_df["Приоритет"].fillna("-")
+        df["ДокОсн"] = "-"
+        df["Дата ДокОсн"] = None
+        df["Сборка"] = "-"
+        df["Приоритет"] = df["Приоритет"].fillna("-")
         
         СпецЗаказы = self.read_special_orders(AddCosts_File)
         
         error_file_name = "ERRORs_Spec_Orders_Orders.xlsx"
         keys_spec = set(zip(СпецЗаказы['Счет'], СпецЗаказы['Дата счета'], СпецЗаказы['Код']))
-        mask = ord_df.apply(lambda row: (row['Счет'], row['Дата счета'], row['Код']) in keys_spec, axis=1)
+        mask = df.apply(lambda row: (row['Счет'], row['Дата счета'], row['Код']) in keys_spec, axis=1)
 
-        df_to_process = ord_df[mask].copy()
+        df_to_process = df[mask].copy()
         processed_df = self.analyze_special_deliveries(df_to_process, СпецЗаказы, error_file_name)
-        df_not_processed = ord_df[~mask].copy()
+        df_not_processed = df[~mask].copy()
 
-        ord_df = pd.concat([processed_df, df_not_processed], ignore_index=True)
+        df = pd.concat([processed_df, df_not_processed], ignore_index=True)
 
-        ord_df["Дата"] = pd.to_datetime(ord_df["Дата"], format='%d.%m.%Y', errors="coerce")
-        ord_df["Дата счета"] = pd.to_datetime(ord_df["Дата счета"], format='%d.%m.%Y', errors="coerce")
-        ord_df["Дата ДокОсн"] = pd.to_datetime(ord_df["Дата ДокОсн"], format='%d.%m.%Y', errors="coerce")
-        ord_df["Дата Поставки"] = pd.to_datetime(ord_df["Дата Поставки"], format='%d.%m.%Y', errors="coerce")
-        ord_df["Order N Поставки"] = ord_df["Order N Поставки"].astype(str)
+        columns_to_check = [
+            'к_Транспорт (перемещ), л',
+            'к_Хранение, л',
+            'к_Ст-ть Денег, л'
+        ]
+
+        for col in columns_to_check:
+            if col not in df.columns:
+                df[col] = pd.Series(dtype='float64')
+
+        df[columns_to_check] = df[columns_to_check].fillna(1.0).astype(float)
+        
+        df["Дата"] = pd.to_datetime(df["Дата"], format='%d.%m.%Y', errors="coerce")
+        df["Дата счета"] = pd.to_datetime(df["Дата счета"], format='%d.%m.%Y', errors="coerce")
+        df["Дата ДокОсн"] = pd.to_datetime(df["Дата ДокОсн"], format='%d.%m.%Y', errors="coerce")
+        df["Дата Поставки"] = pd.to_datetime(df["Дата Поставки"], format='%d.%m.%Y', errors="coerce")
+        df["Order N Поставки"] = df["Order N Поставки"].astype(str)
         
         df['DocType_id'] = df.apply(lambda row: self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')), axis=1)
         
@@ -1742,16 +1813,7 @@ class TempTablesPage(QWidget):
         for col in date_columns:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
-        
-        # Проверка продуктов
-        self._check_products(df, 'Material_id')
-        
-        # Проверка клиентов
-        self._check_customers(df, 'Customer_id')
-        
-        # Проверка договоров
-        self._check_contracts(df, 'Contract_id', 'Customer_id', 'Manager')
-        
+
         return df
 
     def read_purchase_order_data(self):
@@ -1800,6 +1862,9 @@ class TempTablesPage(QWidget):
                     'order': 'Закупки (заказ)'
                 })
             )
+        print(df)
+        # Проверка продуктов
+        self._check_products(df)
         
         column_mapping = {
             'Дата': 'Date',
@@ -1841,17 +1906,16 @@ class TempTablesPage(QWidget):
         }
         
         df = df.rename(columns=column_mapping)
-        
+        print(df)
         # Преобразование дат
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
         
-        # Получение ID типа документа (всегда "1.0. Поступление (транзит)")
-        df['DocType_id'] = self._get_doc_type_id("Транзит", "Транзит", "1.0. Поступление (транзит)")
-        df['Status'] = 'Закуп'
-        
-        # Проверка продуктов
-        df = self._check_products(df, 'Material_id')
+        df['DocType_id'] = df.apply(lambda row: self._get_doc_type_id(
+            document="Закупка",
+            transaction="Транзит" if row["Status"] == "Закупки (транзит)" else "Заказ",
+            doc_type="1.0. Поступление (транзит)" if row["Status"] == "Закупки (транзит)" else "1.0. Поступление (заказ)"
+        ), axis=1)
         
         # Проверка поставщиков
         df = self._check_suppliers(df, 'Supplier_id')
@@ -2213,7 +2277,7 @@ class TempTablesPage(QWidget):
         return df
 
     def _check_customers(self, df, customer_id_column):
-        """Проверка клиентов в БД с автоматическим обновлением из файла"""
+        """Проверка клиентов в БД с автоматическим обновлением из файлов"""
         try:
             # Получение всех клиентов из БД
             customers = db.query(Customer.id, Customer.Customer_name).all()
@@ -2221,7 +2285,7 @@ class TempTablesPage(QWidget):
             
             # Проверяем, есть ли столбец с ID клиента в DataFrame
             if customer_id_column not in df.columns:
-                print(f"Столбец {customer_id_column} не найден в DataFrame")
+                self.show_error_message(f"Столбец {customer_id_column} не найден в DataFrame")
                 return df
             
             # Создаем временный столбец для проверки
@@ -2235,69 +2299,152 @@ class TempTablesPage(QWidget):
                 # Получаем уникальные ID отсутствующих клиентов
                 missing_customer_ids = error_find[customer_id_column].unique()
                 
-                # Пытаемся загрузить данные из файла 1С
-                try:
-                    df_cust1c = pd.read_excel(Customer_file, sheet_name=0, dtype={'ИНН': str})
-                    df_cust1c = df_cust1c[(df_cust1c["Это группа"] == 'Нет') & 
-                                        (df_cust1c['Код'].isin(missing_customer_ids))]
+                # ИСПРАВЛЕНИЕ: проверяем длину массива вместо самого массива
+                if len(missing_customer_ids) > 0:
+                    # ПЕРВЫЙ ЭТАП: Проверяем в файле All_data_file
+                    try:
+                        df_all_data = pd.read_excel(All_data_file, sheet_name='Customers', dtype={'Контрагент.ИНН': str})
+                        
+                        # Ищем отсутствующих клиентов в файле All_data_file
+                        found_in_all_data = df_all_data[df_all_data['Контрагент.Код'].isin(missing_customer_ids)]
+                        
+                        if not found_in_all_data.empty:
+                            # Подготовка данных из All_data_file
+                            column_map_all_data = {
+                                'Контрагент.ИНН': 'INN',
+                                'Контрагент.Код': 'id',
+                                'Контрагент': 'Customer_name',
+                                'Сектор': 'Sector',
+                                'Тип цен': 'Price_type',
+                                'Холдинг': 'Holding'
+                            }
+                            
+                            # Отбираем только нужные колонки, если они существуют
+                            available_columns = [col for col in column_map_all_data.keys() if col in found_in_all_data.columns]
+                            column_map_filtered = {k: v for k, v in column_map_all_data.items() if k in available_columns}
+                            
+                            df_cust_to_save = found_in_all_data.rename(columns=column_map_filtered)[list(column_map_filtered.values())]
+                            
+                            # Очистка данных
+                            df_cust_to_save["Customer_name"] = df_cust_to_save['Customer_name'].str.replace('не исп_', '', regex=False)
+                            if 'Holding' in df_cust_to_save.columns:
+                                df_cust_to_save["Holding"] = df_cust_to_save['Holding'].str.replace('не исп_', '', regex=False)
+                            
+                            # Заполняем пропущенные значения
+                            if 'Sector' in df_cust_to_save.columns:
+                                df_cust_to_save['Sector'] = df_cust_to_save['Sector'].fillna("-")
+                            if 'Price_type' in df_cust_to_save.columns:
+                                df_cust_to_save['Price_type'] = df_cust_to_save['Price_type'].fillna("-")
+                            if 'Holding' in df_cust_to_save.columns:
+                                df_cust_to_save["Holding"] = df_cust_to_save["Holding"].fillna(df_cust_to_save['Customer_name'])
+                            
+                            print("Данные для сохранения из All_data_file:")
+                            print(df_cust_to_save.head())
+                            
+                            # ВАЖНОЕ ИСПРАВЛЕНИЕ: используем прямые методы сохранения вместо CustomerPage
+                            self._save_customer_data(df_cust_to_save.to_dict('records'))
+                            
+                            # Обновляем список найденных ID
+                            found_ids = found_in_all_data['Контрагент.Код'].unique()
+                            missing_customer_ids = list(set(missing_customer_ids) - set(found_ids))
+                            print("Осталось найти после All_data_file:", missing_customer_ids)
+                            
+                    except Exception as e:
+                        self.show_error_message(f"Ошибка при чтении файла All_data_file: {e}")
+                        import traceback
+                        traceback.print_exc()
                     
-                    if not df_cust1c.empty:
-                        # Подготовка данных 1С
-                        column_map_1c = {
-                            'ИНН': 'INN',
-                            'Код': 'id',
-                            'Наименование в программе': 'Customer_name',
-                            'Сектор': 'Sector',
-                            'Тип цен': 'Price_type',
-                            'Холдинг': 'Holding'
-                        }
-                        df_cust1c = df_cust1c.rename(columns=column_map_1c)[list(column_map_1c.values())]
+                    # ВТОРОЙ ЭТАП: Если еще есть отсутствующие клиенты, проверяем в файле 1С
+                    if len(missing_customer_ids) > 0:
+                        try:
+                            df_cust1c = pd.read_excel(Customer_file, sheet_name=0, dtype={'ИНН': str})
+                            
+                            # ИСПРАВЛЕНО: используем отдельные условия вместо & в одном выражении
+                            mask1 = df_cust1c["Это группа"] == 'Нет'
+                            mask2 = df_cust1c['Код'].isin(missing_customer_ids)
+                            df_cust1c = df_cust1c[mask1 & mask2]
+                            
+                            if not df_cust1c.empty:
+                                # Подготовка данных 1С
+                                column_map_1c = {
+                                    'Код': 'id',
+                                    'Наименование в программе': 'Customer_name',
+                                    'ИНН': 'INN',
+                                    'Холдинг': 'Holding',
+                                    'Сектор': 'Sector',
+                                    'Тип цен': 'Price_type',
+                                }
+                                
+                                # Отбираем только нужные колонки, если они существуют
+                                available_columns = [col for col in column_map_1c.keys() if col in df_cust1c.columns]
+                                column_map_filtered = {k: v for k, v in column_map_1c.items() if k in available_columns}
+                                
+                                df_cust1c = df_cust1c.rename(columns=column_map_filtered)[list(column_map_filtered.values())]
+                                
+                                # Очистка данных
+                                df_cust1c["Customer_name"] = df_cust1c['Customer_name'].str.replace('не исп_', '', regex=False)
+                                if 'Holding' in df_cust1c.columns:
+                                    df_cust1c["Holding"] = df_cust1c['Holding'].str.replace('не исп_', '', regex=False)
+                                
+                                # Заполняем пропущенные значения
+                                if 'Sector' in df_cust1c.columns:
+                                    df_cust1c['Sector'] = df_cust1c['Sector'].fillna("-")
+                                if 'Price_type' in df_cust1c.columns:
+                                    df_cust1c['Price_type'] = df_cust1c['Price_type'].fillna("-")
+                                if 'Holding' in df_cust1c.columns:
+                                    df_cust1c["Holding"] = df_cust1c["Holding"].fillna(df_cust1c['Customer_name'])
+                                
+                                # ВАЖНОЕ ИСПРАВЛЕНИЕ: используем прямые методы сохранения вместо CustomerPage
+                                self._save_customer_data(df_cust1c.to_dict('records'))
+                                
+                                error_df.to_excel("ERRORs_Customer_New.xlsx", index=False)
+                                self.show_message(f"Обнаружены новые клиенты.\n"
+                                        f"Данные сохранены в файл ERRORs_Customer_New.xlsx")
+                                # Обновляем список найденных ID
+                                found_ids = df_cust1c['id'].unique()
+                                missing_customer_ids = list(set(missing_customer_ids) - set(found_ids))
+
                         
-                        # Очистка данных
-                        df_cust1c["Customer_name"] = df_cust1c['Customer_name'].str.replace('не исп_', '', regex=False)
-                        df_cust1c["Holding"] = df_cust1c['Holding'].str.replace('не исп_', '', regex=False)
-                        df_cust1c[['Sector', 'Price_type']] = df_cust1c[['Sector', 'Price_type']].fillna("-")
-                        df_cust1c["Holding"] = np.where(pd.isna(df_cust1c["Holding"]), df_cust1c['Customer_name'], df_cust1c["Holding"])
+                        except Exception as e:
+                            self.show_error_message(f"Ошибка при чтении файла клиентов 1С: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    
+                    # Обновляем словарь клиентов после сохранения
+                    customers = db.query(Customer.id, Customer.Customer_name).all()
+                    customer_dict = {cust[0]: cust[1] for cust in customers}
+                    
+                    # ВАЖНО: ОБНОВЛЯЕМ ДАННЫЕ В ТЕКУЩЕМ DataFrame
+                    df["Контрагент.ALLDATA"] = df[customer_id_column].map(customer_dict)
+                    df["Контрагент.ALLDATA"] = df["Контрагент.ALLDATA"].fillna("не найден")
+                    
+                    # Теперь проверяем актуальное состояние
+                    current_missing = df[df["Контрагент.ALLDATA"] == "не найден"]
+                    if len(current_missing) > 0:
+                        # Сохраняем оставшиеся ошибки
+                        error_data = []
+                        for _, row in current_missing.iterrows():
+                            error_row = {
+                                'Контрагент.Код': row[customer_id_column],
+                                'Контрагент': row.get('Контрагент', 'неизвестно'),
+                                'Контрагент.ИНН': row.get('Контрагент.ИНН', 'неизвестно'),
+                                'Холдинг': row.get('Холдинг', 'неизвестно'),
+                                'Сектор': row.get('Сектор', 'неизвестно'),
+                                'Договор.Менеджер': row.get('Договор.Менеджер', 'неизвестно')
+                            }
+                            error_data.append(error_row)
                         
-                        # Сохраняем данные в БД
-                        self._save_customer_data(df_cust1c.to_dict('records'))
+                        error_df = pd.DataFrame(error_data)
+                        error_df = error_df.drop_duplicates(subset=[customer_id_column])
+                        error_df.to_excel("ERRORs_Customer_NotFound.xlsx", index=False)
                         
-                        # Обновляем словарь клиентов после сохранения
-                        customers = db.query(Customer.id, Customer.Customer_name).all()
-                        customer_dict = {cust[0]: cust[1] for cust in customers}
-                        df["Контрагент.ALLDATA"] = df[customer_id_column].map(customer_dict)
+                        # Показываем сообщение
+                        missing_count = len(current_missing[customer_id_column].unique())
+                        self.show_message(f"Обнаружено {missing_count} новых клиентов. Данные обновлены из файлов.\n"
+                                        f"Не найденные клиенты сохранены в файл ERRORs_Customer_NotFound.xlsx")
                         
-                        # Повторно проверяем отсутствующих клиентов
-                        error_find = df[df["Контрагент.ALLDATA"] == "не найден"]
-                
-                except Exception as e:
-                    print(f"Ошибка при чтении файла клиентов: {e}")
-            
-            # Если все еще есть отсутствующие клиенты
-            if not error_find.empty:
-                # Сохраняем ошибки в файл
-                error_data = []
-                for _, row in error_find.iterrows():
-                    error_row = {
-                        'Контрагент.Код': row[customer_id_column],
-                        'Контрагент': row.get('Контрагент', 'неизвестно'),
-                        'Контрагент.ИНН': row.get('Контрагент.ИНН', 'неизвестно'),
-                        'Сектор': row.get('Сектор', 'неизвестно'),
-                        'Договор.Менеджер': row.get('Договор.Менеджер', 'неизвестно')
-                    }
-                    error_data.append(error_row)
-                
-                error_df = pd.DataFrame(error_data)
-                error_df = error_df.drop_duplicates(subset=[customer_id_column])
-                error_df.to_excel("ERRORs_New_Customer.xlsx", index=False)
-                
-                # Показываем сообщение
-                missing_count = len(error_find[customer_id_column].unique())
-                self.show_message(f"Обнаружено {missing_count} новых клиентов. Данные обновлены из файла 1С.\n"
-                                f"Не найденные клиенты сохранены в файл ERRORs_New_Customer.xlsx")
-                
-                # Удаляем строки с отсутствующими клиентами
-                df = df[df["Контрагент.ALLDATA"] != "не найден"]
+                        # Удаляем строки с отсутствующими клиентами из конечного DataFrame
+                        df = df[df["Контрагент.ALLDATA"] != "не найден"]
             
             # Удаляем временный столбец
             df = df.drop(columns=["Контрагент.ALLDATA"])
@@ -2306,6 +2453,8 @@ class TempTablesPage(QWidget):
             
         except Exception as e:
             self.show_error_message(f"Ошибка при проверке клиентов: {e}")
+            import traceback
+            traceback.print_exc()
             return df
 
     def _check_contracts(self, df, contract_id_column, customer_id_column):
@@ -2352,7 +2501,7 @@ class TempTablesPage(QWidget):
                 # Сохраняем ошибки в файл
                 error_find = missing_contracts.drop_duplicates(
                     subset=[customer_id_column, contract_id_column, "Документ", "Дата"]
-                )[[customer_id_column, "Контрагент", "Контрагент.ИНН", "Договор"]]
+                )[[customer_id_column, "Контрагент", "Контрагент.ИНН", 'Договор.Код', "Договор"]]
                 
                 error_find.to_excel("ERRORs_Contract.xlsx", index=False)
                 
@@ -2371,18 +2520,24 @@ class TempTablesPage(QWidget):
             return df
 
     def _save_customer_data(self, data):
-        """Сохранение данных клиентов в БД с использованием функций из customer.py"""
+        """Сохранение данных клиентов в БД"""
         if not data:
             return
         
         try:
+            # Создаем экземпляр CustomerPage, но передаем текущую сессию
             cust_update = CustomerPage()
-            # Используем импортированные функции
+            
+            # Вызываем методы с текущим контекстом БД
             cust_update.save_Sector(data)
-            cust_update.save_Holding(data)
+            cust_update.save_Holding(data) 
             cust_update.save_Customer(data)
             
+            # Явно коммитим изменения
+            db.commit()
+            
         except Exception as e:
+            db.rollback()
             raise Exception(f"Ошибка сохранения клиентов: {str(e)}")
 
     def _check_suppliers(self, df, supplier_id_column):
@@ -2618,7 +2773,8 @@ class TempTablesPage(QWidget):
     def _update_temp_sales_in_db(self, df):
         """Обновление временной таблицы продаж в БД"""
         try:
-            # Удаляем старые данные
+            df = self._clean_dataframe(df)
+            
             db.query(temp_Sales).delete()
             
             # Подготовка данных для bulk вставки
@@ -2678,6 +2834,7 @@ class TempTablesPage(QWidget):
     def _update_temp_orders_in_db(self, df):
         """Обновление временной таблицы заказов в БД"""
         try:
+            df = self._clean_dataframe(df)
             # Удаляем старые данные
             db.query(temp_Orders).delete()
             
@@ -2742,6 +2899,7 @@ class TempTablesPage(QWidget):
     def _update_purchase_order_in_db(self, df):
         """Обновление таблицы заказов поставщиков в БД"""
         try:
+            df = self._clean_dataframe(df)
             # Удаляем старые данные
             db.query(Purchase_Order).delete()
             

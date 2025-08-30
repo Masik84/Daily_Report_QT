@@ -1,4 +1,4 @@
-import os
+import os, re
 import pandas as pd
 from sqlalchemy import func
 import datetime
@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QMenu, 
                               QTableWidgetItem, QWidget, QApplication)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QDoubleValidator, QIntValidator
 from functools import lru_cache
 import traceback
 
@@ -20,18 +21,22 @@ class ProductsPage(QWidget):
         super().__init__()
         self.ui = Ui_Form()
         self.ui.setupUi(self)
+        
+        self._updating_table = False
+        self._original_values = {}  # Для хранения оригинальных значений
+        self._pending_changes = {}  # Для отслеживания незакоммиченных изменений
 
         self._setup_ui()
         self._setup_connections()
         self.refresh_all_comboboxes()
 
     def _setup_ui(self):
-        """Настройка интерфейса таблицы"""
+        """Настройка интерфейса таблицы с поддержкой редактирования"""
         self.table = self.ui.table
         
         # Базовые настройки таблицы
         self.table.setSelectionBehavior(QTableWidget.SelectItems)  # Выделение отдельных ячеек
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # Запрет редактирования
+        self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)  # Разрешить редактирование
         self.table.setAlternatingRowColors(True)  # Чередование цветов строк
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # Изменяемые размеры
         self.table.horizontalHeader().setStretchLastSection(True)  # Растягивание последнего столбца
@@ -40,11 +45,11 @@ class ProductsPage(QWidget):
         self.table.setWordWrap(False)  # Запрет переноса слов
         self.table.setTextElideMode(Qt.TextElideMode.ElideRight)  # Обрезка длинного текста
         
-        # Настройка контекстного меню для копирования
+        # Настройка контекстного меню для копирования и редактирования
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         
-        # Стилизация таблицы
+        # Стилизация таблицы с подсветкой редактируемых ячеек
         self.table.setStyleSheet("""
             QTableWidget {
                 alternate-background-color: #f0f0f0;
@@ -54,14 +59,50 @@ class ProductsPage(QWidget):
             QTableWidget::item {
                 padding: 3px;
             }
+            QTableWidget::item:editable {
+                background-color: #ffffd0;
+                border: 1px solid #ffcc00;
+            }
+            QTableWidget::item:focus {
+                background-color: #ffffa0;
+                border: 2px solid #ff9900;
+            }
         """)
+        
+        # Флаг для отслеживания обновления таблицы (чтобы избежать рекурсии)
+        self._updating_table = False
+        
+        # Настройка поведения при редактировании
+        self.table.setTabKeyNavigation(True)
+        self.table.setCornerButtonEnabled(False)
 
     def show_context_menu(self, position):
-        """Показ контекстного меню для копирования"""
+        """Показ контекстного меню"""
         menu = QMenu()
         copy_action = menu.addAction("Копировать")
+        apply_action = menu.addAction("Применить изменения")
+        revert_action = menu.addAction("Отменить изменения")
+        
         copy_action.triggered.connect(self.copy_cell_content)
+        apply_action.triggered.connect(self.apply_pending_changes)
+        revert_action.triggered.connect(self.revert_changes)
+        
         menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def save_all_changes(self):
+        """Принудительное сохранение всех изменений"""
+        try:
+            db.commit()
+            self.show_message("Все изменения сохранены")
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка сохранения: {str(e)}")
+
+    def revert_changes(self):
+        """Отмена изменений и обновление таблицы"""
+        db.rollback()
+        self.find_Product()
+        self.show_message("Изменения отменены")
 
     def copy_cell_content(self):
         """Копирование содержимого выделенных ячеек"""
@@ -92,12 +133,341 @@ class ProductsPage(QWidget):
 
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
+        self.table.itemChanged.connect(self.on_item_changed)
         self.ui.line_Brand.currentTextChanged.connect(self.fill_in_prod_fam_list)
         self.ui.line_Prod_Fam.currentTextChanged.connect(self.fill_in_prod_name_list)
         self.ui.btn_open_file.clicked.connect(self.get_file)
         self.ui.btn_upload_file.clicked.connect(self.upload_data)
         self.ui.btn_find.clicked.connect(self.find_Product)
+
+    def on_item_changed(self, item):
+        """Обработчик изменения данных в таблице"""
+        if not hasattr(self, '_updating_table') or self._updating_table:
+            return
         
+        try:
+            row = item.row()
+            column = item.column()
+            header = self.table.horizontalHeaderItem(column).text()
+            code_item = self.table.item(row, 0)
+            
+            if not code_item:
+                return
+                
+            material_code = code_item.text()
+            new_value = item.text()
+            
+            # Сохраняем изменение в pending_changes
+            if material_code not in self._pending_changes:
+                self._pending_changes[material_code] = {}
+            
+            self._pending_changes[material_code][header] = new_value
+            
+            # Автоматически применяем изменения (можно убрать, если хотите ручное сохранение)
+            self.apply_pending_changes()
+                
+        except Exception as e:
+            self.show_error_message(f"Ошибка: {str(e)}")
+            self.revert_changes()  # Откатываем при ошибке
+
+    def apply_pending_changes(self):
+        """Применение всех ожидающих изменений"""
+        if not self._pending_changes:
+            self.show_message("Нет изменений для применения")
+            return
+            
+        try:
+            applied_changes = 0
+            
+            # Создаем копию для безопасной итерации
+            pending_changes_copy = self._pending_changes.copy()
+            changes_to_remove = []
+            
+            for material_code, changes in pending_changes_copy.items():
+                for header, new_value in changes.items():
+                    # Маппинг колонок таблицы на поля БД
+                    column_mapping = {
+                        'Article': ('Materials', 'Article'),
+                        'Full_name': ('Materials', 'Full_name'),
+                        'Brand': ('Materials', 'Brand'),
+                        'Family': ('Materials', 'Family'),
+                        'Product_type': ('Materials', 'Product_type'),
+                        'UoM': ('Materials', 'UoM'),
+                        'Report_UoM': ('Materials', 'Report_UoM'),
+                        'Package_type': ('Materials', 'Package_type'),
+                        'Items_per_Package': ('Materials', 'Items_per_Package'),
+                        'Items_per_Set': ('Materials', 'Items_per_Set'),
+                        'Package_Volume': ('Materials', 'Package_Volume'),
+                        'Net_weight': ('Materials', 'Net_weight'),
+                        'Gross_weight': ('Materials', 'Gross_weight'),
+                        'Density': ('Materials', 'Density'),
+                        'Excise': ('Materials', 'Excise'),
+                        'Status': ('Materials', 'Status'),
+                        'TNVED': ('TNVED', 'code'),
+                        'Material_Name': ('Product_Names', 'Product_name')
+                    }
+                    
+                    if header in column_mapping:
+                        table_name, field_name = column_mapping[header]
+                        
+                        # Для числовых полей преобразуем значение
+                        numeric_fields = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 
+                                        'Net_weight', 'Gross_weight', 'Density']
+                        
+                        if field_name in numeric_fields:
+                            try:
+                                new_value = float(new_value) if new_value else 0.0
+                            except ValueError:
+                                raise Exception(f"Неверное числовое значение в колонке {header}: {new_value}")
+                        
+                        # Обработка разных таблиц
+                        success = False
+                        if table_name == 'Materials':
+                            success = self.update_material_field(material_code, field_name, new_value)
+                        elif table_name == 'Product_Names':
+                            success = self.update_product_name(material_code, new_value)
+                        elif table_name == 'TNVED':
+                            success = self.update_tnved_for_material(material_code, new_value)
+                        
+                        if success:
+                            applied_changes += 1
+                            # Запоминаем изменения для удаления
+                            changes_to_remove.append((material_code, header))
+            
+            # Коммитим все изменения одним разом
+            try:
+                db.commit()
+                
+                # Удаляем примененные изменения из pending_changes
+                for material_code, header in changes_to_remove:
+                    if material_code in self._pending_changes and header in self._pending_changes[material_code]:
+                        del self._pending_changes[material_code][header]
+                        # Если для этого материала больше нет изменений, удаляем запись
+                        if not self._pending_changes[material_code]:
+                            del self._pending_changes[material_code]
+                
+                # Обновляем оригинальные значения из базы
+                self._update_original_values()
+                
+                if applied_changes > 0:
+                    self.show_message(f"Успешно применено {applied_changes} изменений")
+                    # Обновляем таблицу для отображения актуальных данных
+                    self.find_Product()
+                else:
+                    self.show_message("Нет изменений для применения")
+                    
+            except SQLAlchemyError as e:
+                db.rollback()
+                raise Exception(f"Ошибка сохранения в базу данных: {str(e)}")
+            
+        except Exception as e:
+            # Откатываем все изменения при ошибке
+            try:
+                db.rollback()
+            except:
+                pass
+                
+            self.show_error_message(f"Ошибка применения изменений: {str(e)}")
+            
+            # Восстанавливаем таблицу из оригинальных значений
+            self._reload_data_from_database()
+
+    def _mark_change_applied(self, material_code, header):
+        """Помечает изменение как примененное (удаляет из pending_changes)"""
+        if material_code in self._pending_changes and header in self._pending_changes[material_code]:
+            del self._pending_changes[material_code][header]
+            # Если для этого материала больше нет изменений, удаляем запись
+            if not self._pending_changes[material_code]:
+                del self._pending_changes[material_code]
+
+    def revert_changes(self):
+        """Полный откат всех изменений - восстановление из базы данных"""
+        try:
+            # Откатываем все незакоммиченные изменения в БД
+            if db.is_active:
+                db.rollback()
+            
+            # Закрываем и заново открываем сессию для полного сброса
+            db.close()
+            
+            # Полностью перезагружаем данные из базы
+            self._reload_data_from_database()
+            
+            # Очищаем pending changes
+            self._pending_changes.clear()
+            
+            # Обновляем комбобоксы
+            self.refresh_all_comboboxes()
+            
+            self.show_message("Все изменения отменены, данные восстановлены из базы")
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка отката: {str(e)}")
+            # Пытаемся восстановить соединение
+            try:
+                if not db.is_active:
+                    db.begin()
+            except:
+                pass
+
+    def _update_original_values(self):
+        """Обновление оригинальных значений из текущей таблицы"""
+        try:
+            self._original_values.clear()
+            
+            for row in range(self.table.rowCount()):
+                code_item = self.table.item(row, 0)
+                if code_item:
+                    material_code = code_item.text()
+                    self._original_values[material_code] = {}
+                    
+                    for col in range(self.table.columnCount()):
+                        header = self.table.horizontalHeaderItem(col).text()
+                        item = self.table.item(row, col)
+                        if item:
+                            self._original_values[material_code][header] = item.text()
+        except Exception as e:
+            print(f"Ошибка обновления оригинальных значений: {e}")
+
+    def _reload_data_from_database(self):
+        """Полная перезагрузка данных из базы данных с восстановлением"""
+        try:
+            # Сохраняем текущие фильтры
+            current_filters = {
+                'code': self.ui.line_ID.text().strip(),
+                'article': self.ui.line_Artical.text().strip(),
+                'brand': self.ui.line_Brand.currentText(),
+                'family': self.ui.line_Prod_Fam.currentText(),
+                'product_name': self.ui.line_Prod_name.currentText()
+            }
+            
+            # Закрываем текущую сессию для чистого старта
+            if db.is_active:
+                db.close()
+            
+            # Открываем новую сессию
+            db.begin()
+            
+            # Получаем свежие данные из базы
+            prod_df = self.get_Products_from_db()
+            
+            # Применяем фильтры
+            if not prod_df.empty:
+                code = current_filters['code']
+                article = current_filters['article']
+                brand = current_filters['brand']
+                family = current_filters['family']
+                product_name = current_filters['product_name']
+
+                if code:
+                    prod_df = prod_df[prod_df["Code"].astype(str).str.contains(code, case=False, na=False)]
+                if article:
+                    prod_df = prod_df[prod_df["Article"].astype(str).str.contains(article, case=False, na=False)]
+                if brand != "-":
+                    prod_df = prod_df[prod_df["Brand"] == brand]
+                if family != "-":
+                    prod_df = prod_df[prod_df["Family"] == family]
+                if product_name != "-":
+                    prod_df = prod_df[prod_df["Material_Name"] == product_name]
+
+            # Обновляем таблицу
+            self._display_data(prod_df)
+            
+        except Exception as e:
+            raise Exception(f"Ошибка перезагрузки данных: {str(e)}")
+        finally:
+            # Всегда коммитим изменения
+            try:
+                db.commit()
+            except:
+                db.rollback()
+
+    def update_material_field(self, material_code, field_name, new_value):
+        """Обновление поля материала в БД (без коммита)"""
+        try:
+            material = db.query(Materials).filter(Materials.Code == material_code).first()
+            if material:
+                setattr(material, field_name, new_value)
+                return True
+            return False
+        except SQLAlchemyError as e:
+            raise Exception(f"Ошибка БД при обновлении материала: {str(e)}")
+
+    def update_product_name(self, material_code, new_product_name):
+        """Обновление названия продукта в связанной таблице Product_Names (без коммита)"""
+        try:
+            material = db.query(Materials).filter(Materials.Code == material_code).first()
+            if not material:
+                return False
+            
+            product_name = db.query(Product_Names).filter(
+                Product_Names.id == material.Product_Names_id
+            ).first()
+            
+            if product_name:
+                product_name.Product_name = new_product_name
+                # После изменения обновляем отображение
+                self.find_Product()
+                return True
+            return False
+        except SQLAlchemyError as e:
+            raise Exception(f"Ошибка БД при обновлении названия продукта: {str(e)}")
+
+    def update_tnved_for_material(self, material_code, new_tnved_code):
+        """Обновление TNVED для материала"""
+        try:
+            # Закрываем предыдущую сессию если активна
+            if db.is_active:
+                db.close()
+                
+            material = db.query(Materials).filter(Materials.Code == material_code).first()
+            if not material:
+                raise Exception("Материал не найден")
+            
+            product_name = db.query(Product_Names).filter(
+                Product_Names.id == material.Product_Names_id
+            ).first()
+            
+            if not product_name:
+                raise Exception("Наименование продукта не найдено")
+            
+            # Находим или создаем TNVED
+            tnved = db.query(TNVED).filter(TNVED.code == new_tnved_code).first()
+            if not tnved:
+                tnved = TNVED(code=new_tnved_code)
+                db.add(tnved)
+                db.flush()  # Используем flush вместо commit
+                
+            # Находим или создаем product_group
+            if product_name.Product_Group_id:
+                product_group = db.query(Product_Group).filter(
+                    Product_Group.id == product_name.Product_Group_id
+                ).first()
+                if product_group:
+                    product_group.TNVED_id = tnved.id
+            else:
+                # Создаем новую группу если нет привязки
+                new_group_id = f"GRP_{material_code}"
+                product_group = Product_Group(
+                    id=new_group_id,
+                    Product_name=product_name.Product_name,
+                    TNVED_id=tnved.id
+                )
+                db.add(product_group)
+                db.flush()
+                
+                # Обновляем привязку product_name к группе
+                product_name.Product_Group_id = new_group_id
+            
+            return True
+            
+        except SQLAlchemyError as e:
+            db.rollback()
+            raise Exception(f"Ошибка БД при обновлении TNVED: {str(e)}")
+        finally:
+            if db.is_active:
+                db.close()
+
     def get_file(self):
         """Выбор файла через диалоговое окно"""
         file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с данными продуктов')
@@ -204,34 +574,24 @@ class ProductsPage(QWidget):
             # Устанавливаем фиксированные значения для новых продуктов
             new_df['Items_per_Set'] = 1
             new_df['Status'] = 'новый'
-            
-            
+
             df = pd.read_excel(file_path, sheet_name=0, dtype=dtype_prod)
             
             required_columns = ['Код', 'Product name', 'Шт в комплекте', 'Единица измерения отчетов']
             if not all(col in df.columns for col in required_columns):
                 raise ValueError("Файл не содержит необходимых столбцов")
+
+            valid_types = ['Товары', 'Услуги', 'Нефтепродукты', 'Продукция']
+            df = df[df['Вид номенклатуры'].isin(valid_types)]
+
+            valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
+            df = df[df['Номенклатурная группа'].isin(valid_groups)]
+
+            df['Статус'] = df['Артикул'].apply(lambda x: 'не активный' if 'удален_' in str(x) else 'активный')
+            df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
+            df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
+            df['Type'] = df['Type'].fillna(df['Вид номенклатуры'])
             
-            # 1. Фильтрация по "Вид номенклатуры"
-            if 'Вид номенклатуры' in df.columns:
-                valid_types = ['Товары', 'Услуги', 'Нефтепродукты', 'Продукция']
-                df = df[df['Вид номенклатуры'].isin(valid_types)]
-            
-            # 2. Фильтрация по "Номенклатурная группа"
-            if 'Номенклатурная группа' in df.columns:
-                valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
-                df = df[df['Номенклатурная группа'].isin(valid_groups)]
-            
-            # Добавляем колонку Статус перед обработкой артикулов
-            if 'Артикул' in df.columns:
-                df['Статус'] = df['Артикул'].apply(lambda x: 'не активный' if 'удален_' in str(x) else 'активный')
-                df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
-                
-            if 'Наименование' in df.columns:
-                df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
-            
-            
-    
             # 3. Переименование колонок
             column_map = {
                 'Код': 'Code', 
@@ -260,6 +620,7 @@ class ProductsPage(QWidget):
             df = pd.concat([df, new_df], ignore_index=True)
             
             df["Package_type"] = df["Package_type"].replace({"комплект кан": "комплект", "комплект туб": "комплект"})
+            df.loc[df["Package_type"] == "комплект", "Package_Volume"] = df["Package_Volume"] / df["Items_per_Set"]
             
             for_replace = {"Канистра": "шт", "бочка": "шт", "Туба": "шт", "банка": "шт", "л ": "л"}
             df["UoM"] = df["UoM"].replace(for_replace)
@@ -605,10 +966,7 @@ class ProductsPage(QWidget):
             
             # Формирование отчета
             report = [
-                f"Всего строк в файле: {len(df)}",
-                f"Добавлено новых записей: {len(to_insert)}",
-                f"Добавлено новых категорий: {len(new_categories)}",
-                f"Пропущено из-за отсутствия продукта: {len(missing_products)}"
+                f"Пропущено ABCD из-за отсутствия продукта: {len(missing_products)}"
             ]
             
             if missing_products:
@@ -622,7 +980,7 @@ class ProductsPage(QWidget):
             self.show_error_message(f"Ошибка обновления ABC: {str(e)}")
         finally:
             db.close()
-            
+
     @lru_cache(maxsize=32)
     def _get_unique_values(self, column, filter_column=None, filter_value=None):
         """Получение уникальных значений с фильтрацией"""
@@ -728,13 +1086,13 @@ class ProductsPage(QWidget):
             .subquery()
         )
         
-        # Основной запрос с JOIN к TNVED
+        # Основной запрос с JOIN к TNVED и Product_Names
         query = (
             db.query(
                 Materials.Code,
                 Materials.Article,
                 Materials.Full_name,
-                Product_Names.Product_name.label('Material_Name'),
+                Product_Names.Product_name.label('Material_Name'),  # Берем из Product_Names
                 Materials.Brand,
                 Materials.Family,
                 Materials.Product_type,
@@ -748,12 +1106,13 @@ class ProductsPage(QWidget):
                 Materials.Gross_weight,
                 Materials.Density,
                 Materials.Excise,
-                TNVED.code.label('TNVED'),  # Добавляем код ТН ВЭД
+                Materials.Status,  # Добавляем статус
+                TNVED.code.label('TNVED'),
                 subq.c.ABC_category
             )
             .join(Product_Names, Materials.Product_Names_id == Product_Names.id)
-            .join(Product_Group, Product_Names.Product_Group_id == Product_Group.id)  # Связь Product_Names → Product_Group
-            .join(TNVED, Product_Group.TNVED_id == TNVED.id)  # Связь Product_Group → TNVED
+            .join(Product_Group, Product_Names.Product_Group_id == Product_Group.id)
+            .join(TNVED, Product_Group.TNVED_id == TNVED.id)
             .outerjoin(subq, Product_Names.id == subq.c.product_name_id)
         )
         
@@ -774,10 +1133,14 @@ class ProductsPage(QWidget):
             family = self.ui.line_Prod_Fam.currentText()
             product_name = self.ui.line_Prod_name.currentText()
 
+            # Для Code: поиск по началу строки
             if code:
-                prod_df = prod_df[prod_df["Code"].astype(str).str.contains(code, case=False, na=False)]
+                prod_df = prod_df[prod_df["Code"].astype(str).str.startswith(code, na=False)]
+                
+            # Для Article: обычный contains (без regex) для избежания проблем со спецсимволами
             if article:
                 prod_df = prod_df[prod_df["Article"].astype(str).str.contains(article, case=False, na=False)]
+                
             if brand != "-":
                 prod_df = prod_df[prod_df["Brand"] == brand]
             if family != "-":
@@ -790,7 +1153,7 @@ class ProductsPage(QWidget):
             self.show_error_message("Нет данных для отображения")
 
     def _display_data(self, df):
-        """Отображение данных в таблице с настройкой выравнивания"""
+        """Отображение данных в таблице с сохранением оригинальных значений"""
         self.table.clear()
         self.table.setColumnCount(0)
         self.table.setRowCount(0)
@@ -798,6 +1161,13 @@ class ProductsPage(QWidget):
         if df.empty:
             self.show_error_message('Нет данных для отображения')
             return
+        
+        # Устанавливаем флаг обновления таблицы
+        self._updating_table = True
+        
+        # Очищаем предыдущие значения
+        self._original_values.clear()
+        self._pending_changes.clear()
         
         # Заполнение пропущенных значений
         df = df.fillna('')
@@ -808,19 +1178,27 @@ class ProductsPage(QWidget):
         self.table.setRowCount(len(df))
         self.table.setHorizontalHeaderLabels(headers)
         
-        # Определение текстовых колонок (можно адаптировать под ваши данные)
+        # Определение типов колонок
         text_columns = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family', 
                     'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
                     'Package_type', 'TNVED', 'Excise', 'Status']
         
-        # Заполнение данных с разным выравниванием
+        # Заполнение данных
         for i in range(len(df)):
+            material_code = str(df.iloc[i]['Code'])
+            self._original_values[material_code] = {}
+            
             for j, col in enumerate(headers):
                 value = df.iloc[i][col]
                 item = QTableWidgetItem(str(value))
-                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 
-                # Выравнивание: текст - по левому краю, числа - по центру
+                # Сохраняем оригинальное значение
+                self._original_values[material_code][col] = str(value)
+                
+                # Устанавливаем флаги для возможности редактирования
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+                
+                # Выравнивание
                 if col in text_columns:
                     item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 else:
@@ -835,7 +1213,11 @@ class ProductsPage(QWidget):
         for i in range(self.table.columnCount()):
             if self.table.columnWidth(i) < 100:
                 self.table.setColumnWidth(i, 100)
-                    
+        
+        # Снимаем флаг обновления таблицы
+        self._updating_table = False
+        self._update_original_values()
+
     def download_Products(self):
         """Скачивание продуктов"""
         file_path, _ = QFileDialog.getSaveFileName(
