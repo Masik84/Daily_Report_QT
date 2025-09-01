@@ -61,7 +61,7 @@ class ProductsPage(QWidget):
             }
             QTableWidget::item:editable {
                 background-color: #ffffd0;
-                border: 1px solid #ffcc00;
+                border: #ffcc00;
             }
             QTableWidget::item:focus {
                 background-color: #ffffa0;
@@ -88,16 +88,46 @@ class ProductsPage(QWidget):
         revert_action.triggered.connect(self.revert_changes)
         
         menu.exec_(self.table.viewport().mapToGlobal(position))
+    
+    def _setup_connections(self):
+            """Настройка сигналов и слотов"""
+            self.table.itemChanged.connect(self.on_item_changed)
+            self.ui.line_Brand.currentTextChanged.connect(self.fill_in_prod_fam_list)
+            self.ui.line_Prod_Fam.currentTextChanged.connect(self.fill_in_prod_name_list)
+            self.ui.btn_open_file.clicked.connect(self.get_file)
+            self.ui.btn_upload_file.clicked.connect(self.upload_data)
+            self.ui.btn_find.clicked.connect(self.find_Product)
 
-    def save_all_changes(self):
-        """Принудительное сохранение всех изменений"""
+    def on_item_changed(self, item):
+        """Обработчик изменения данных в таблице"""
+        if not hasattr(self, '_updating_table') or self._updating_table:
+            return
+        
         try:
-            db.commit()
-            self.show_message("Все изменения сохранены")
+            row = item.row()
+            column = item.column()
+            header = self.table.horizontalHeaderItem(column).text()
+            code_item = self.table.item(row, 0)
+            
+            if not code_item:
+                return
+                
+            material_code = code_item.text()
+            new_value = item.text()
+            
+            # Сохраняем изменение в pending_changes
+            if material_code not in self._pending_changes:
+                self._pending_changes[material_code] = {}
+            
+            self._pending_changes[material_code][header] = new_value
+            
+            # Автоматически применяем изменения (можно убрать, если хотите ручное сохранение)
+            self.apply_pending_changes()
+                
         except Exception as e:
-            db.rollback()
-            self.show_error_message(f"Ошибка сохранения: {str(e)}")
-
+            self.show_error_message(f"Ошибка: {str(e)}")
+            self.revert_changes()  # Откатываем при ошибке
+    
     def revert_changes(self):
         """Отмена изменений и обновление таблицы"""
         db.rollback()
@@ -130,45 +160,6 @@ class ProductsPage(QWidget):
                     text += "\t".join([text for col, text in sorted_cols]) + "\n"
             
             clipboard.setText(text.strip())
-
-    def _setup_connections(self):
-        """Настройка сигналов и слотов"""
-        self.table.itemChanged.connect(self.on_item_changed)
-        self.ui.line_Brand.currentTextChanged.connect(self.fill_in_prod_fam_list)
-        self.ui.line_Prod_Fam.currentTextChanged.connect(self.fill_in_prod_name_list)
-        self.ui.btn_open_file.clicked.connect(self.get_file)
-        self.ui.btn_upload_file.clicked.connect(self.upload_data)
-        self.ui.btn_find.clicked.connect(self.find_Product)
-
-    def on_item_changed(self, item):
-        """Обработчик изменения данных в таблице"""
-        if not hasattr(self, '_updating_table') or self._updating_table:
-            return
-        
-        try:
-            row = item.row()
-            column = item.column()
-            header = self.table.horizontalHeaderItem(column).text()
-            code_item = self.table.item(row, 0)
-            
-            if not code_item:
-                return
-                
-            material_code = code_item.text()
-            new_value = item.text()
-            
-            # Сохраняем изменение в pending_changes
-            if material_code not in self._pending_changes:
-                self._pending_changes[material_code] = {}
-            
-            self._pending_changes[material_code][header] = new_value
-            
-            # Автоматически применяем изменения (можно убрать, если хотите ручное сохранение)
-            self.apply_pending_changes()
-                
-        except Exception as e:
-            self.show_error_message(f"Ошибка: {str(e)}")
-            self.revert_changes()  # Откатываем при ошибке
 
     def apply_pending_changes(self):
         """Применение всех ожидающих изменений"""
@@ -1243,56 +1234,58 @@ class ProductsPage(QWidget):
         self.show_message('Отчет сохранен')
 
     def show_message(self, text):
-        """Показать компактное информационное сообщение"""
+        """Показать информационное сообщение"""
         msg = QMessageBox()
         msg.setWindowTitle("Информация")
         msg.setIcon(QMessageBox.Information)
-        msg.setText(text)
         
-        # Уменьшаем размер окна
-        msg.setMinimumSize(400, 200)
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
         
-        # Добавляем кнопку Copy
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
+        else:
+            msg.setText(text)
+        
+        # Кнопки
         copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
         
-        # Настройка буфера обмена
-        clipboard = QApplication.clipboard()
-        
-        # Обработчики кнопок
         def copy_text():
-            clipboard.setText(text)
+            QApplication.clipboard().setText(text)
         
         copy_button.clicked.connect(copy_text)
-        
-        # Показываем сообщение
         msg.exec_()
 
     def show_error_message(self, text):
-        """Показать компактное сообщение об ошибке"""
+        """Показать сообщение об ошибке"""
         msg = QMessageBox()
         msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
-        msg.setText(text)
         
-        # Уменьшаем размер окна
-        msg.setMinimumSize(400, 200)
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
         
-        # Добавляем кнопку Copy
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Произошла ошибка. Подробности ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
+        else:
+            msg.setText(text)
+        
+        # Кнопки
         copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
         
-        # Настройка буфера обмена
-        clipboard = QApplication.clipboard()
-        
-        # Обработчики кнопок
         def copy_text():
-            clipboard.setText(text)
+            QApplication.clipboard().setText(text)
         
         copy_button.clicked.connect(copy_text)
-        
-        # Показываем сообщение
         msg.exec_()
-    
+
     
     

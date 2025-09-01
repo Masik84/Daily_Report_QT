@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'deliveryEksbbN.ui'
+## Form generated from reading UI file 'deliverycKWoUE.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QApplicat
     QLabel, QLineEdit, QPushButton, QSizePolicy,
     QSpacerItem, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget)
-import resource_rc
+from wind import resource_rc
 
 class Ui_Form(object):
     def setupUi(self, Form):
@@ -84,9 +84,12 @@ class Ui_Form(object):
                         "lor: #f6c294;\n"
 "    color: #262626;\n"
 "}\n"
+"QTableWidget::item {\n"
+"                padding: 1px;  /* \u0423\u043c\u0435\u043d\u044c\u0448\u0430\u0435\u043c \u043e\u0442\u0441\u0442\u0443\u043f\u044b */\n"
+"                font: 9pt \"Tahoma\";  /* \u0428\u0440\u0438\u0444\u0442 \u0434\u043b\u044f \u044f\u0447\u0435\u0435\u043a */\n"
+"            }\n"
 "QHeaderView::section{\n"
 "	background-color: #f8f8f2;\n"
-"	max-width: 30px;\n"
 "	border: none;\n"
 "	border-style: none;\n"
 "}\n"
@@ -111,7 +114,8 @@ class Ui_Form(object):
 "	border-radius: 5px;\n"
 "	border: 2px solid #f09d54;\n"
 "	padding-left: 10px;\n"
-"	selection-color: rgb(255, 255, 255);\n"
+"	selection-color: rgb("
+                        "255, 255, 255);\n"
 "	selection-background-color: #f28223;\n"
 "    color: #262626;\n"
 "}\n"
@@ -125,13 +129,12 @@ class Ui_Form(object):
 "QComboBox {\n"
 "	background-color: #f8f8f2;\n"
 "	border-radius: 5px;\n"
-""
-                        "	border: 2px solid #f09d54;\n"
+"	border: 2px solid #f09d54;\n"
 "	padding-left: 10px;\n"
 "	selection-color: #f28223;\n"
 "	selection-background-color: #f28223;\n"
 "    color: #262626;\n"
-"	font: 10pt \"Tahoma\";\n"
+"	font: 9pt \"Tahoma\";\n"
 "}\n"
 "QComboBox:hover {\n"
 "	border: 2px solid #f28223;\n"
@@ -155,15 +158,15 @@ class Ui_Form(object):
 "}\n"
 "QComboBox::drop-down {\n"
 "    subcontrol-origin: padding;\n"
-"    subcontrol-position: top right;\n"
+"    subcon"
+                        "trol-position: top right;\n"
 "    width: 15px;\n"
 "    border-left-width: 1px;\n"
 "    border-left-color: #f8994a;\n"
 "    border-left-style: solid; /* just a single line */\n"
 "    border-top-right-radius: 3px; /* same radius as the QComboBox */\n"
 "    border-bottom-right-radius: 3px;\n"
-""
-                        "	color: #262626;\n"
+"	color: #262626;\n"
 "}\n"
 "\n"
 "QScrollBar:horizontal {\n"
@@ -175,7 +178,7 @@ class Ui_Form(object):
 "}\n"
 "QScrollBar::handle:horizontal {\n"
 "    background: #f6c294;\n"
-"    min-width: 25px;\n"
+"    min-width: 20px;\n"
 "	border-radius: 4px\n"
 "}\n"
 "QScrollBar::add-line:horizontal {\n"
@@ -192,7 +195,8 @@ class Ui_Form(object):
 "    background: #f8994a;\n"
 "    width: 20px;\n"
 "	border-top-left-radius: 4px;\n"
-"    border-bottom-left-radius: 4px;\n"
+"    border"
+                        "-bottom-left-radius: 4px;\n"
 "    subcontrol-position: left;\n"
 "    subcontrol-origin: margin;\n"
 "}\n"
@@ -202,8 +206,7 @@ class Ui_Form(object):
 "}\n"
 "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal\n"
 "{\n"
-" "
-                        "    background: none;\n"
+"     background: none;\n"
 "}\n"
 " QScrollBar:vertical {\n"
 "	border: none;\n"
@@ -231,7 +234,8 @@ class Ui_Form(object):
 "    background: #f8994a;\n"
 "     height: 20px;\n"
 "	border-top-left-radius: 4px;\n"
-"    border-top-right-radius: 4px;\n"
+"    b"
+                        "order-top-right-radius: 4px;\n"
 "     subcontrol-position: top;\n"
 "     subcontrol-origin: margin;\n"
 " }\n"
@@ -240,8 +244,7 @@ class Ui_Form(object):
 " }\n"
 "\n"
 " QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {\n"
-"    "
-                        " background: none;\n"
+"     background: none;\n"
 " }\n"
 "\n"
 "QDateEdit {\n"
@@ -267,7 +270,8 @@ class Ui_Form(object):
 "    subcontrol-origin: padding;\n"
 "    subcontrol-position: top right;\n"
 "    width: 25px; /* Keep the dropdown arrow width */\n"
-"    border-left-width: 1px;\n"
+"    border-lef"
+                        "t-width: 1px;\n"
 "    border-left-color: #f8994a;\n"
 "    border-left-style: solid;\n"
 "    border-top-right-radius: 3px;\n"
@@ -276,8 +280,7 @@ class Ui_Form(object):
 "}\n"
 "\n"
 "QDateEdit::down-arrow {\n"
-"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e"
-                        "\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "    width: 16px;\n"
 "    height: 16px;\n"
 "}\n"
@@ -308,7 +311,8 @@ class Ui_Form(object):
 "}\n"
 "\n"
 "QCalendarWidget QToolButton:hover {\n"
-"    background-color: #f28223;\n"
+""
+                        "    background-color: #f28223;\n"
 "    color: #ffffff;\n"
 "}\n"
 "\n"
@@ -320,8 +324,7 @@ class Ui_Form(object):
 "QCalendarWidget QSpinBox {\n"
 "    background-color: #f8f8f2;\n"
 "    color: #262626;\n"
-"    border: 1px solid #f09"
-                        "d54;\n"
+"    border: 1px solid #f09d54;\n"
 "}\n"
 "\n"
 "QCalendarWidget QSpinBox::up-button {\n"
@@ -346,7 +349,8 @@ class Ui_Form(object):
 "	image: url(:/icon/icon/chevron-up \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "    width: 10px;\n"
 "    height: 10px;\n"
-"}\n"
+""
+                        "}\n"
 "\n"
 "QCalendarWidget QSpinBox::down-arrow {\n"
 "	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
@@ -434,26 +438,28 @@ class Ui_Form(object):
         self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
         self.line_customer = QComboBox(self.frame_5)
         self.line_customer.setObjectName(u"line_customer")
-        self.line_customer.setMinimumSize(QSize(0, 25))
+        self.line_customer.setMinimumSize(QSize(0, 22))
+        self.line_customer.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_customer)
 
         self.line_bill = QLineEdit(self.frame_5)
         self.line_bill.setObjectName(u"line_bill")
-        self.line_bill.setMinimumSize(QSize(0, 25))
+        self.line_bill.setMinimumSize(QSize(0, 22))
 
         self.verticalLayout_6.addWidget(self.line_bill)
 
         self.line_sborka = QLineEdit(self.frame_5)
         self.line_sborka.setObjectName(u"line_sborka")
-        self.line_sborka.setMinimumSize(QSize(0, 25))
-        self.line_sborka.setMaximumSize(QSize(16777215, 25))
+        self.line_sborka.setMinimumSize(QSize(0, 22))
+        self.line_sborka.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_sborka)
 
         self.line_changes = QComboBox(self.frame_5)
         self.line_changes.setObjectName(u"line_changes")
-        self.line_changes.setMinimumSize(QSize(0, 25))
+        self.line_changes.setMinimumSize(QSize(0, 22))
+        self.line_changes.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_changes)
 
@@ -514,15 +520,15 @@ class Ui_Form(object):
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
         self.line_Year = QComboBox(self.frame_2)
         self.line_Year.setObjectName(u"line_Year")
-        self.line_Year.setMinimumSize(QSize(0, 25))
-        self.line_Year.setMaximumSize(QSize(16777215, 25))
+        self.line_Year.setMinimumSize(QSize(0, 22))
+        self.line_Year.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_3.addWidget(self.line_Year)
 
         self.line_Mnth = QComboBox(self.frame_2)
         self.line_Mnth.setObjectName(u"line_Mnth")
-        self.line_Mnth.setMinimumSize(QSize(0, 25))
-        self.line_Mnth.setMaximumSize(QSize(16777215, 25))
+        self.line_Mnth.setMinimumSize(QSize(0, 22))
+        self.line_Mnth.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_3.addWidget(self.line_Mnth)
 
@@ -538,6 +544,8 @@ class Ui_Form(object):
         self.line_date.setFont(font3)
         self.line_date.setMinimumDate(QDate(2022, 1, 1))
         self.line_date.setCalendarPopup(True)
+        self.line_date.setCurrentSectionIndex(0)
+        self.line_date.setTimeSpec(Qt.TimeSpec.UTC)
 
         self.verticalLayout_3.addWidget(self.line_date)
 
@@ -579,14 +587,23 @@ class Ui_Form(object):
         self.frame_9.setFrameShadow(QFrame.Shadow.Raised)
         self.verticalLayout_7 = QVBoxLayout(self.frame_9)
         self.verticalLayout_7.setObjectName(u"verticalLayout_7")
-        self.verticalLayout_7.setContentsMargins(0, -1, -1, -1)
+        self.verticalLayout_7.setContentsMargins(0, -1, 0, -1)
+        self.btn_disputch = QPushButton(self.frame_9)
+        self.btn_disputch.setObjectName(u"btn_disputch")
+        self.btn_disputch.setMinimumSize(QSize(0, 30))
+        icon1 = QIcon()
+        icon1.addFile(u":/icon/icon/refresh-cw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.btn_disputch.setIcon(icon1)
+
+        self.verticalLayout_7.addWidget(self.btn_disputch)
+
         self.btn_refresh = QPushButton(self.frame_9)
         self.btn_refresh.setObjectName(u"btn_refresh")
-        self.btn_refresh.setMinimumSize(QSize(160, 30))
+        self.btn_refresh.setMinimumSize(QSize(170, 30))
         self.btn_refresh.setMaximumSize(QSize(160, 16777215))
-        icon1 = QIcon()
-        icon1.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_refresh.setIcon(icon1)
+        icon2 = QIcon()
+        icon2.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.btn_refresh.setIcon(icon2)
 
         self.verticalLayout_7.addWidget(self.btn_refresh)
 
@@ -604,7 +621,7 @@ class Ui_Form(object):
         self.table.setObjectName(u"table")
         font4 = QFont()
         font4.setFamilies([u"Tahoma"])
-        font4.setPointSize(10)
+        font4.setPointSize(9)
         self.table.setFont(font4)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -621,8 +638,8 @@ class Ui_Form(object):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setCascadingSectionResizes(True)
-        self.table.verticalHeader().setMinimumSectionSize(25)
-        self.table.verticalHeader().setDefaultSectionSize(25)
+        self.table.verticalHeader().setMinimumSectionSize(20)
+        self.table.verticalHeader().setDefaultSectionSize(20)
         self.table.verticalHeader().setHighlightSections(False)
 
         self.verticalLayout.addWidget(self.table)
@@ -647,6 +664,7 @@ class Ui_Form(object):
         self.label_5.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u0441\u044f\u0446", None))
         self.label_3.setText(QCoreApplication.translate("Form", u"\u0414\u0435\u043d\u044c", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
-        self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
+        self.btn_disputch.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0438\u0437 Disputch", None))
+        self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0438\u0437 \u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430", None))
     # retranslateUi
 

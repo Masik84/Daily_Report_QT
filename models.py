@@ -849,7 +849,79 @@ class Purchase_Order(Base):
         Index('idx_purchase_order_material', 'Material_id'),
     )
 
-# Index('idx_purchase_order_unique', 'Order', 'Document', 'Date', 'Material_id', 'Supplier_id', unique=True),
+class Delivery_to_Customer_24(Base):
+    __tablename__ = 'delivery_to_customer_24'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Customer_name = Column(String)  # Контрагент
+    Delivery_date = Column(sqlalchemy.Date())  # Дата отгр
+    Bill = Column(String)  # Счет
+    Customer_in_logist = Column(String)  # Наименование Клиента
+    INN = Column(String)  # ИНН клиента
+    Carrier = Column(String)  # Перевозчик
+    Sborka = Column(String)  # Задание на сборку.Номер
+    Delivery_method = Column(String)  # Способ доставки
+    Delivery_amount_w_VAT = Column(Numeric)  # Ставка, руб (с НДС 20%)
+    Delivery_amount_wo_VAT = Column(Numeric)  # Ставка без НДС
+    Order_volume = Column(Numeric)  # Объем заказа, л
+    Comment = Column(String)  # Комментарий
+    OZON = Column(String)  # ОЗОН
+    TS = Column(String)  # ТС
+    CD_per_lt = Column(Numeric)  # Ставка р/л
+    new_Amount = Column(Numeric)  # new_Ставка
+    check_Deliv_amount = Column(String)  # true/false (ставка)
+    inv_Volume = Column(Numeric)  # Объем СФ
+    check_Inv_volume = Column(String)  # true/false (объем)
+    Invoice = Column(String)  # СФ
+    Invoice_date = Column(sqlalchemy.Date(), nullable=True)  # Дата сф
+    Year_delivery = Column(Integer)  # Год отгр
+    Bill_and_Date = Column(String)  # Счет & Дата
+
+    __table_args__ = (
+        Index('idx_delivery24_customer_name', 'Customer_name'),
+        Index('idx_delivery24_delivery_date', 'Delivery_date'),
+        Index('idx_delivery24_bill', 'Bill'),
+        Index('idx_delivery24_sborka', 'Sborka'),
+        Index('idx_delivery24_bill_sborka', 'Bill', 'Sborka'),
+        Index('idx_delivery24_inn', 'INN'),
+    )
+
+class Delivery_to_Customer(Base):
+    __tablename__ = 'delivery_to_customer'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Customer_name = Column(String)  # Контрагент
+    Delivery_date = Column(sqlalchemy.Date())  # Дата отгр
+    Bill = Column(String)  # Счет
+    Customer_in_logist = Column(String)  # Наименование Клиента
+    INN = Column(String)  # ИНН клиента
+    Carrier = Column(String)  # Перевозчик
+    Sborka = Column(String)  # Задание на сборку.Номер
+    Delivery_method = Column(String)  # Способ доставки
+    Delivery_amount_w_VAT = Column(Numeric)  # Ставка, руб (с НДС 20%)
+    Delivery_amount_wo_VAT = Column(Numeric)  # Ставка без НДС
+    Order_volume = Column(Numeric)  # Объем заказа, л
+    Comment = Column(String)  # Комментарий
+    OZON = Column(String)  # ОЗОН
+    TS = Column(String)  # ТС
+    CD_per_lt = Column(Numeric)  # Ставка р/л
+    new_Amount = Column(Numeric)  # new_Ставка
+    check_Deliv_amount = Column(String)  # true/false (ставка)
+    inv_Volume = Column(Numeric)  # Объем СФ
+    check_Inv_volume = Column(String)  # true/false (объем)
+    Invoice = Column(String)  # СФ
+    Invoice_date = Column(sqlalchemy.Date(), nullable=True)  # Дата сф
+    Year_delivery = Column(Integer)  # Год отгр
+    Bill_and_Date = Column(String)  # Счет & Дата
+
+    __table_args__ = (
+        Index('idx_delivery_customer_name', 'Customer_name'),
+        Index('idx_delivery_delivery_date', 'Delivery_date'),
+        Index('idx_delivery_bill', 'Bill'),
+        Index('idx_delivery_sborka', 'Sborka'),
+        Index('idx_delivery_bill_sborka', 'Bill', 'Sborka'),
+        Index('idx_delivery_inn', 'INN'),
+    )
 
 from sqlalchemy.orm import configure_mappers
 configure_mappers()

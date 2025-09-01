@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'temp_tablesFXFpgJ.ui'
+## Form generated from reading UI file 'temp_tablesERAQLT.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -78,20 +78,29 @@ class Ui_Form(object):
 "	padding-right: 5px;\n"
 "	gridline-color: #f8994a;\n"
 "	color: #262626;\n"
+"	padding: 1px; \n"
+"    font: 5pt \"Tahoma\";\n"
 "}\n"
 "QTableWidget::item:selected{\n"
-"	background-co"
-                        "lor: #f6c294;\n"
+"	background-color: #f6c294;\n"
 "    color: #262626;\n"
+"}\n"
+"QTableWidget::item:editable {\n"
+"	background-color: #ffffd0;\n"
+"	border: #ffcc00;\n"
+"}\n"
+"QTableWidget::item:focus {\n"
+"	background-color: #ffffa0;\n"
+"	border: 2px solid #ff9900;\n"
 "}\n"
 "QHeaderView::section{\n"
 "	background-color: #f8f8f2;\n"
-"	max-width: 30px;\n"
 "	border: none;\n"
 "	border-style: none;\n"
 "}\n"
 "QTableWidget::horizontalHeader {	\n"
 "	background-color: #f8994a;\n"
+"	font: 10pt \"Tahoma\";\n"
 "}\n"
 "QHeaderView::section:horizontal {\n"
 "    border: 1px solid #f8994a;\n"
@@ -125,13 +134,12 @@ class Ui_Form(object):
 "QComboBox {\n"
 "	background-color: #f8f8f2;\n"
 "	border-radius: 5px;\n"
-""
-                        "	border: 2px solid #f09d54;\n"
+"	border: 2px solid #f09d54;\n"
 "	padding-left: 10px;\n"
 "	selection-color: #f28223;\n"
 "	selection-background-color: #f28223;\n"
 "    color: #262626;\n"
-"	font: 10pt \"Tahoma\";\n"
+"	font: 9pt \"Tahoma\";\n"
 "}\n"
 "QComboBox:hover {\n"
 "	border: 2px solid #f28223;\n"
@@ -151,7 +159,8 @@ class Ui_Form(object):
 "\n"
 "QComboBox::down-arrow {\n"
 "	\n"
-"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e"
+                        "\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "}\n"
 "QComboBox::drop-down {\n"
 "    subcontrol-origin: padding;\n"
@@ -162,8 +171,7 @@ class Ui_Form(object):
 "    border-left-style: solid; /* just a single line */\n"
 "    border-top-right-radius: 3px; /* same radius as the QComboBox */\n"
 "    border-bottom-right-radius: 3px;\n"
-""
-                        "	color: #262626;\n"
+"	color: #262626;\n"
 "}\n"
 "\n"
 "QScrollBar:horizontal {\n"
@@ -175,7 +183,7 @@ class Ui_Form(object):
 "}\n"
 "QScrollBar::handle:horizontal {\n"
 "    background: #f6c294;\n"
-"    min-width: 25px;\n"
+"    min-width: 20px;\n"
 "	border-radius: 4px\n"
 "}\n"
 "QScrollBar::add-line:horizontal {\n"
@@ -187,7 +195,8 @@ class Ui_Form(object):
 "    subcontrol-position: right;\n"
 "    subcontrol-origin: margin;\n"
 "}\n"
-"QScrollBar::sub-line:horizontal {\n"
+"QScrollB"
+                        "ar::sub-line:horizontal {\n"
 "    border: none;\n"
 "    background: #f8994a;\n"
 "    width: 20px;\n"
@@ -202,8 +211,7 @@ class Ui_Form(object):
 "}\n"
 "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal\n"
 "{\n"
-" "
-                        "    background: none;\n"
+"     background: none;\n"
 "}\n"
 " QScrollBar:vertical {\n"
 "	border: none;\n"
@@ -226,7 +234,8 @@ class Ui_Form(object):
 "     subcontrol-position: bottom;\n"
 "     subcontrol-origin: margin;\n"
 " }\n"
-" QScrollBar::sub-line:vertical {\n"
+" "
+                        "QScrollBar::sub-line:vertical {\n"
 "	border: none;\n"
 "    background: #f8994a;\n"
 "     height: 20px;\n"
@@ -240,8 +249,7 @@ class Ui_Form(object):
 " }\n"
 "\n"
 " QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {\n"
-"    "
-                        " background: none;\n"
+"     background: none;\n"
 " }\n"
 "\n"
 "QDateEdit {\n"
@@ -264,7 +272,8 @@ class Ui_Form(object):
 "}\n"
 "\n"
 "QDateEdit::drop-down {\n"
-"    subcontrol-origin: padding;\n"
+" "
+                        "   subcontrol-origin: padding;\n"
 "    subcontrol-position: top right;\n"
 "    width: 25px; /* Keep the dropdown arrow width */\n"
 "    border-left-width: 1px;\n"
@@ -276,8 +285,7 @@ class Ui_Form(object):
 "}\n"
 "\n"
 "QDateEdit::down-arrow {\n"
-"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e"
-                        "\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "    width: 16px;\n"
 "    height: 16px;\n"
 "}\n"
@@ -301,7 +309,8 @@ class Ui_Form(object):
 "\n"
 "QCalendarWidget QToolButton {\n"
 "    background-color: #ffd4af;\n"
-"    color: #262626;\n"
+"    colo"
+                        "r: #262626;\n"
 "    font: 10pt \"Tahoma\";\n"
 "    border-radius: 3px;\n"
 "    padding: 5px;\n"
@@ -320,8 +329,7 @@ class Ui_Form(object):
 "QCalendarWidget QSpinBox {\n"
 "    background-color: #f8f8f2;\n"
 "    color: #262626;\n"
-"    border: 1px solid #f09"
-                        "d54;\n"
+"    border: 1px solid #f09d54;\n"
 "}\n"
 "\n"
 "QCalendarWidget QSpinBox::up-button {\n"
@@ -343,7 +351,8 @@ class Ui_Form(object):
 "}\n"
 "\n"
 "QCalendarWidget QSpinBox::up-arrow {\n"
-"	image: url(:/icon/icon/chevron-up \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/"
+                        "icon/icon/chevron-up \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "    width: 10px;\n"
 "    height: 10px;\n"
 "}\n"
@@ -429,22 +438,22 @@ class Ui_Form(object):
         self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
         self.line_table = QComboBox(self.frame_5)
         self.line_table.setObjectName(u"line_table")
-        self.line_table.setMinimumSize(QSize(0, 25))
-        self.line_table.setMaximumSize(QSize(16777215, 25))
+        self.line_table.setMinimumSize(QSize(0, 22))
+        self.line_table.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_table)
 
         self.line_article = QLineEdit(self.frame_5)
         self.line_article.setObjectName(u"line_article")
-        self.line_article.setMinimumSize(QSize(0, 25))
-        self.line_article.setMaximumSize(QSize(16777215, 25))
+        self.line_article.setMinimumSize(QSize(0, 22))
+        self.line_article.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_article)
 
         self.line_product = QComboBox(self.frame_5)
         self.line_product.setObjectName(u"line_product")
-        self.line_product.setMinimumSize(QSize(0, 25))
-        self.line_product.setMaximumSize(QSize(16777215, 25))
+        self.line_product.setMinimumSize(QSize(0, 22))
+        self.line_product.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_6.addWidget(self.line_product)
 
@@ -511,29 +520,30 @@ class Ui_Form(object):
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
         self.line_doc_type = QComboBox(self.frame_2)
         self.line_doc_type.setObjectName(u"line_doc_type")
-        self.line_doc_type.setMinimumSize(QSize(0, 25))
-        self.line_doc_type.setMaximumSize(QSize(16777215, 25))
+        self.line_doc_type.setMinimumSize(QSize(0, 22))
+        self.line_doc_type.setMaximumSize(QSize(16777215, 22))
         self.line_doc_type.setIconSize(QSize(16, 16))
 
         self.verticalLayout_3.addWidget(self.line_doc_type)
 
         self.line_Year = QComboBox(self.frame_2)
         self.line_Year.setObjectName(u"line_Year")
-        self.line_Year.setMinimumSize(QSize(0, 25))
-        self.line_Year.setMaximumSize(QSize(16777215, 25))
+        self.line_Year.setMinimumSize(QSize(0, 22))
+        self.line_Year.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_3.addWidget(self.line_Year)
 
         self.line_Mnth = QComboBox(self.frame_2)
         self.line_Mnth.setObjectName(u"line_Mnth")
-        self.line_Mnth.setMinimumSize(QSize(0, 25))
-        self.line_Mnth.setMaximumSize(QSize(16777215, 25))
+        self.line_Mnth.setMinimumSize(QSize(0, 22))
+        self.line_Mnth.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_3.addWidget(self.line_Mnth)
 
         self.line_customer = QComboBox(self.frame_2)
         self.line_customer.setObjectName(u"line_customer")
-        self.line_customer.setMinimumSize(QSize(0, 25))
+        self.line_customer.setMinimumSize(QSize(0, 22))
+        self.line_customer.setMaximumSize(QSize(16777215, 22))
 
         self.verticalLayout_3.addWidget(self.line_customer)
 
@@ -696,10 +706,10 @@ class Ui_Form(object):
 
         self.table = QTableWidget(self.widget)
         self.table.setObjectName(u"table")
-        font4 = QFont()
-        font4.setFamilies([u"Tahoma"])
-        font4.setPointSize(10)
-        self.table.setFont(font4)
+        # font4 = QFont()
+        # font4.setFamilies([u"Tahoma"])
+        # font4.setPointSize(9)
+        # self.table.setFont(font4)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
@@ -715,8 +725,8 @@ class Ui_Form(object):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setCascadingSectionResizes(True)
-        self.table.verticalHeader().setMinimumSectionSize(25)
-        self.table.verticalHeader().setDefaultSectionSize(25)
+        self.table.verticalHeader().setMinimumSectionSize(20)
+        self.table.verticalHeader().setDefaultSectionSize(20)
         self.table.verticalHeader().setHighlightSections(False)
 
         self.verticalLayout.addWidget(self.table)

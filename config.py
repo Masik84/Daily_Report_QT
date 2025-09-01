@@ -23,8 +23,8 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 # Основные файлы
 All_data_file = MAIN_FOLDER / "! All DATA !.xlsx"
 AddCosts_File = MAIN_FOLDER / "! ДопРасходы !.xlsx"
-CustDelivery_File = MAIN_FOLDER / "! Доставка клиентам !.xlsx"
-
+CustDelivery_File = MAIN_FOLDER / "! Доставка клиентам !2.xlsx"
+Total_DISPATCHED = MAIN_FOLDER / "WorkFiles" / "Total DISPATCHED_2025.xlsx"
 # Файлы реестров
 Material_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реестр номенклатур XLSX.xlsx"
 Customer_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реестр контрагентов XLSX.xlsx"

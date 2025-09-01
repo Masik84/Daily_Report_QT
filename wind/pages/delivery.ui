@@ -75,9 +75,12 @@ QTableWidget::item:selected{
 	background-color: #f6c294;
     color: #262626;
 }
+QTableWidget::item {
+                padding: 1px;  /* Уменьшаем отступы */
+                font: 9pt &quot;Tahoma&quot;;  /* Шрифт для ячеек */
+            }
 QHeaderView::section{
 	background-color: #f8f8f2;
-	max-width: 30px;
 	border: none;
 	border-style: none;
 }
@@ -121,7 +124,7 @@ QComboBox {
 	selection-color: #f28223;
 	selection-background-color: #f28223;
     color: #262626;
-	font: 10pt &quot;Tahoma&quot;;
+	font: 9pt &quot;Tahoma&quot;;
 }
 QComboBox:hover {
 	border: 2px solid #f28223;
@@ -164,7 +167,7 @@ QScrollBar:horizontal {
 }
 QScrollBar::handle:horizontal {
     background: #f6c294;
-    min-width: 25px;
+    min-width: 20px;
 	border-radius: 4px
 }
 QScrollBar::add-line:horizontal {
@@ -542,7 +545,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -552,7 +561,7 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -562,13 +571,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                  <property name="maximumSize">
                   <size>
                    <width>16777215</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -578,7 +587,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -718,13 +733,13 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
              </widget>
@@ -734,13 +749,13 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
              </widget>
@@ -771,6 +786,12 @@ QCalendarWidget QSpinBox::down-arrow {
               </property>
               <property name="calendarPopup">
                <bool>true</bool>
+              </property>
+              <property name="currentSectionIndex">
+               <number>0</number>
+              </property>
+              <property name="timeSpec">
+               <enum>Qt::TimeSpec::UTC</enum>
               </property>
              </widget>
             </item>
@@ -874,11 +895,31 @@ QCalendarWidget QSpinBox::down-arrow {
             <property name="leftMargin">
              <number>0</number>
             </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QPushButton" name="btn_disputch">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>30</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>Обновить из Disputch</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../resource.qrc">
+                <normaloff>:/icon/icon/refresh-cw — копия — копия.svg</normaloff>:/icon/icon/refresh-cw — копия — копия.svg</iconset>
+              </property>
+             </widget>
+            </item>
             <item>
              <widget class="QPushButton" name="btn_refresh">
               <property name="minimumSize">
                <size>
-                <width>160</width>
+                <width>170</width>
                 <height>30</height>
                </size>
               </property>
@@ -889,7 +930,7 @@ QCalendarWidget QSpinBox::down-arrow {
                </size>
               </property>
               <property name="text">
-               <string>Обновить данные</string>
+               <string>Обновить из Доставка</string>
               </property>
               <property name="icon">
                <iconset resource="../resource.qrc">
@@ -921,7 +962,7 @@ QCalendarWidget QSpinBox::down-arrow {
         <property name="font">
          <font>
           <family>Tahoma</family>
-          <pointsize>10</pointsize>
+          <pointsize>9</pointsize>
          </font>
         </property>
         <property name="verticalScrollBarPolicy">
@@ -970,10 +1011,10 @@ QCalendarWidget QSpinBox::down-arrow {
          <bool>true</bool>
         </attribute>
         <attribute name="verticalHeaderMinimumSectionSize">
-         <number>25</number>
+         <number>20</number>
         </attribute>
         <attribute name="verticalHeaderDefaultSectionSize">
-         <number>25</number>
+         <number>20</number>
         </attribute>
         <attribute name="verticalHeaderHighlightSections">
          <bool>false</bool>

@@ -17,6 +17,7 @@ from pages_functions.add_costs import AddSupplCostsPage
 from pages_functions.move import MovesPage
 from pages_functions.marketplace import MarketplacePage
 from pages_functions.temp_table import TempTablesPage
+from pages_functions.delivery import DeliveryPage
 
 from pages_functions.dashboard import Dashboard
 
@@ -82,7 +83,7 @@ class MyWindow(QMainWindow):
         self.btn_moves = self.ui.btn_Moves
         self.btn_MP = self.ui.btn_MarketPlace
         self.btn_tempTable = self.ui.btn_TempTable
-        
+        self.btn_delivery = self.ui.btn_CustDelivery
         self.btn_order = self.ui.btn_Cust_Orders
         self.btn_sales = self.ui.btn_Sales
         
@@ -105,6 +106,8 @@ class MyWindow(QMainWindow):
             self.btn_moves: MovesPage(),
             self.btn_MP: MarketplacePage(),
             self.btn_tempTable: TempTablesPage(),
+            self.btn_delivery: DeliveryPage(),
+            
             
             self.btn_order: Rep_Orders(),
             self.btn_sales: Rep_Invoices(),
@@ -134,6 +137,7 @@ class MyWindow(QMainWindow):
         self.btn_moves.clicked.connect(self.show_selected_window)
         self.btn_MP.clicked.connect(self.show_selected_window)
         self.btn_tempTable.clicked.connect(self.show_selected_window)
+        self.btn_delivery.clicked.connect(self.show_selected_window)
         
         self.btn_order.clicked.connect(self.show_selected_window)
         self.btn_sales.clicked.connect(self.show_selected_window)

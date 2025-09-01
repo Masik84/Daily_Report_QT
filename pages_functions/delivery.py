@@ -1,1262 +1,1000 @@
-from datetime import datetime
-
-import numpy as np
+import os
 import pandas as pd
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QWidget
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+import numpy as np
+from sqlalchemy import or_
+from PySide6.QtWidgets import (QMessageBox, QHeaderView, QTableWidget, QMenu, QTableWidgetItem, QWidget, QApplication)
+from PySide6.QtCore import Qt, QDate
+from PySide6.QtGui import QFont
 
-from db import db, engine
-# from models import Brands, Contracts, Customers_ALL, Delivery, Orders, Packs, Products, Stock
-from wind.pages.delivery_ui import Ui_Form as Del_Form
-from wind.pages.report_cols_ui import Ui_Form as Cols_Form
+from datetime import datetime, date, timedelta
 
+from wind.pages.delivery_ui import Ui_Form
+from config import CustDelivery_File, Total_DISPATCHED
+from models import Delivery_to_Customer, temp_Sales, Materials
+from db import db
 
-class Rep_Delivery(QWidget):
+class DeliveryPage(QWidget):
     def __init__(self):
-        super(Rep_Delivery, self).__init__()
-        self.ui = Del_Form()
+        super().__init__()
+        self.ui = Ui_Form()
         self.ui.setupUi(self)
         
-        # self.fill_in_prod_group()
-        # self.fill_in_del_date()
-        # self.fill_in_ord_date()
+        self._updating_table = False
+        self._original_values = {}
+        self._pending_changes = {}
         
-        # self.ui.line_brand.currentTextChanged.connect(self.fill_in_prod_group)
-        # self.ui.line_segment.currentTextChanged.connect(self.fill_in_prod_group)
-        
-        
-        self.ui.btn_select_cols.setToolTip('выбери колонки для отчета')
-        self.ui.btn_select_cols.clicked.connect(self.go_to_Select_Cols)
-        
-        self.ui.btn_open_file.clicked.connect(self.get_file)
-        self.ui.btn_upload_file.clicked.connect(self.upload_data)
-        # self.ui.btn_download.clicked.connect(self.dowload_Delivery)
-        
-        self.ui.rep_date.setCalendarPopup(True)
-
-        
-    def onDateChanged(self,date):
-        period = date.toString('yyyy-MM-dd')
-        return period
-        
-        
-    def go_to_Select_Cols(self):
-        self.columns_form = QWidget()
-        self.columns = Cols_Form()
-        self.columns.setupUi(self.columns_form)
-        self.columns_form.show()
-        self.columns.btn_select.clicked.connect(self.get_columns)
-        
-        # self.columns_form.close()
-
-
-    def get_columns(self):
-        pass
- 
-    
-    def get_file(self):
-        get_file = QFileDialog.getOpenFileName(self, 'Choose File')
-        if get_file:
-            self.ui.label_delivery_File.setText(get_file[0])
- 
-            
-    def upload_data(self, deliv_file_xls):
-        deliv_file_xls = self.ui.label_delivery_File.text()
-        if deliv_file_xls == 'File Path' or deliv_file_xls == 'Database was updated successfully':
-            msg = QMessageBox()
-            msg.setWindowTitle('Programm Error')
-            msg.setText('!!! Please choose the file with Delivery Data !!!')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                                            "font: 12pt  \"Segoe UI\";"
-                                            "color: #ff0000;\n"
-                                            " ")
-            msg.setIcon(QMessageBox.Critical)
-            x = msg.exec_()
+        today = datetime.now()
+        if today.day > 5:
+            target_date = QDate(today.year, today.month, 1)
         else:
-            deliv_data = self.read_deliv_file(deliv_file_xls)
-            self.update_Delivery(deliv_data)
+            # Получаем первый день прошлого месяца
+            first_day_prev_month = today.replace(day=1) - timedelta(days=1)
+            target_date = QDate(first_day_prev_month.year, first_day_prev_month.month, 1)
 
-            msg = QMessageBox()
-            msg.setText('Database was updated successfully')
-            msg.setStyleSheet("background-color: #f8f8f2;\n"
-                            "font: 10pt  \"Segoe UI\";"
-                            "color: #4b0082;\n"
-                            " ")
-            msg.setIcon(QMessageBox.Information)
-            x = msg.exec_()
-            self.ui.label_delivery_File.setText('File Path')
- 
+        self.ui.line_date.setDate(target_date)
+
+        self._setup_ui()
+        self._setup_connections()
+        self.refresh_all_comboboxes()
+
+    def _setup_ui(self):
+        """Настройка интерфейса таблицы"""
+        self.table = self.ui.table
+        
+        # Базовые настройки таблицы
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)
+        self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSortingEnabled(True)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        
+        # Устанавливаем высоту строки 20px
+        self.table.verticalHeader().setDefaultSectionSize(20)
+        self.table.verticalHeader().setMinimumSectionSize(20)
+        
+        # Контекстное меню
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+        
+        self.table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f0f0f0;
+                selection-background-color: #3daee9;
+                selection-color: black;
+                font: 9pt "Tahoma";  /* Добавляем шрифт для всей таблицы */
+            }
+            QTableWidget::item {
+                padding: 1px;  /* Уменьшаем отступы */
+                font: 9pt "Tahoma";  /* Шрифт для ячеек */
+            }
+            QTableWidget::item:editable {
+                background-color: #ffffd0;
+                border: #ffcc00;
+            }
+            QTableWidget::item:focus {
+                background-color: #ffffa0;
+                border: 2px solid #ff9900;
+            }
+        """)
+        
+        self._updating_table = False
+        
+        self.table.setTabKeyNavigation(True)
+        self.table.setCornerButtonEnabled(False)
+
+    def show_context_menu(self, position):
+        """Показ контекстного меню"""
+        menu = QMenu()
+        copy_action = menu.addAction("Копировать")
+        apply_action = menu.addAction("Применить изменения")
+        revert_action = menu.addAction("Отменить изменения")
+        
+        copy_action.triggered.connect(self.copy_cell_content)
+        apply_action.triggered.connect(self.apply_pending_changes)
+        revert_action.triggered.connect(self.revert_changes)
+        
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def _setup_connections(self):
+        """Настройка сигналов и слотов"""
+        self.table.itemChanged.connect(self.on_item_changed)
+        self.ui.btn_refresh.clicked.connect(self.refresh_from_delivery)
+        self.ui.btn_disputch.clicked.connect(self.refresh_from_disputch)
+        self.ui.btn_find.clicked.connect(self.find_delivery)
+
+    def on_item_changed(self, item):
+        """Обработчик изменения данных в таблице"""
+        if self._updating_table:
+            return
+        
+        try:
+            row = item.row()
+            column = item.column()
+            header = self.table.horizontalHeaderItem(column).text()
             
-    # def read_deliv_file(self, deliv_file_xls):
-    #     deliv_df = pd.read_excel(deliv_file_xls, sheet_name='Лист1')
-    #     deliv_df = deliv_df[['Реестр.№дог', 'ТипД', 'ПОтг', 'КССС Пок.', 'Имя Покупателя', 
-    #                                     'Заказ Покупателя', 'Д/зкзПок.', 'ЕжмР', 'КСССмат', 'ДатаЦены(Р)', 
-    #                                     'Поставка', 'Накладная', 'ДатаОтгр.', 'БУ-документ', 
-    #                                     'Номер счета-фактуры:', 'Фактура', 'Дата фактуры', 
-    #                                     'ПартияПоставки', 'Дата партии', 'Условие отгрузки', 'ИнкТм', 
-    #                                     'НСН', 'Пункт отгрузки', 'КССС ГрП.', 'Имя Грузополучателя', 'Тип договора', 'ЦенаЕжмР(безНДС)', 
-    #                                     'Влт(Р)', 'за(Р)', 'ЦенаФактуры(безНДС)', 'Влт(Ф)', 'за(Ф)', 'Объем поставки']]
-
-    #     deliv_df.rename(columns={
-    #                                                 'Реестр.№дог' : 'Contract_N',
-    #                                                 'ТипД' : 'CType',
-    #                                                 'ПОтг' : 'Stock',
-    #                                                 'КССС Пок.' : 'KSSS_cust',
-    #                                                 'Имя Покупателя' : 'Customer_Name',
-    #                                                 'Заказ Покупателя' : 'ord_CRM',
-    #                                                 'Д/зкзПок.' : 'ord_Date',
-    #                                                 'ЕжмР' : 'ord_SAP',
-    #                                                 'КСССмат' : 'KSSS_prod',
-    #                                                 'ДатаЦены(Р)' : 'Price_Date',
-    #                                                 'Поставка' : 'Supply_doc',
-    #                                                 'Накладная' : 'Delivery_doc',
-    #                                                 'ДатаОтгр.' : 'Delivery_Date',
-    #                                                 'БУ-документ' : 'Account_doc',
-    #                                                 'Номер счета-фактуры:' : 'Invoice',
-    #                                                 'Фактура' : 'Account_doc2',
-    #                                                 'Дата фактуры' : 'Invoice_Date',
-    #                                                 'ПартияПоставки' : 'Batch',
-    #                                                 'Дата партии' : 'Batch_Date',
-    #                                                 'Условие отгрузки' : 'Delivery_type',
-    #                                                 'ИнкТм' : 'InkTm',
-    #                                                 'НСН' : 'Country',
-    #                                                 'Пункт отгрузки' : 'Stock_Name',
-    #                                                 'КССС ГрП.' : 'KSSS_Shipto',
-    #                                                 'Имя Грузополучателя' : 'Shipto_Name',
-    #                                                 'Тип договора' : 'Contract_type',
-    #                                                 'ЦенаЕжмР(безНДС)' : 'ord_Price',
-    #                                                 'Влт(Р)' : 'ord_Curr',
-    #                                                 'за(Р)' : 'for_ord',
-    #                                                 'ЦенаФактуры(безНДС)' : 'inv_Price',
-    #                                                 'Влт(Ф)' : 'inv_Curr',
-    #                                                 'за(Ф)' : 'for_inv',
-    #                                                 'Объем поставки' : 'Volume'}, inplace = True)
-        
-    #     deliv_df = deliv_df[(deliv_df['Contract_type'] != 'Перемещение')]
-    #     deliv_df = deliv_df[(deliv_df['Contract_type'] != 'Битумы')]
-        
-    #     deliv_df['KSSS_prod'] = deliv_df['KSSS_prod'].fillna('-')
-    #     deliv_df = deliv_df.loc[~deliv_df['KSSS_prod'].str.contains(r'[^\d\.]')]
-    #     deliv_df = deliv_df[(deliv_df['KSSS_prod'] != '-')]
-
-    #     deliv_df['ord_CRM'] = deliv_df['ord_CRM'].fillna('-')
-    #     deliv_df = deliv_df[(deliv_df['ord_CRM'] != '-')]
-
-    #     deliv_df['Stock_Name'] = deliv_df['Stock_Name'].str.replace('"', '')
-    #     deliv_df['Customer_Name'] = deliv_df['Customer_Name'].str.replace('"', '')
-    #     deliv_df['Shipto_Name'] = deliv_df['Shipto_Name'].str.replace('"', '')
-
-
-    #     deliv_df['Account_doc'] = deliv_df['Account_doc'].astype(str)
-    #     deliv_df['Account_doc'] = deliv_df['Account_doc'].str[:-2]
-    #     deliv_df['Account_doc2'] = deliv_df['Account_doc2'].astype(str)
-    #     deliv_df['Account_doc2'] = deliv_df['Account_doc2'].str[:-2]
-
-    #     deliv_df['Stock'] = deliv_df['Stock'].astype(str)
-    #     deliv_df['Supply_doc'] = deliv_df['Supply_doc'].fillna('').astype(str)
-    #     deliv_df['Delivery_doc'] = deliv_df['Delivery_doc'].fillna('').astype(str)
-    #     deliv_df['Batch'] = deliv_df['Batch'].fillna('').astype(str)
-    #     deliv_df['Invoice'] = deliv_df['Invoice'].fillna('').astype(str)
-    #     deliv_df['ord_Curr'] = deliv_df['ord_Curr'].fillna('0').astype(str)
-    #     deliv_df['inv_Curr'] = deliv_df['inv_Curr'].fillna('0').astype(str)
-
-    #     deliv_df['KSSS_cust'] = deliv_df['KSSS_cust'].replace(np.nan, 0).astype(int)
-    #     deliv_df['ord_SAP'] = deliv_df['ord_SAP'].replace(np.nan, 0).astype(int)
-    #     deliv_df['KSSS_Shipto'] = deliv_df['KSSS_Shipto'].replace(np.nan, 0).astype(int)
-    #     deliv_df['KSSS_prod'] = deliv_df['KSSS_prod'].astype(int)
-
-    #     period = self.ui.rep_date.dateTime()
-    #     period = period.toString('yyyy-MM-dd')
-    #     period = datetime.strptime(period, '%Y-%m-%d')
-    #     if period.day != 1:
-    #         period = datetime(period.year, period.month, 1).strftime('%Y-%m-%d')
-    #     else:
-    #         period = period
+            # Получаем уникальный идентификатор строки (Bill + Sborka + Delivery_date)
+            bill_item = self.table.item(row, self._get_column_index('Bill'))
+            sborka_item = self.table.item(row, self._get_column_index('Sborka'))
+            date_item = self.table.item(row, self._get_column_index('Delivery_date'))
             
-    #     deliv_df.insert(0, 'Period', period)
-
-    #     deliv_df['Period'] =pd.to_datetime(deliv_df['Period'], format='%Y-%m-%d')
-    #     deliv_df['Period'] = pd.to_datetime(deliv_df['Period'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-    #     deliv_df['ord_Date'] = pd.to_datetime(deliv_df['ord_Date'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-    #     deliv_df['Price_Date'] = pd.to_datetime(deliv_df['Price_Date'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-    #     deliv_df['Delivery_Date'] = pd.to_datetime(deliv_df['Delivery_Date'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-    #     deliv_df['Invoice_Date'] = pd.to_datetime(deliv_df['Invoice_Date'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-    #     deliv_df['Batch_Date'] = pd.to_datetime(deliv_df['Batch_Date'], format='%Y%m%d', errors='coerce').dt.date.replace({pd.NaT: ''})
-
-    #     reques = db.execute(select(Products.KSSS_prod, Products.Product_Name)).all()
-    #     product_df = pd.DataFrame(reques)
-    #     product_df['KSSS_prod'] = product_df['KSSS_prod'].astype(int)
-
-    #     deliv_df = pd.merge(deliv_df, product_df, how='left', on='KSSS_prod')
-        
-    #     deliv_df['Product_Name'] = deliv_df['Product_Name'].fillna('-')
-    #     deliv_df = deliv_df[(deliv_df.Product_Name != '-')]
-    #     deliv_df = deliv_df.drop(['Product_Name'], axis = 1)
-
-    #     deliv_df['del_merge'] = deliv_df['ord_SAP'].astype (str) + deliv_df['KSSS_prod'].astype (str) + deliv_df['Supply_doc'].astype (str) + deliv_df['Delivery_doc'].astype (str) + deliv_df['Batch'].astype (str)
-
-    #     deliv_df['ord_Price'] = np.where(deliv_df['for_ord'] == 1, deliv_df['ord_Price'] * 1000, deliv_df['ord_Price'])
-    #     deliv_df['inv_Price'] = np.where(deliv_df['for_inv'] == 1, deliv_df['inv_Price'] * 1000, deliv_df['inv_Price'])
-        
-    #     deliv_df['Price'] = deliv_df.apply(self.check_Price, axis=1)
-    #     deliv_df.pop('ord_Price')
-    #     deliv_df.pop('inv_Price')
-
-    #     deliv_df['Curr'] = deliv_df.apply(self.check_Curr, axis=1)
-    #     deliv_df.pop('for_ord')
-    #     deliv_df.pop('for_inv')
-
-    #     deliv_df['DocType'] = 'Delivery'
-
-    #     deliv_df = deliv_df.groupby(['del_merge', 'DocType', 'Period', 'Contract_N', 'CType', 'Stock', 'KSSS_cust', 'Customer_Name', 
-    #                                                     'ord_CRM', 'ord_Date', 'ord_SAP', 'KSSS_prod', 'Price_Date', 'Supply_doc', 'Delivery_doc', 
-    #                                                     'Delivery_Date', 'Account_doc', 'Invoice', 'Account_doc2', 'Invoice_Date', 'Batch', 
-    #                                                     'Batch_Date', 'Delivery_type', 'InkTm', 'Country', 'Stock_Name', 'KSSS_Shipto', 
-    #                                                     'Shipto_Name', 'Contract_type', 'Price', 'Curr']).sum().reset_index()
-
-    #     deliv_data = deliv_df.to_dict('records')
-
-    #     return deliv_data
-
-
-    # def update_Delivery(self, data):
-    #     deliv_for_create = []
-    #     deliv_for_update = []
-    #     for row in data:
-    #         deliv_exists = Delivery.query.filter(Delivery.del_merge == str(row['del_merge'])).count()
-    #         if row['Invoice_Date'] == '':
-    #             row['Invoice_Date'] = None
-    #         else:
-    #             row['Invoice_Date'] = row['Invoice_Date']
-
-    #         if row['Batch_Date'] == '':
-    #             row['Batch_Date'] = None
-    #         else:
-    #             row['Batch_Date'] = row['Batch_Date']
-
-    #         if deliv_exists == 0:
-    #             deliv_list = {'del_merge' : str(row['del_merge']),
-    #                                 'DocType' : row['DocType'],
-    #                                 'Period' : row['Period'],
-    #                                 'Contract_N' : row['Contract_N'],
-    #                                 'CType' : row['CType'],
-    #                                 'Stock' : row['Stock'],
-    #                                 'KSSS_cust' : row['KSSS_cust'],
-    #                                 'Customer_Name' : row['Customer_Name'],
-    #                                 'ord_CRM' : row['ord_CRM'],
-    #                                 'ord_Date' : row['ord_Date'],
-    #                                 'ord_SAP' : row['ord_SAP'],
-    #                                 'KSSS_prod' : row['KSSS_prod'],
-    #                                 'Price_Date' : row['Price_Date'],
-    #                                 'Supply_doc' : row['Supply_doc'],
-    #                                 'Delivery_doc' : row['Delivery_doc'],
-    #                                 'Delivery_Date' : row['Delivery_Date'],
-    #                                 'Account_doc' : row['Account_doc'],
-    #                                 'Invoice' : row['Invoice'],
-    #                                 'Account_doc2' : row['Account_doc2'],
-    #                                 'Invoice_Date' : row['Invoice_Date'],
-    #                                 'Batch' : row['Batch'],
-    #                                 'Batch_Date' : row['Batch_Date'],
-    #                                 'Delivery_type' : row['Delivery_type'],
-    #                                 'InkTm' : row['InkTm'],
-    #                                 'Country' : row['Country'],
-    #                                 'Stock_Name' : row['Stock_Name'],
-    #                                 'KSSS_Shipto' : row['KSSS_Shipto'],
-    #                                 'Shipto_Name' : row['Shipto_Name'],
-    #                                 'Contract_type' : row['Contract_type'],
-    #                                 'Price' : row['Price'],
-    #                                 'Curr' : row['Curr'],
-    #                                 'Volume' : row['Volume']}
-    #             deliv_for_create.append(deliv_list)
-
-    #         elif deliv_exists > 0:
-    #             deliv_list = {'id' : self.get_id_Delivery(row['del_merge']),
-    #                                 'del_merge' : str(row['del_merge']),
-    #                                 'DocType' : row['DocType'],
-    #                                 'Period' : row['Period'],
-    #                                 'Contract_N' : row['Contract_N'],
-    #                                 'CType' : row['CType'],
-    #                                 'Stock' : row['Stock'],
-    #                                 'KSSS_cust' : row['KSSS_cust'],
-    #                                 'Customer_Name' : row['Customer_Name'],
-    #                                 'ord_CRM' : row['ord_CRM'],
-    #                                 'ord_Date' : row['ord_Date'],
-    #                                 'ord_SAP' : row['ord_SAP'],
-    #                                 'KSSS_prod' : row['KSSS_prod'],
-    #                                 'Price_Date' : row['Price_Date'],
-    #                                 'Supply_doc' : row['Supply_doc'],
-    #                                 'Delivery_doc' : row['Delivery_doc'],
-    #                                 'Delivery_Date' : row['Delivery_Date'],
-    #                                 'Account_doc' : row['Account_doc'],
-    #                                 'Invoice' : row['Invoice'],
-    #                                 'Account_doc2' : row['Account_doc2'],
-    #                                 'Invoice_Date' : row['Invoice_Date'],
-    #                                 'Batch' : row['Batch'],
-    #                                 'Batch_Date' : row['Batch_Date'],
-    #                                 'Delivery_type' : row['Delivery_type'],
-    #                                 'InkTm' : row['InkTm'],
-    #                                 'Country' : row['Country'],
-    #                                 'Stock_Name' : row['Stock_Name'],
-    #                                 'KSSS_Shipto' : row['KSSS_Shipto'],
-    #                                 'Shipto_Name' : row['Shipto_Name'],
-    #                                 'Contract_type' : row['Contract_type'],
-    #                                 'Price' : row['Price'],
-    #                                 'Curr' : row['Curr'],
-    #                                 'Volume' : row['Volume']}
-    #             deliv_for_update.append(deliv_list)
+            if not all([bill_item, sborka_item, date_item]):
+                return
                 
-    #     db.bulk_insert_mappings(Delivery, deliv_for_create)
-    #     db.bulk_update_mappings(Delivery, deliv_for_update)
-
-    #     try:
-    #         db.commit()
-    #     except SQLAlchemyError as e:
-    #         print_error(row, "Ошибка целостности данных: {}", e)
-    #         db.rollback()
-    #         raise
-    #     except ValueError as e:
-    #         print_error(row, "Неправильный формат данных: {}", e)
-    #         db.rollback()
-    #         raise
-        
-        
-    #     self.ui.line_del_year.clear()
-    #     self.ui.line_del_qtr.clear()
-    #     self.ui.line_del_mnth.clear()
-        
-    #     self.ui.line_ord_year.clear()
-    #     self.ui.line_ord_qtr.clear()
-    #     self.ui.line_ord_mnth.clear()
-        
-    #     self.ui.line_pr_group.clear()
-        
-    #     self.fill_in_prod_group()
-    #     self.fill_in_del_date()
-    #     self.fill_in_ord_date()
-        
-    #     return deliv_for_create
-
-
-    # def get_id_Delivery(self, del_merge):
-    #     db_data = Delivery.query.filter(Delivery.del_merge == del_merge).first()
-    #     delivery_id = db_data.id
-
-    #     return delivery_id
-
-
-    # def get_all_Delivery_from_db(self):
-    #     deliv_reques = db.query(Delivery)
-    #     deliv_data = pd.read_sql_query(deliv_reques.statement, engine)
-        
-    #     order_request = db.execute(select(Orders.id, Orders.ord_merge, Orders.ord_CRM, Orders.ord_Date, Orders.ord_SAP,
-    #                                 Orders.ord_Origin, Orders.ord_Orig_Date, Orders.Price_Date, Orders.PrTp)).all()
-    #     order_data = pd.DataFrame(order_request)
-        
-    #     cust_reques = db.query(Customers_ALL, Contracts).join(Contracts
-    #                                     ).with_entities(Customers_ALL.id, Customers_ALL.Customer_Name, Contracts.Contract_N)
-    #     cust_data = pd.DataFrame(cust_reques)
-        
-    #     prod_reques = db.query(Products, Packs, Brands
-    #                      ).join(Packs).join(Brands
-    #                                         ).with_entities(Products.id, Products.KSSS_prod, Products.Product_Name, Products.Product_group,
-    #                                                         Products.LoB, Products.Segment, Products.BO_type, Products.Production,
-    #                                                         Products.Production_type, Packs.Pack, Packs.Pack_group,
-    #                                                         Packs.Pack_group2, Packs.Pack_group3, Brands.Brand)
-    #     prod_data = pd.DataFrame(prod_reques)
-        
-    #     stock_reques = db.query(Stock)
-    #     stock_data = pd.read_sql_query(stock_reques.statement, engine)
-    #     stock_data = stock_data[['id', 'Stock', 'Stock_Name']]
-
-    #     deliv_data = pd.merge(deliv_data, cust_data, how='left', left_on='cust_id', right_on='id')
-    #     deliv_data = pd.merge(deliv_data, prod_data, how='left', left_on='prod_id', right_on='id')
-    #     deliv_data = deliv_data.drop(columns=['id_x', 'ord_merge', 'contr_id', 'cust_id', 'prod_id', 'id_y', 'id'])
-    #     deliv_data = pd.merge(deliv_data, stock_data, how='left', left_on='stock_id', right_on='id')
-    #     deliv_data = deliv_data.drop(columns=['stock_id', 'id'])
-    #     deliv_data = pd.merge(deliv_data, order_data, how='left', left_on='order_id', right_on='id')
-    #     deliv_data = deliv_data.fillna('')
-
-    #     return order_data
-
-
-    # def fill_in_del_date(self):
-    #     period_request = db.execute(select(Delivery.Period, Delivery.KSSS_prod, Delivery.KSSS_cust)).all()
-    #     deliv_date = pd.DataFrame(period_request)
-        
-    #     prod_request = db.execute(select(Products.KSSS_prod, Products.Brand, Products.Segment, Products.Product_group)).all()
-    #     prod_data = pd.DataFrame(prod_request)
-
-    #     Brand = self.ui.line_brand.currentText()
-    #     Product_Segment = self.ui.line_segment.currentText()
-    #     Product_group = self.ui.line_pr_group.currentText()
-
-    #     if deliv_date.empty == True or prod_data.empty == True:
-    #         self.ui.line_del_year.addItem('-')
-    #         self.ui.line_del_qtr.addItem('-')
-    #         self.ui.line_del_mnth.addItem('-')
+            unique_id = f"{bill_item.text()}_{sborka_item.text()}_{date_item.text()}"
+            new_value = item.text()
             
-    #     else:
-    #         deliv_date = pd.merge(deliv_date, prod_data, how='left', on='KSSS_prod')
-    #         deliv_date = deliv_date.drop_duplicates(subset='KSSS_prod')
-    #         deliv_date['year'] = pd.DatetimeIndex(deliv_date['Period']).year
-    #         deliv_date['mnth'] = pd.DatetimeIndex(deliv_date['Period']).month
-    #         deliv_date['qtr'] = deliv_date.apply(self.check_Quarter, axis=1)
-        
-    #         if Brand == '-' and Product_Segment == '-' and Product_group == '-':
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
+            # Сохраняем изменение
+            if unique_id not in self._pending_changes:
+                self._pending_changes[unique_id] = {}
+            
+            self._pending_changes[unique_id][header] = new_value
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка: {str(e)}")
 
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-                
-    #         elif Brand != '-' and Product_Segment == '-' and Product_group == '-':
-    #             deliv_date = [['year', 'qtr', 'mnth', 'Brand']]
-    #             deliv_date = deliv_date[(deliv_date['Brand'] == Brand)]
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
-                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year = df_year.drop_duplicates()
-    #             df_qtr = df_qtr.drop_duplicates()
-    #             df_mnth = df_mnth.drop_duplicates()
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-                
-    #         elif Brand != '-' and Product_Segment != '-' and Product_group == '-':
-    #             deliv_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment']]
-    #             deliv_date = deliv_date[(deliv_date['Brand'] == Brand)]
-    #             deliv_date = deliv_date[(deliv_date['Segment'] == Product_Segment)]
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
-                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year = df_year.drop_duplicates()
-    #             df_qtr = df_qtr.drop_duplicates()
-    #             df_mnth = df_mnth.drop_duplicates()
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-            
-    #         elif Brand == '-' and Product_Segment != '-' and Product_group == '-':
-    #             deliv_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment']]
-    #             deliv_date = deliv_date[(deliv_date['Segment'] == Product_Segment)]
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
-                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year = df_year.drop_duplicates()
-    #             df_qtr = df_qtr.drop_duplicates()
-    #             df_mnth = df_mnth.drop_duplicates()
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-            
-    #         elif Brand != '-' and Product_Segment == '-' and Product_group != '-':
-    #             deliv_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment', 'Product_group']]
-    #             deliv_date = deliv_date[(deliv_date['Brand'] == Brand)]
-    #             deliv_date = deliv_date[(deliv_date['Product_group'] == Product_group)]
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
-                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year = df_year.drop_duplicates()
-    #             df_qtr = df_qtr.drop_duplicates()
-    #             df_mnth = df_mnth.drop_duplicates()
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-                
-    #         elif Brand != '-' and Product_Segment != '-' and Product_group != '-':
-    #             deliv_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment', 'Product_group']]
-    #             deliv_date = deliv_date[(deliv_date['Brand'] == Brand)]
-    #             deliv_date = deliv_date[(deliv_date['Segment'] == Product_Segment)]
-    #             deliv_date = deliv_date[(deliv_date['Product_group'] == Product_group)]
-    #             df_year = deliv_date[['year']]
-    #             df_qtr = deliv_date[['qtr']]
-    #             df_mnth = deliv_date[['mnth']]
-                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year = df_year.drop_duplicates()
-    #             df_qtr = df_qtr.drop_duplicates()
-    #             df_mnth = df_mnth.drop_duplicates()
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_del_year.addItems(df_year_list)
-    #             self.ui.line_del_qtr.addItems(df_qtr_list)
-    #             self.ui.line_del_mnth.addItems(df_mnth_list)
-                
-        
-    # def fill_in_ord_date(self):      
-    #     period_request = db.execute(select(Delivery.ord_Date, Delivery.KSSS_prod, Delivery.KSSS_cust)).all()
-    #     order_date = pd.DataFrame(period_request)
-        
-    #     prod_request = db.execute(select(Products.KSSS_prod, Products.Brand, Products.Segment, Products.Product_group)).all()
-    #     prod_data = pd.DataFrame(prod_request)
+    def _get_column_index(self, column_name):
+        """Получение индекса колонки по имени"""
+        for col in range(self.table.columnCount()):
+            if self.table.horizontalHeaderItem(col).text() == column_name:
+                return col
+        return -1
 
-    #     Brand = self.ui.line_brand.currentText()
-    #     Product_Segment = self.ui.line_segment.currentText()
-    #     Product_group = self.ui.line_pr_group.currentText()
-        
-    #     d_year = self.ui.line_del_year.currentText()
-    #     d_qtr = self.ui.line_del_qtr.currentText()
-    #     d_mnth = self.ui.line_del_mnth.currentText()
-
-    #     if order_date.empty == True or prod_data.empty == True:
-    #         self.ui.line_ord_year.addItem('-')
-    #         self.ui.line_ord_qtr.addItem('-')
-    #         self.ui.line_ord_mnth.addItem('-')
+    def apply_pending_changes(self):
+        """Применение всех ожидающих изменений"""
+        if not self._pending_changes:
+            self.show_message("Нет изменений для применения")
+            return
             
-    #     elif d_year != '-' or d_qtr != '-' or d_mnth != '-':
-    #         self.ui.line_ord_year.addItem('-')
-    #         self.ui.line_ord_qtr.addItem('-')
-    #         self.ui.line_ord_mnth.addItem('-')
-                 
-    #     else:
-    #         order_date = pd.merge(order_date, prod_data, how='left', on='KSSS_prod')
-    #         order_date = order_date.drop_duplicates(subset='KSSS_prod')
-    #         order_date['year'] = pd.DatetimeIndex(order_date['ord_Date']).year
-    #         order_date['mnth'] = pd.DatetimeIndex(order_date['ord_Date']).month
-    #         order_date['qtr'] = order_date.apply(self.check_Quarter, axis=1)
-
-    #         if Brand == '-' and Product_Segment == '-' and Product_group == '-':
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
+        try:
+            for unique_id, changes in self._pending_changes.items():
+                bill, sborka, delivery_date_str = unique_id.split('_', 2)
+                delivery_date = datetime.strptime(delivery_date_str, '%Y-%m-%d').date()
                 
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
+                # Находим запись в БД
+                delivery = db.query(Delivery_to_Customer).filter(
+                    Delivery_to_Customer.Bill == bill,
+                    Delivery_to_Customer.Sborka == sborka,
+                    Delivery_to_Customer.Delivery_date == delivery_date
+                ).first()
                 
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
+                if not delivery:
+                    continue
                 
-    #         elif Brand != '-' and Product_Segment == '-' and Product_group == '-':
-    #             order_date = [['year', 'qtr', 'mnth', 'Brand']]
-    #             order_date = order_date[(order_date['Brand'] == Brand)]
-
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
-                
-    #         elif Brand != '-' and Product_Segment != '-' and Product_group == '-':
-    #             order_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment']]
-    #             order_date = order_date[(order_date['Brand'] == Brand)]
-    #             order_date = order_date[(order_date['Segment'] == Product_Segment)]
-
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
-            
-    #         elif Brand == '-' and Product_Segment != '-' and Product_group == '-':
-    #             order_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment']]
-    #             order_date = order_date[(order_date['Segment'] == Product_Segment)]
-
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
-            
-    #         elif Brand != '-' and Product_Segment == '-' and Product_group != '-':
-    #             order_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment', 'Product_group']]
-    #             order_date = order_date[(order_date['Brand'] == Brand)]
-    #             order_date = order_date[(order_date['Product_group'] == Product_group)]
-
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
-                
-    #         elif Brand != '-' and Product_Segment != '-' and Product_group != '-':
-    #             order_date = [['year', 'qtr', 'mnth', 'Brand', 'Segment', 'Product_group']]
-    #             order_date = order_date[(order_date['Brand'] == Brand)]
-    #             order_date = order_date[(order_date['Segment'] == Product_Segment)]
-    #             order_date = order_date[(order_date['Product_group'] == Product_group)]
-
-    #             df_year = order_date[['year']]
-    #             df_qtr = order_date[['qtr']]
-    #             df_mnth = order_date[['mnth']]
-
-    #             df_year = df_year.drop_duplicates(subset='year')
-    #             df_qtr = df_qtr.drop_duplicates(subset='qtr')
-    #             df_mnth = df_mnth.drop_duplicates(subset='mnth')
-    #             df_year = df_year.sort_values(by='year')
-    #             df_qtr = df_qtr.sort_values(by='qtr')
-    #             df_mnth = df_mnth.sort_values(by='mnth')
-                                
-    #             df_year['year'] = df_year['year'].astype(str)
-    #             df_qtr['qtr'] = df_qtr['qtr'].astype(str)
-    #             df_mnth['mnth'] = df_mnth['mnth'].astype(str)
-    #             df_mnth['mnth'] = df_mnth.apply(self.chng_nmth_formate, axis=1)
-                
-    #             df_year_list = df_year['year'].astype(str).tolist()
-    #             df_qtr_list = df_qtr['qtr'].tolist()
-    #             df_mnth_list = df_mnth['mnth'].tolist()
-    #             df_year_list.insert(0, '-')
-    #             df_qtr_list.insert(0, '-')
-    #             df_mnth_list.insert(0, '-')
-    #             self.ui.line_ord_year.addItems(df_year_list)
-    #             self.ui.line_ord_qtr.addItems(df_qtr_list)
-    #             self.ui.line_ord_mnth.addItems(df_mnth_list)
-      
-            
-    # def fill_in_prod_group(self):
-    #     group_request = db.execute(select(Delivery.KSSS_prod)).all()
-    #     group_data = pd.DataFrame(group_request)
-        
-    #     prod_request = db.execute(select(Products.KSSS_prod, Products.Brand, Products.Segment, Products.Product_group)).all()
-    #     prod_data = pd.DataFrame(prod_request)
-        
-    #     Brand = self.ui.line_brand.currentText()
-    #     Product_Segment = self.ui.line_segment.currentText()
-        
-    #     if group_data.empty == True or prod_data.empty == True:
-    #         self.ui.line_pr_group.addItem('-')
-        
-    #     else:
-    #         group_data = pd.merge(group_data, prod_data, how='left', on='KSSS_prod')
-    #         group_data = group_data[(group_data['Brand'] != '-')]
-            
-    #         if Brand == '-' and Product_Segment == '-':
-    #             group_data = group_data[['Product_group']]
-    #             group_data = group_data.drop_duplicates(subset='Product_group')
-    #             group_data = group_data.sort_values(by='Product_group')
-    #             group_data_list = group_data['Product_group'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand != '-' and Product_Segment == '-':
-    #             group_data = group_data[['Product_group', 'Brand']]
-    #             group_data = group_data[(group_data['Brand'] == Brand)]
-    #             group_data = group_data.drop_duplicates(subset='Product_group')
-    #             group_data = group_data.sort_values(by='Product_group')
-    #             group_data_list = group_data['Product_group'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand != '-' and Product_Segment != '-':
-    #             group_data = group_data[['Product_group', 'Brand', 'Segment']]
-    #             group_data = group_data[(group_data['Brand'] == Brand)]
-    #             group_data = group_data[(group_data['Segment'] == Product_Segment)]
-    #             group_data = group_data.drop_duplicates(subset='Product_group')
-    #             group_data = group_data.sort_values(by='Product_group')
-    #             group_data_list = group_data['Product_group'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand == '-' and Product_Segment != '-':
-    #             group_data = group_data[['Product_group', 'Segment']]
-    #             group_data = group_data[(group_data['Segment'] == Product_Segment)]
-    #             group_data = group_data.drop_duplicates(subset='Product_group')
-    #             group_data = group_data.sort_values(by='Product_group')
-    #             group_data_list = group_data['Product_group'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-        
-    
-    # def fill_in_prod_segment(self):
-    #     group_request = db.execute(select(Delivery.KSSS_prod)).all()
-    #     group_data = pd.DataFrame(group_request)
-        
-    #     prod_request = db.execute(select(Products.KSSS_prod, Products.Brand, Products.Segment, Products.Product_group)).all()
-    #     prod_data = pd.DataFrame(prod_request)
-        
-    #     Brand = self.ui.line_brand.currentText()
-    #     Product_group = self.ui.line_pr_group.currentText()
-        
-    #     if group_data.empty == True or prod_data.empty == True:
-    #         self.ui.line_pr_group.addItem('-')
-        
-    #     else:
-    #         group_data = pd.merge(group_data, prod_data, how='left', on='KSSS_prod')
-            
-    #         if Brand == '-' and Product_group == '-':
-    #             group_data = group_data[['Segment']]
-    #             group_data = group_data.drop_duplicates(subset='Segment')
-    #             group_data = group_data.sort_values(by='Segment')
-    #             group_data_list = group_data['Segment'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand != '-' and Product_group == '-':
-    #             group_data = group_data[['Segment', 'Brand']]
-    #             group_data = group_data[(group_data['Brand'] == Brand)]
-    #             group_data = group_data.drop_duplicates(subset='Segment')
-    #             group_data = group_data.sort_values(by='Segment')
-    #             group_data_list = group_data['Segment'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand != '-' and Product_group != '-':
-    #             group_data = group_data[['Segment', 'Brand', 'Segment']]
-    #             group_data = group_data[(group_data['Brand'] == Brand)]
-    #             group_data = group_data[(group_data['Product_group'] == Product_group)]
-    #             group_data = group_data.drop_duplicates(subset='Segment')
-    #             group_data = group_data.sort_values(by='Segment')
-    #             group_data_list = group_data['Segment'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    #         elif Brand == '-' and Product_group != '-':
-    #             group_data = group_data[['Product_group', 'Segment']]
-    #             group_data = group_data[(group_data['Product_group'] == Product_group)]
-    #             group_data = group_data.drop_duplicates(subset='Segment')
-    #             group_data = group_data.sort_values(by='Segment')
-    #             group_data_list = group_data['Segment'].tolist()
-    #             group_data_list.insert(0, '-')
-    #             self.ui.line_pr_group.addItems(group_data_list)
-
-    
-    # def dowload_Delivery(self):
-    #     savePath = QFileDialog.getSaveFileName(None, 'Blood Hound', 'Delivery.xlsx', 'Excel Workbook (*.xlsx)')
-        
-    #     deliv_request = db.execute(select(Delivery.Period, Delivery.Contract_N, Delivery.CType, Delivery.Stock, Delivery.KSSS_cust, 
-    #                                                             Delivery.Customer_Name, Delivery.ord_CRM, Delivery.ord_Date, Delivery.ord_SAP, 
-    #                                                             Delivery.KSSS_prod, Delivery.Price_Date, Delivery.Supply_doc, Delivery.Delivery_doc, 
-    #                                                             Delivery.Delivery_Date, Delivery.Account_doc, Delivery.Invoice, Delivery.Account_doc2, 
-    #                                                             Delivery.Invoice_Date, Delivery.Batch, Delivery.Batch_Date, Delivery.Delivery_type, 
-    #                                                             Delivery.InkTm, Delivery.Country, Delivery.Pack_group2, Delivery.Stock_Name, 
-    #                                                             Delivery.KSSS_Shipto, Delivery.Shipto_Name, Delivery.Contract_type, Delivery.Price, 
-    #                                                             Delivery.Curr, Delivery.Volume)).all()
-    #     deliv_data = pd.DataFrame(deliv_request)
-        
-    #     prod_request = db.execute(select(Products.KSSS_prod, Products.Product_Name, Products.Pack, Products.Pack_group, 
-    #                                                             Products.Brand, Products.Production, Products.Product_group, Products.Segment, 
-    #                                                             Products.LoB, Products.BO_type, Products.Pack_group2, Products.Production_type)).all()
-    #     prod_data = pd.DataFrame(prod_request)
-        
-    #     cust_request = db.execute(select(Customers.KSSS_cust, Customers.Customer_Name, Customers.merge, Customers.Cust_type, 
-    #                                                             Customers.AM, Customers.STL, Customers.SM)).all()
-    #     cust_data = pd.DataFrame(cust_request)
-        
-    #     d_year = self.ui.line_del_year.currentText()
-    #     d_qtr = self.ui.line_del_qtr.currentText()
-    #     d_mnth = self.ui.line_del_mnth.currentText()
-        
-    #     o_year = self.ui.line_ord_year.currentText()
-    #     o_qtr = self.ui.line_ord_qtr.currentText()
-    #     o_mnth = self.ui.line_ord_mnth.currentText()
-        
-    #     Brand = self.ui.line_brand.currentText()
-    #     Segment = self.ui.line_segment.currentText()
-    #     Product_group = self.ui.line_pr_group.currentText()
-        
-    #     KSSS_Cust = self.ui.line_cust_ksss.text()
-        
-                
-    #     if deliv_data.empty == True:
-    #         msg = QMessageBox()
-    #         msg.setText('There is no Delivery data in Database')
-    #         msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                         "font: 10pt  \"Segoe UI\";"
-    #                         "color: #4b0082;\n"
-    #                         " ")
-    #         msg.setIcon(QMessageBox.Critical)
-    #         x = msg.exec_()
-            
-    #     else:
-    #         cust_data['KSSS_cust'] = cust_data['KSSS_cust'].astype(int)
-    #         cust_data['merge'] = cust_data['merge'].astype(str)
-            
-    #         deliv_data['KSSS_cust'] = deliv_data['KSSS_cust'].astype(int)
-    #         deliv_data['KSSS_prod'] = deliv_data['KSSS_prod'].astype(int)
-    #         deliv_data['KSSS_Shipto'] = deliv_data['KSSS_Shipto'].astype(int)
-    #         deliv_data['Price'] = deliv_data['Price'].astype(float)
-    #         deliv_data['Volume'] = deliv_data['Volume'].astype(float)
-            
-    #         deliv_data['d_year'] = pd.DatetimeIndex(deliv_data['Delivery_Date']).year
-    #         deliv_data['d_mnth'] = pd.DatetimeIndex(deliv_data['Delivery_Date']).month
-    #         deliv_data['d_qtr'] = deliv_data.apply(self.check_d_Quarter, axis=1)
-            
-    #         deliv_data['o_year'] = pd.DatetimeIndex(deliv_data['ord_Date']).year
-    #         deliv_data['o_mnth'] = pd.DatetimeIndex(deliv_data['ord_Date']).month
-    #         deliv_data['o_qtr'] = deliv_data.apply(self.check_o_Quarter, axis=1)
-            
-    #         deliv_data = pd.merge(deliv_data, prod_data, how='left', on='KSSS_prod')
-    #         deliv_data['LoB'] = deliv_data.apply(self.check_prod_LoB, axis=1)
-            
-    #         cust_df = cust_data[['KSSS_cust', 'Cust_type']]
-    #         cust_df = cust_df.drop_duplicates(subset='KSSS_cust')
-            
-    #         deliv_data = pd.merge(deliv_data, cust_df, how='left', on='KSSS_cust')
-    #         deliv_data['Cust_type'] = deliv_data['Cust_type'].fillna('other_LLK')
-    #         deliv_data['Cust_type'] = deliv_data.apply(self.check_Cust_type, axis=1)
-            
-    #         cust_df1 = cust_data[['merge', 'AM', 'STL', 'SM']]
-    #         cust_df2 = cust_data[['KSSS_cust', 'AM', 'STL', 'SM']]
-            
-    #         deliv_data['merge'] = deliv_data['KSSS_cust'].astype(str) + deliv_data['LoB']
-            
-    #         deliv_data1 = pd.merge(deliv_data, cust_df1, how='left', on='merge')
-    #         deliv_data1['AM'] = deliv_data1['AM'].fillna('-')
-    #         deliv_data1['STL'] = deliv_data1['STL'].fillna('-')
-    #         deliv_data1['SM'] = deliv_data1['SM'].fillna('-')
-    #         deliv_data1 = deliv_data1[(deliv_data1['AM'] != '-')]
-            
-    #         deliv_data2 = pd.merge(deliv_data, cust_df2, how='left', on='KSSS_cust')
-    #         deliv_data2['AM'] = deliv_data2['AM'].fillna('-')
-    #         deliv_data2['STL'] = deliv_data2['STL'].fillna('-')
-    #         deliv_data2['SM'] = deliv_data2['SM'].fillna('-')
-            
-    #         frames = [deliv_data1, deliv_data2]
-    #         deliv_data = pd.concat(frames)
-            
-    #         deliv_data = deliv_data.drop(['merge'], axis=1)
-            
-    #         deliv_data_cust = pd.DataFrame()
-            
-    #         if self.ui.check_teb_dealer.isChecked() == True:
-    #             t_deal = deliv_data[(deliv_data['Cust_type'] == 'Dealer_TEBOIL')]
-    #             frame2 = [deliv_data_cust, t_deal]
-    #             deliv_data_cust = pd.concat(frame2)
-                
-    #         if self.ui.check_teb_direct.isChecked() == True:
-    #             t_dir = deliv_data[(deliv_data['Cust_type'] == 'Direct_TEBOIL')]
-    #             frame2 = [deliv_data_cust, t_dir]
-    #             deliv_data_cust = pd.concat(frame2)
+                # Применяем изменения
+                for header, new_value in changes.items():
+                    if header == 'Delivery_amount_w_VAT':
+                        delivery.Delivery_amount_w_VAT = float(new_value) if new_value else 0.0
+                        # Пересчитываем ставку без НДС
+                        delivery.Delivery_amount_wo_VAT = round(float(new_value) / 1.2, 2) if new_value else 0.0
                     
-    #         if self.ui.check_teb_fws.isChecked() == True:
-    #             t_fws = deliv_data[(deliv_data['Cust_type'] == 'FWS_TEBOIL')]
-    #             frame2 = [deliv_data_cust, t_fws]
-    #             deliv_data_cust = pd.concat(frame2)
-                        
-    #         if self.ui.check_teb_market.isChecked() == True:
-    #             t_mp = deliv_data[(deliv_data['Cust_type'] == 'MarketPlace_TEBOIL')]
-    #             frame2 = [deliv_data_cust, t_mp]
-    #             deliv_data_cust = pd.concat(frame2)
-
-    #         if self.ui.check_luk_dealer.isChecked() == True:
-    #             l_deal = deliv_data[(deliv_data['Cust_type'] == 'Dealer_LLK')]
-    #             frame2 = [deliv_data_cust, l_deal]
-    #             deliv_data_cust = pd.concat(frame2)
-
-    #         if self.ui.check_luk_direct.isChecked() == True:
-    #             l_dir = deliv_data[(deliv_data['Cust_type'] == 'Direct_LLK')]
-    #             frame2 = [deliv_data_cust, l_dir]
-    #             deliv_data_cust = pd.concat(frame2)
+                    elif header == 'Sborka' or header == 'Bill':
+                        # Обновляем связанные данные при изменении Sborka или Bill
+                        setattr(delivery, header, new_value)
+                        self._update_invoice_data(delivery)
                     
-    #         if self.ui.check_luk_fws.isChecked() == True:
-    #             l_fws = deliv_data[(deliv_data['Cust_type'] == 'FWS_LLK')]
-    #             frame2 = [deliv_data_cust, l_fws]
-    #             deliv_data_cust = pd.concat(frame2)
+                    else:
+                        # Для остальных полей просто устанавливаем значение
+                        setattr(delivery, header, new_value)
+            
+            db.commit()
+            self._pending_changes.clear()
+            self.show_message("Изменения успешно применены")
+            self.find_delivery()  # Обновляем таблицу
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка применения изменений: {str(e)}")
+
+    def _update_invoice_data(self, delivery):
+        """Обновление данных инвойса при изменении Sborka или Bill"""
+        try:
+            # Ищем данные в temp_Sales
+            sales_data = db.query(temp_Sales).filter(
+                temp_Sales.Bill == delivery.Bill,
+                temp_Sales.Sborka == delivery.Sborka
+            ).first()
+            
+            if sales_data:
+                delivery.Invoice = sales_data.Document
+                delivery.Invoice_date = sales_data.Date
+                # Расчет объема
+                delivery.inv_Volume = self._calculate_volume(sales_data)
+            else:
+                delivery.Invoice = "-"
+                delivery.Invoice_date = None
+                delivery.inv_Volume = 0
+            
+            # Обновляем проверки
+            self._update_checks(delivery)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка обновления данных инвойса: {str(e)}")
+
+    def _update_checks(self, delivery):
+        """Обновление проверочных полей"""
+        try:
+            # Проверка ставки
+            if delivery.new_Amount == delivery.Delivery_amount_wo_VAT:
+                delivery.check_Deliv_amount = "Да"
+            else:
+                delivery.check_Deliv_amount = "Нет"
+            
+            # Проверка объема
+            if delivery.inv_Volume == 0:
+                delivery.check_Inv_volume = "-"
+            elif delivery.inv_Volume == delivery.Order_volume:
+                delivery.check_Inv_volume = "Да"
+            else:
+                delivery.check_Inv_volume = "Нет"
+                
+        except Exception as e:
+            self.show_error_message(f"Ошибка обновления проверок: {str(e)}")
+
+    def revert_changes(self):
+        """Отмена изменений"""
+        db.rollback()
+        self.find_delivery()
+        self._pending_changes.clear()
+        self.show_message("Изменения отменены")
+
+    def copy_cell_content(self):
+        """Копирование содержимого ячеек"""
+        selection = self.table_view.selectionModel()
+        if selection.hasSelection():
+            selected_indexes = selection.selectedIndexes()
+            if selected_indexes:
+                clipboard = QApplication.clipboard()
+                rows = {}
+                for index in selected_indexes:
+                    row = index.row()
+                    col = index.column()
+                    if row not in rows:
+                        rows[row] = {}
+                    rows[row][col] = index.data(Qt.DisplayRole) or ""
+                
+                sorted_rows = sorted(rows.items())
+                text = ""
+                for row, cols in sorted_rows:
+                    sorted_cols = sorted(cols.items())
+                    text += "\t".join([text for col, text in sorted_cols]) + "\n"
+                
+                clipboard.setText(text.strip())
+
+    def refresh_all_comboboxes(self):
+        """Обновление всех выпадающих списков"""
+        try:
+            # Заполнение списка контрагентов
+            customers = sorted([r[0] for r in db.query(Delivery_to_Customer.Customer_name).distinct().all() if r[0]])
+            self._fill_combobox(self.ui.line_customer, customers)
+            
+            # Заполнение годов
+            years = sorted([r[0] for r in db.query(Delivery_to_Customer.Year_delivery).distinct().all() if r[0]])
+            self._fill_combobox(self.ui.line_Year, years)
+            
+            # Заполнение месяцев
+            months = list(range(1, 13))
+            self._fill_combobox(self.ui.line_Mnth, months)
+            
+            # Заполнение статусов проверок
+            changes = ["-", "Да", "Нет"]
+            self.ui.line_changes.clear()
+            self.ui.line_changes.addItems(changes)
+            
+            # Установка даты по умолчанию
+            self.ui.line_date.setDate(date(2022, 1, 1))
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка обновления списков: {str(e)}")
+
+    def _fill_combobox(self, combobox, items):
+        """Заполнение комбобокса"""
+        combobox.clear()
+        combobox.addItem("-")
+        if items:
+            combobox.addItems([str(item) for item in items])
+
+    def refresh_from_delivery(self):
+        """Обновление данных из файла доставки (btn_refresh)"""
+        try:
+            file_path = CustDelivery_File
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {file_path} не найден")
+            
+            # Чтение Excel файла
+            dtype_spec = {
+                'ИНН клиента': str,
+                'Задание на сборку.Номер': str
+            }
+            
+            df = pd.read_excel(file_path, sheet_name="Доставка клиентам", dtype=dtype_spec)
+            
+            # Преобразование данных
+            df = df.replace('#N/A', None)
+            
+            # Заполнение пустых значений
+            df['Объем заказа, л'] = df['Объем заказа, л'].fillna(0.0)
+            df['Ставка, руб (с НДС 20%)'] = df['Ставка, руб (с НДС 20%)'].fillna(0.0)
+            
+            # Расчеты
+            df['Ставка без НДС'] = np.round(df['Ставка, руб (с НДС 20%)'] / 1.2, 2)
+            df['CD_per_lt'] = np.where(
+                df['Объем заказа, л'] != 0,
+                df['Ставка без НДС'] / df['Объем заказа, л'],
+                0.0
+            )
+            
+            # Преобразование дат
+            df['Дата отгр'] = pd.to_datetime(df["Дата отгр"], errors="coerce")
+            df['Дата сф'] = pd.to_datetime(df["Дата сф"], errors="coerce")
+            
+            # Обработка каждой строки из Excel
+            for _, row in df.iterrows():
+                bill = row.get('Счет', '-')
+                sborka = row.get('Задание на сборку.Номер', '-')
+                delivery_date = row['Дата отгр']
+                order_volume = float(row.get('Объем заказа, л', 0)) if pd.notna(row.get('Объем заказа, л')) else 0.0
+                
+                # Логика для Customer_name как в refresh_from_disputch
+                kontragent = row.get('Наименование Клиента', '')
+                if kontragent == "ИНТЕРНЕТ РЕШЕНИЯ ООО":
+                    customer_name = "OZON"
+                elif kontragent == "АВТОКОНТРАКТЫ ООО":
+                    customer_name = "ПАРТКОМ"
+                elif kontragent == "РВБ ООО":
+                    customer_name = "Wildberries"
+                else:
+                    customer_name = kontragent  # Если ни одно условие не выполнено
+                
+                # Ищем существующую запись по УНИКАЛЬНОМУ КЛЮЧУ
+                existing = db.query(Delivery_to_Customer).filter(
+                    Delivery_to_Customer.Bill == bill,
+                    Delivery_to_Customer.Sborka == sborka,
+                    Delivery_to_Customer.Delivery_date == delivery_date.date(),
+                    Delivery_to_Customer.Order_volume == order_volume
+                ).first()
+                
+                # Правильная логика для check_Deliv_amount
+                new_amount = row.get('Check Ставка')
+                stavka_w_vat = row.get('Ставка, руб (с НДС 20%)')
+                stavka_wo_vat = row.get('Ставка без НДС')
+                
+                if pd.isna(new_amount) or new_amount is None:
+                    check_deliv_amount = "-"
+                elif float(new_amount) == float(stavka_w_vat) if pd.notna(stavka_w_vat) else False:
+                    check_deliv_amount = "Да"
+                else:
+                    check_deliv_amount = "Нет"
+                
+                data = {
+                    'Customer_name': customer_name, 
+                    'Delivery_date': delivery_date.date(),
+                    'Bill': bill,
+                    'Customer_in_logist': row.get('Наименование Клиента', '-'),
+                    'INN': row.get('ИНН клиента', '-'),
+                    'Carrier': row.get('Перевозчик', '-'),
+                    'Sborka': sborka,
+                    'Delivery_method': row.get('Способ доставки', '-'),
+                    'Delivery_amount_w_VAT': float(row.get('Ставка, руб (с НДС 20%)', 0)) if pd.notna(row.get('Ставка, руб (с НДС 20%)')) else 0.0,
+                    'Delivery_amount_wo_VAT': float(row.get('Ставка без НДС', 0)) if pd.notna(row.get('Ставка без НДС')) else 0.0,
+                    'Order_volume': order_volume,
+                    'Comment': row.get('Комментарий', ''),
+                    'OZON': row.get('ОЗОН', ''),
+                    'TS': row.get('ТС', '-'),
+                    'CD_per_lt': float(row.get('CD_per_lt', 0)) if pd.notna(row.get('CD_per_lt')) else 0.0,
+                    'new_Amount': float(new_amount) if pd.notna(new_amount) else None,
+                    'check_Deliv_amount': check_deliv_amount,
+                    # Временные значения, будут перезаписаны из temp_Sales
+                    'inv_Volume': float(row.get('Объем СФ', 0)) if pd.notna(row.get('Объем СФ')) else 0.0,
+                    'check_Inv_volume': 'Да' if row.get('true/false (объем)') == 'TRUE' else 'Нет',
+                    'Invoice': row.get('СФ', '-'),
+                    'Invoice_date': pd.to_datetime(row.get('Дата сф'), errors="coerce").date() if pd.notna(row.get('Дата сф')) else None,
+                    'Year_delivery': int(row.get('Год отгр')) if pd.notna(row.get('Год отгр')) else None,
+                    'Bill_and_Date': row.get('Счет & Дата', '')
+                }
+                
+                if existing:
+                    # Обновляем существующую запись, но НЕ трогаем временные поля
+                    for key, value in data.items():
+                        if key not in ['Invoice', 'Invoice_date', 'inv_Volume', 'check_Inv_volume']:
+                            setattr(existing, key, value)
+                else:
+                    # Создаем новую запись
+                    delivery = Delivery_to_Customer(**data)
+                    db.add(delivery)
+            
+            db.commit()
+            
+            # ЕДИНЫЙ МЕТОД: ПЕРЕЗАПИСЫВАЕМ данные из temp_Sales
+            self._update_from_temp_sales()
+            
+            self.show_message("Данные доставки успешно обновлены")
+            self.refresh_all_comboboxes()
+            self.find_delivery()
+            
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка обновления из доставки: {str(e)}")
+
+    def _calculate_bill_and_date(self, customer_name, ozon, bill, delivery_date):
+        """Расчет значения для колонки Bill_and_Date по логике Excel формулы"""
+        try:
+            if not delivery_date:
+                return f"{bill}_"
+                
+            month = delivery_date.month
+            year = delivery_date.year
+            
+            customer_name_str = str(customer_name or "").upper()
+            ozon_str = str(ozon or "").upper()
+            bill_str = str(bill or "")
+            
+            # 1. Проверка на "ЯНДЕКС"
+            if "ЯНДЕКС" in customer_name_str:
+                return f"fbsЯндекс_{month}_{year}"
+            
+            # 2. Проверка на "ВАЙЛДБЕРРИЗ ООО" и "РВБ ООО"
+            if "ВАЙЛДБЕРРИЗ ООО" in customer_name_str or "РВБ ООО" in customer_name_str:
+                return f"WB_{month}_{year}"
+            
+            # 3. Проверка на "МАРКЕТПЛЕЙС ООО"
+            if "МАРКЕТПЛЕЙС ООО" in customer_name_str:
+                return f"SberMP_{month}_{year}"
+            
+            # 4. Проверка на "ИНТЕРНЕТ РЕШЕНИЯ"
+            if "ИНТЕРНЕТ РЕШЕНИЯ" in customer_name_str:
+                # Проверка даты > 30.09.2024
+                if delivery_date > date(2024, 9, 30):
+                    if "RFBS" in ozon_str:
+                        return f"realFBS_{month}_{year}"
+                    elif "FBS" in ozon_str:
+                        return f"fbsОЗОН_{month}_{year}"
+                    elif "1P" in ozon_str or "1Р" in ozon_str:
+                        return f"отгрузка1P_{month}_{year}"
+                    elif "РУЧНАЯ КОРР" in ozon_str:
+                        return f"ОЗОНдоп_{month}_{year}"
+                    elif any(x in ozon_str for x in ["3P", "ФФСС", "ФФУ"]):
+                        return f"ффсс_{month}_{year}"
+                    else:
+                        return "error"
+                else:
+                    return f"{bill_str}_{month}_{year}"
+            
+            # 5. Проверка на "АВТОКОНТРАКТЫ ООО" с "УАК"
+            if customer_name_str == "АВТОКОНТРАКТЫ ООО" and "УАК" in ozon_str:
+                return f"VMIПартком_{month}_{year}"
+            
+            # 6. Проверка на "VMI" в ОЗОН
+            if "VMI" in ozon_str:
+                return f"VMIПартком_{month}_{year}"
+            
+            # По умолчанию: счет_месяц_год
+            return f"{bill_str}_{month}_{year}"
+            
+        except Exception as e:
+            print(f"Ошибка расчета Bill_and_Date: {e}")
+            return f"{bill}_error"
+
+    def refresh_from_disputch(self):
+        """Обновление данных из файла Disputch (btn_disputch)"""
+        try:
+            file_path = Total_DISPATCHED
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {file_path} не найден")
+
+            # Чтение Excel файла
+            dtype_spec = {
+                'ИНН': str,
+                'Задание на сборку.Номер': str,
+                'Задание на доставку номер': str,
+                'Заказ покупателя.Номер': str
+            }
+            usecols = [
+                'Плановая дата отгрузки в заявке на доставку',
+                'Заказ покупателя.Номер',
+                'Контрагент',
+                'ИНН',
+                'Задание на доставку номер',
+                'Перевозчик',
+                'Задание на сборку.Номер',
+                'Заказ покупателя.Способ доставки',
+                'Количество конечный остаток литры',
+                'Ставка, руб (с НДС 20%)',
+                'комментарии',
+                'Заказ покупателя.Инструкции по доставке'
+            ]
+            df = pd.read_excel(file_path, sheet_name="Фактические отгрузки", usecols=usecols, dtype=dtype_spec)
+
+            # Преобразуем дату в правильный формат
+            df['Плановая дата отгрузки в заявке на доставку'] = pd.to_datetime(
+                df['Плановая дата отгрузки в заявке на доставку'],
+                errors='coerce'
+            )
+
+            # Замена пустых значений
+            df['Заказ покупателя.Номер'] = df['Заказ покупателя.Номер'].fillna('-')
+            df['Задание на сборку.Номер'] = df['Задание на сборку.Номер'].fillna('-')
+            df['Ставка, руб (с НДС 20%)'] = pd.to_numeric(
+                df['Ставка, руб (с НДС 20%)'].replace(['n/a', ''], 0.0),
+                errors='coerce'
+            ).fillna(0.0)
+            df['Количество конечный остаток литры'] = pd.to_numeric(
+                df['Количество конечный остаток литры'].fillna(0.0),
+                errors='coerce'
+            ).fillna(0.0)
+
+            # Переименовываем колонку для удобства
+            df = df.rename(columns={'Контрагент': 'Наименование Клиента'})
+            
+            # Создание колонки ОЗОН
+            df['ОЗОН'] = df.apply(lambda x: x['Заказ покупателя.Инструкции по доставке']
+                                if 'ИНТЕРНЕТ РЕШЕНИЯ' in str(x['Наименование Клиента']) or 'АВТОКОНТРАКТЫ' in str(x['Наименование Клиента'])
+                                else '', axis=1)
+            
+            df[['Наименование Клиента', 'Перевозчик']] = df[['Наименование Клиента', 'Перевозчик']].fillna('-')
+            df[['комментарии', 'Заказ покупателя.Способ доставки']] = df[['комментарии', 'Заказ покупателя.Способ доставки']].astype(str).fillna('')
+
+            df['Задание на доставку номер'] = df['Задание на доставку номер'].apply(lambda x: str(x).lstrip('0') if pd.notna(x) and str(x).strip() != '' else '')
+
+            # Группировка по всем необходимым полям для уникальности
+            grouped = df.groupby([
+                'Плановая дата отгрузки в заявке на доставку',
+                'Заказ покупателя.Номер',
+                'Задание на сборку.Номер',
+                'Наименование Клиента',
+                'ИНН',
+                'Перевозчик',
+                'Заказ покупателя.Способ доставки',
+                'комментарии',
+                'ОЗОН',
+                'Задание на доставку номер'
+            ]).agg({
+                'Ставка, руб (с НДС 20%)': 'sum',
+                'Количество конечный остаток литры': 'sum'
+            }).reset_index()
+            
+            # Обработка данных
+            grouped['Ставка без НДС'] = np.round(grouped['Ставка, руб (с НДС 20%)'] / 1.2, 2)
+
+            # Создаем колонку ТС
+            grouped['ТС'] = '-'
+            mask = (grouped['Задание на доставку номер'].notna()) & (grouped['Задание на доставку номер'] != '')
+            grouped.loc[mask, 'ТС'] = grouped['Плановая дата отгрузки в заявке на доставку'].dt.year.astype(str) + '_' + grouped['Задание на доставку номер']
+
+            # Шаг 1: Добавляем новые строки и обновляем существующие
+            for _, row in grouped.iterrows():
+                kontragent = row['Наименование Клиента']
+                if kontragent == "ИНТЕРНЕТ РЕШЕНИЯ ООО":
+                    customer_name = "OZON"
+                elif kontragent == "АВТОКОНТРАКТЫ ООО":
+                    customer_name = "ПАРТКОМ"
+                elif kontragent == "РВБ ООО":
+                    customer_name = "Wildberries"
+                else:
+                    customer_name = kontragent
+
+                delivery_date = row['Плановая дата отгрузки в заявке на доставку']
+                if pd.notna(delivery_date):
+                    delivery_date = delivery_date.date()
+                else:
+                    delivery_date = None
+
+                bill = str(row['Заказ покупателя.Номер']).strip()
+                sborka = str(row['Задание на сборку.Номер']).strip()
+                order_volume = float(row['Количество конечный остаток литры'])
+                ozon_value = row['ОЗОН']
+
+                # Получаем год для поля Year_delivery
+                year_value = delivery_date.year if delivery_date else None
+
+                # Рассчитываем Bill_and_Date по сложной логике
+                bill_and_date = self._calculate_bill_and_date(
+                    kontragent, ozon_value, bill, delivery_date
+                )
+
+                # Ищем существующую запись по УНИКАЛЬНОМУ КЛЮЧУ
+                existing = db.query(Delivery_to_Customer).filter(
+                    Delivery_to_Customer.Bill == bill,
+                    Delivery_to_Customer.Sborka == sborka,
+                    Delivery_to_Customer.Delivery_date == delivery_date,
+                    Delivery_to_Customer.Order_volume == order_volume
+                ).first()
+
+                data = {
+                    'Customer_name': customer_name,
+                    'Delivery_date': delivery_date,
+                    'Bill': bill,
+                    'Customer_in_logist': row['Наименование Клиента'],
+                    'INN': row['ИНН'],
+                    'Carrier': row['Перевозчик'],
+                    'Sborka': sborka,
+                    'Delivery_method': row['Заказ покупателя.Способ доставки'],
+                    'Delivery_amount_w_VAT': float(row['Ставка, руб (с НДС 20%)']),
+                    'Delivery_amount_wo_VAT': float(row['Ставка без НДС']),
+                    'Order_volume': order_volume,
+                    'Comment': row['комментарии'],
+                    'OZON': ozon_value,
+                    'TS': row['ТС'],
+                    'CD_per_lt': 0.0,
+                    'new_Amount': float(row['Ставка без НДС']),
+                    'Year_delivery': year_value,
+                    'Bill_and_Date': bill_and_date  # Используем рассчитанное значение
+                }
+
+                if existing:
+                    # ОБНОВЛЯЕМ существующую запись - ВСЕ поля кроме временных
+                    for key, value in data.items():
+                        if key not in ['Invoice', 'Invoice_date', 'inv_Volume', 'check_Inv_volume']:
+                            setattr(existing, key, value)
                     
-    #         if self.ui.check_luk_market.isChecked() == True:
-    #             l_mp = deliv_data[(deliv_data['Cust_type'] == 'MarketPlace_LLK')]
-    #             frame2 = [deliv_data_cust, l_mp]
-    #             deliv_data_cust = pd.concat(frame2)
+                    # Обновляем check_Deliv_amount
+                    if existing.new_Amount is None:
+                        existing.check_Deliv_amount = "-"
+                    elif existing.new_Amount == existing.Delivery_amount_wo_VAT:
+                        existing.check_Deliv_amount = "Да"
+                    else:
+                        existing.check_Deliv_amount = "Нет"
+                else:
+                    # СОЗДАЕМ новую запись со всеми полями
+                    data.update({
+                        'check_Deliv_amount': "Да" if data['new_Amount'] == data['Delivery_amount_wo_VAT'] else "Нет",
+                        'inv_Volume': 0.0,
+                        'check_Inv_volume': '-',
+                        'Invoice': '-',
+                        'Invoice_date': None
+                    })
+                    delivery = Delivery_to_Customer(**data)
+                    db.add(delivery)
+
+            db.commit()
+
+            # Шаг 2: Обновляем данные из temp_Sales
+            self._update_from_temp_sales()
+
+            self.show_message("Данные из Disputch успешно обновлены")
+            self.refresh_all_comboboxes()
+            self.find_delivery()
+
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка обновления из Disputch: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+
+    def _update_from_temp_sales(self):
+        """Единый метод для обновления полей Invoice, Invoice_date, inv_Volume, check_Inv_volume из temp_Sales"""
+        try:
+            # Получаем все данные из temp_Sales
+            sales_data = db.query(temp_Sales).filter(
+                temp_Sales.Sborka != "-",
+            ).all()
+            
+            # Создаем словарь для группировки данных по Bill и Sborka
+            sales_data_dict = {}
+            
+            for sale in sales_data:
+                if sale.Bill and sale.Sborka:
+                    key = (sale.Bill, sale.Sborka)
                     
-    #         if self.ui.check_luk_other.isChecked() == True:
-    #             l_oth = deliv_data[(deliv_data['Cust_type'] == 'other_LLK')]
-    #             frame2 = [deliv_data_cust, l_oth]
-    #             deliv_data_cust = pd.concat(frame2)
-                 
-    #         if deliv_data_cust.empty == True:
-    #             deliv_data
-    #         else:
-    #             deliv_data = deliv_data_cust
+                    if key not in sales_data_dict:
+                        sales_data_dict[key] = {
+                            'Invoice': sale.Document,
+                            'Invoice_date': sale.Date,
+                            'Total_Volume': 0.0
+                        }
+                    
+                    # Рассчитываем объем для текущей записи
+                    material = db.query(Materials).filter(Materials.Code == sale.Material_id).first()
+                    if material:
+                        volume = self._calculate_volume_for_sale(sale, material)
+                        sales_data_dict[key]['Total_Volume'] += float(volume)  # Приводим к float
             
-    #         #check Order Date
-    #         if d_year != '-' or d_qtr != '-' or d_mnth != '-':
-    #             msg = QMessageBox()
-    #             msg.setText('Сhoose either Delivery date or Order date')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 10pt  \"Segoe UI\";"
-    #                             "color: #4b0082;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
+            # Обновляем записи Delivery
+            deliveries = db.query(Delivery_to_Customer).all()
             
-    #         elif o_year == '-' and o_qtr == '-' and o_mnth == '-':
-    #             deliv_data
-    #         elif o_year != '-' and o_qtr == '-' and o_mnth == '-':
-    #             o_year = int(o_year)
-    #             deliv_data = deliv_data[(deliv_data['o_year'] == o_year)]
-    #         elif o_year != '-' and o_qtr != '-' and o_mnth == '-':
-    #             o_year = int(o_year)
-    #             deliv_data = deliv_data[(deliv_data['o_year'] == o_year)]
-    #             deliv_data = deliv_data[(deliv_data['o_qtr'] == o_qtr)]
-    #         elif o_year != '-' and o_mnth != '-':
-    #             o_year = int(o_year)
-    #             o_mnth = int(o_mnth)
-    #             deliv_data = deliv_data[(deliv_data['o_year'] == o_year)]
-    #             deliv_data = deliv_data[(deliv_data['o_mnth'] == o_mnth)]
-    #         elif o_year == '-' and o_qtr != '-' and o_mnth != '-':
-    #             o_mnth = int(o_mnth)
-    #             deliv_data = deliv_data[(deliv_data['o_qtr'] == o_qtr)]
-    #             deliv_data = deliv_data[(deliv_data['o_mnth'] == o_mnth)]
-    #         elif o_year == '-' and o_qtr == '-' and o_mnth == '-':
-    #             o_mnth = int(o_mnth)
-    #             deliv_data = deliv_data[(deliv_data['o_mnth'] == o_mnth)]
+            for delivery in deliveries:
+                key = (delivery.Bill, delivery.Sborka)
+                
+                if key in sales_data_dict:
+                    # Данные найдены в temp_Sales - ОБНОВЛЯЕМ
+                    delivery.Invoice = sales_data_dict[key]['Invoice']
+                    delivery.Invoice_date = sales_data_dict[key]['Invoice_date']
+                    delivery.inv_Volume = float(sales_data_dict[key]['Total_Volume'])  # Приводим к float
+                else:
+                    # Данные не найдены - СБРАСЫВАЕМ
+                    delivery.Invoice = "-"
+                    delivery.Invoice_date = None
+                    delivery.inv_Volume = 0.0  # Используем float
+                
+                # Обновляем check_Inv_volume на основе новых данных
+                delivery_volume = float(delivery.Order_volume) if delivery.Order_volume else 0.0
+                invoice_volume = float(delivery.inv_Volume) if delivery.inv_Volume else 0.0
 
-    #         #check Delivery Date
-    #         elif o_year != '-' or o_qtr != '-' or o_mnth != '-':
-    #             msg = QMessageBox()
-    #             msg.setText('Сhoose either Delivery date or Order date')
-    #             msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                             "font: 10pt  \"Segoe UI\";"
-    #                             "color: #4b0082;\n"
-    #                             " ")
-    #             msg.setIcon(QMessageBox.Critical)
-    #             x = msg.exec_()
-    #         elif d_year == '-' and d_qtr == '-' and d_mnth == '-':
-    #             deliv_data
-    #         elif d_year != '-' and d_qtr == '-' and d_mnth == '-':
-    #             d_year = int(d_year)
-    #             deliv_data = deliv_data[(deliv_data['d_year'] == d_year)]
-    #         elif d_year != '-' and d_qtr != '-' and d_mnth == '-':
-    #             d_year = int(d_year)
-    #             deliv_data = deliv_data[(deliv_data['d_year'] == d_year)]
-    #             deliv_data = deliv_data[(deliv_data['d_qtr'] == d_qtr)]
-    #         elif d_year != '-' and d_mnth != '-':
-    #             d_year = int(d_year)
-    #             d_mnth = int(d_mnth)
-    #             deliv_data = deliv_data[(deliv_data['d_year'] == d_year)]
-    #             deliv_data = deliv_data[(deliv_data['d_mnth'] == d_mnth)]
-    #         elif d_year == '-' and d_qtr != '-' and d_mnth != '-':
-    #             d_mnth = int(d_mnth)
-    #             deliv_data = deliv_data[(deliv_data['d_qtr'] == d_qtr)]
-    #             deliv_data = deliv_data[(deliv_data['d_mnth'] == d_mnth)]
-    #         elif d_year == '-' and d_qtr == '-' and d_mnth != '-':
-    #             d_mnth = int(d_mnth)
-    #             deliv_data = deliv_data[(deliv_data['d_mnth'] == d_mnth)]
+                if invoice_volume == 0:
+                    delivery.check_Inv_volume = "-"
+                elif abs(invoice_volume - delivery_volume) < 0.01:
+                    delivery.check_Inv_volume = "Да"
+                else:
+                    delivery.check_Inv_volume = "Нет"
             
-      
-    #         elif Brand == '-' and Segment == '-' and Product_group == '-':
-    #             deliv_data
-    #         elif Brand != '-' and Segment == '-' and Product_group == '-':
-    #             deliv_data = deliv_data[(deliv_data['Brand'] == Brand)]
-    #         elif Brand != '-' and Segment != '-' and Product_group == '-':
-    #             deliv_data = deliv_data[(deliv_data['Brand'] == Brand)]
-    #             deliv_data = deliv_data[(deliv_data['Segment'] == Segment)]
-    #         elif Brand != '-' and Segment != '-' and Product_group != '-':
-    #             deliv_data = deliv_data[(deliv_data['Brand'] == Brand)]
-    #             deliv_data = deliv_data[(deliv_data['Segment'] == Segment)]
-    #             deliv_data = deliv_data[(deliv_data['Product_group'] == Product_group)]
-    #         elif Brand != '-' and Segment == '-' and Product_group != '-':
-    #             deliv_data = deliv_data[(deliv_data['Brand'] == Brand)]
-    #             deliv_data = deliv_data[(deliv_data['Product_group'] == Product_group)]
-    #         elif Brand == '-' and Segment == '-' and Product_group != '-':
-    #             deliv_data = deliv_data[(deliv_data['Product_group'] == Product_group)]
+            db.commit()
             
-    #         if KSSS_Cust != '':
-    #             KSSS_Cust = int(KSSS_Cust)
-    #             deliv_data = deliv_data[(deliv_data['KSSS_Cust'] == KSSS_Cust)]
+        except Exception as e:
+            db.rollback()
+            self.show_error_message(f"Ошибка обновления данных из temp_Sales: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
 
-
-    #     deliv_data['d_year'] = deliv_data.drop(['d_year'], axis=1)
-    #     deliv_data['d_qtr'] = deliv_data.drop(['d_qtr'], axis=1)
-    #     deliv_data['d_mnth'] = deliv_data.drop(['d_mnth'], axis=1)
-        
-    #     deliv_data['o_year'] = deliv_data.drop(['o_year'], axis=1)
-    #     deliv_data['o_qtr'] = deliv_data.drop(['o_qtr'], axis=1)
-    #     deliv_data['o_mnth'] = deliv_data.drop(['o_mnth'], axis=1)
-        
-
-    #     deliv_data.to_excel(savePath[0], index=False)
-
-    #     msg = QMessageBox()
-    #     msg.setText('Report was saved successfully')
-    #     msg.setStyleSheet("background-color: #f8f8f2;\n"
-    #                     "font: 12pt  \"Segoe UI\";"
-    #                     "color: #4b0082;\n"
-    #                     " ")
-    #     msg.setIcon(QMessageBox.Information)
-    #     x = msg.exec_()
+    def _calculate_volume_for_sale(self, sale, material):
+        """Расчет объема в литрах для записи temp_Sales"""
+        try:
+            # Приводим все значения к float
+            qty = float(sale.Qty) if sale.Qty else 0.0
             
-    
-    # def check_Cust_type(self, row):
-    #     if row['Brand'] == 'TEBOIL' or row['Brand'] == 'Shell':
-    #         return row['Cust_type']
-    #     else:
-    #         if row['Brand'] == 'Лукойл' or row['Brand'] == 'GPO':
-    #             if row['Cust_type'] == 'Dealer_TEBOIL':
-    #                 return 'Dealer_LLK'
-    #             elif row['Cust_type'] == 'Dir_TEBOIL':
-    #                 return 'Dir_LLK'
-    #             elif row['Cust_type'] == 'FWS_TEBOIL':
-    #                 return 'FWS_LLK'
-    #         else:
-    #             return 'other_LLK'
+            items_per_set = float(material.Items_per_Set) if material.Items_per_Set else 1.0
+            package_volume = float(material.Package_Volume) if material.Package_Volume else 1.0
+            
+            # Условия для расчета количества в штуках
+            conditions_quantity = [
+                material.Product_type == 'Услуги',
+                material.Package_type == 'комплект',
+                material.UoM == 'шт',
+                material.UoM == 'л',
+                material.UoM == 'кг',
+                material.UoM == 'т'
+            ]
+
+            choices_quantity = [
+                0.0,  # Для услуг
+                qty * items_per_set,  # Для комплектов
+                qty,  # Для штук
+                qty / package_volume,  # Для литров
+                qty / package_volume,  # Для килограммов
+                round(qty * 1000 / package_volume, 0)  # Для тонн
+            ]
+
+            # Вычисляем количество в штуках
+            qty_pcs = np.select(conditions_quantity, choices_quantity, default=qty)
+            
+            # Вычисляем количество в литрах
+            if material.UoM == 'л':
+                qty_liters = qty
+            elif material.UoM == 'кг':
+                qty_liters = qty  # Предполагаем эквивалентность
+            elif material.UoM == 'т':
+                qty_liters = qty * 1000
+            else:
+                qty_liters = float(qty_pcs) * package_volume
+
+            return round(float(qty_liters), 2)  # Приводим к float и округляем
+            
+        except Exception as e:
+            print(f"Ошибка расчета объема для sale {sale.Bill}/{sale.Sborka}: {str(e)}")
+            return 0.0
+
+    def find_delivery(self):
+        """Поиск данных с фильтрами"""
+        try:
+            # Получаем параметры фильтрации
+            customer = self.ui.line_customer.currentText()
+            bill = self.ui.line_bill.text().strip()
+            sborka = self.ui.line_sborka.text().strip()
+            changes = self.ui.line_changes.currentText()
+            year = self.ui.line_Year.currentText()
+            month = self.ui.line_Mnth.currentText()
+            date_filter = self.ui.line_date.date().toString("yyyy-MM-dd")
+            
+            # Строим запрос
+            query = db.query(Delivery_to_Customer)
+            
+            if customer != "-":
+                query = query.filter(Delivery_to_Customer.Customer_name == customer)
+            
+            if bill:
+                query = query.filter(Delivery_to_Customer.Bill.contains(bill))
+            
+            if sborka:
+                query = query.filter(Delivery_to_Customer.Sborka.contains(sborka))
+            
+            if changes != "-":
+                if changes == "Да":
+                    query = query.filter(Delivery_to_Customer.check_Deliv_amount == "Да")
+                else:
+                    query = query.filter(Delivery_to_Customer.check_Deliv_amount == "Нет")
+            
+            if year != "-":
+                query = query.filter(Delivery_to_Customer.Year_delivery == int(year))
+            
+            if month != "-":
+                query = query.filter(Delivery_to_Customer.Delivery_date.cast('DATE').like(f"%-{int(month):02d}-%"))
+            
+            if date_filter != "2022-01-01":
+                filter_date = datetime.strptime(date_filter, "%Y-%m-%d").date()
+                query = query.filter(Delivery_to_Customer.Delivery_date == filter_date)
+            
+            # Выполняем запрос
+            results = query.all()
+            
+            # Отображаем результаты
+            self._display_data(results)
+            
+        except Exception as e:
+            self.show_error_message(f"Ошибка поиска: {str(e)}")
+
+    def _display_data(self, data):
+        """Отображение данных в таблице с русскими названиями колонок и правильным форматированием"""
+        self.table.clear()
+        self.table.setColumnCount(0)
+        self.table.setRowCount(0)
         
+        if not data:
+            self.show_message('Нет данных для отображения')
+            return
         
-    # def check_Quarter(self, row):
-    #     if row['mnth'] >= 1 and row['mnth'] <= 3:
-    #         return '1 кв.'
-    #     elif row['mnth'] >= 4 and row['mnth'] <= 6:
-    #         return '2 кв.'
-    #     elif row['mnth'] >= 7 and row['mnth'] <= 9:
-    #         return '3 кв.'
-    #     elif row['mnth'] >= 10 and row['mnth'] <= 12:
-    #         return '4 кв.'
- 
- 
-    # def check_d_Quarter(self, row):
-    #     if row['d_mnth'] >= 1 and row['d_mnth'] <= 3:
-    #         return '1 кв.'
-    #     elif row['d_mnth'] >= 4 and row['d_mnth'] <= 6:
-    #         return '2 кв.'
-    #     elif row['d_mnth'] >= 7 and row['d_mnth'] <= 9:
-    #         return '3 кв.'
-    #     elif row['d_mnth'] >= 10 and row['d_mnth'] <= 12:
-    #         return '4 кв.'
+        # Устанавливаем флаг обновления таблицы
+        self._updating_table = True
         
+        # Русские названия колонок
+        headers = [
+            'Контрагент', 'Дата отгр', 'Счет', 'Наименование Клиента', 'ИНН',
+            'Перевозчик', 'Сборка', 'Способ доставки', 
+            'Ставка, руб с НДС', 'Ставка без НДС', 'Объем заказа, л', 'ТС',
+            'Ставка р/л', 'new_Ставка', 'true/false (ставка)', 'Объем СФ', 
+            'true/false (объем)', 'Комментарий', 'ОЗОН', 'СФ', 'Дата сф', 
+            'Год сф', 'Год отгр', 'Счет & Дата'
+        ]
         
-    # def check_o_Quarter(self, row):
-    #     if row['o_mnth'] >= 1 and row['o_mnth'] <= 3:
-    #         return '1 кв.'
-    #     elif row['o_mnth'] >= 4 and row['o_mnth'] <= 6:
-    #         return '2 кв.'
-    #     elif row['o_mnth'] >= 7 and row['o_mnth'] <= 9:
-    #         return '3 кв.'
-    #     elif row['o_mnth'] >= 10 and row['o_mnth'] <= 12:
-    #         return '4 кв.'       
-    
-    
-    # def check_prod_LoB(self, row):
-    #     if row['LoB'] == 'B2B/B2C':
-    #         return 'B2B'
-    #     else:
-    #         return row['LoB']
+        # Соответствие русских названий английским полям
+        column_mapping = {
+            'Контрагент': 'Customer_name',
+            'Дата отгр': 'Delivery_date',
+            'Счет': 'Bill',
+            'Наименование Клиента': 'Customer_in_logist',
+            'ИНН': 'INN',
+            'Перевозчик': 'Carrier',
+            'Сборка': 'Sborka',
+            'Способ доставки': 'Delivery_method',
+            'Ставка, руб с НДС': 'Delivery_amount_w_VAT',
+            'Ставка без НДС': 'Delivery_amount_wo_VAT',
+            'Объем заказа, л': 'Order_volume',
+            'ТС': 'TS',
+            'Ставка р/л': 'CD_per_lt',
+            'new_Ставка': 'new_Amount',
+            'true/false (ставка)': 'check_Deliv_amount',
+            'Объем СФ': 'inv_Volume',
+            'true/false (объем)': 'check_Inv_volume',
+            'Комментарий': 'Comment',
+            'ОЗОН': 'OZON',
+            'СФ': 'Invoice',
+            'Дата сф': 'Invoice_date',
+            'Год сф': 'Year_invoice',
+            'Год отгр': 'Year_delivery',
+            'Счет & Дата': 'Bill_and_Date'
+        }
         
+        # Создаем DataFrame для удобной сортировки
+        display_data = []
+        for delivery in data:
+            row_data = {}
+            for header, eng_field in column_mapping.items():
+                value = getattr(delivery, eng_field, '')
+                row_data[header] = value
+            display_data.append(row_data)
+        
+        display_df = pd.DataFrame(display_data)
+        
+        # Сортируем данные как указано
+        display_df = display_df.sort_values(by=['Дата отгр', 'ТС', 'Счет'], ascending=[True, True, True])
+        
+        # Числовые колонки для специального форматирования
+        numeric_cols = [
+            'Ставка, руб с НДС', 'Ставка без НДС', 'Объем заказа, л',
+            'Ставка р/л', 'new_Ставка', 'Объем СФ'
+        ]
+        
+        # Устанавливаем размеры таблицы
+        self.table.setColumnCount(len(headers))
+        self.table.setRowCount(len(display_df))
+        self.table.setHorizontalHeaderLabels(headers)
+            
+        # Заполняем данные
+        for row_idx, (_, row) in enumerate(display_df.iterrows()):
+            for col_idx, col_name in enumerate(headers):
+                value = row[col_name]
+                
+                # Обработка пустых значений
+                if pd.isna(value) or value is None or str(value) in ['None', 'nan', 'NaT']:
+                    value = ''
+                
+                item = QTableWidgetItem(str(value))
+                item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+                
+                # Специальное форматирование для числовых колонок
+                if col_name in numeric_cols and pd.notna(value) and value != '':
+                    try:
+                        # Дробные значения с разделителями тысяч и запятой для дробей
+                        formatted_value = f"{float(value):,.2f}".replace(",", " ").replace(".", ",")
+                        item.setText(formatted_value)
+                        item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    except (ValueError, TypeError):
+                        item.setText(str(value))
+                        item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                else:
+                    # Для нечисловых колонок
+                    item.setText(str(value))
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                    
+                self.table.setItem(row_idx, col_idx, item)
+        
+        # Автоматическая настройка ширины столбцов
+        self.table.resizeColumnsToContents()
+        
+        # Устанавливаем минимальную ширину для некоторых колонок
+        for col_idx, col_name in enumerate(headers):
+            if col_name in ['Счет', 'Сборка', 'ТС']:
+                self.table.setColumnWidth(col_idx, 100)
+            elif col_name in numeric_cols:
+                self.table.setColumnWidth(col_idx, 120)
+        
+        # Снимаем флаг обновления таблицы
+        self._updating_table = False
 
-    # def chng_nmth_formate(self, row):
-    #     if row['mnth'] == '1':
-    #         return row['mnth'].replace('1','01')
-    #     elif row['mnth'] == '2':
-    #         return row['mnth'].replace('2','02')
-    #     elif row['mnth'] == '3':
-    #         return row['mnth'].replace('3','03')
-    #     elif row['mnth'] == '4':
-    #         return row['mnth'].replace('4','04')
-    #     elif row['mnth'] == '5':
-    #         return row['mnth'].replace('5','05')
-    #     elif row['mnth'] == '6':
-    #         return row['mnth'].replace('6','06')
-    #     elif row['mnth'] == '7':
-    #         return row['mnth'].replace('7','07')
-    #     elif row['mnth'] == '8':
-    #         return row['mnth'].replace('8','08')
-    #     elif row['mnth'] == '9':
-    #         return row['mnth'].replace('9','09')
-    #     else:
-    #         return row['mnth']
-
-
-    # def get_id_Delivery(self, del_merge):
-    #     db_data = Delivery.query.filter(Delivery.del_merge == del_merge).first()
-    #     delivery_id = db_data.id
-
-    #     return delivery_id
-
-
-    # def check_Price(self, row):
-    #     if row['ord_Price'] == row['inv_Price']:
-    #         return row['ord_Price']
-    #     elif row['inv_Price'] == 0:
-    #         return row['ord_Price']
-    #     else:
-    #         return row['inv_Price']
-
-
-    # def check_Curr(self, row):
-        if row['ord_Curr'] == row['inv_Curr']:
-            return row['inv_Curr']
-        elif row['inv_Curr'] == 0:
-            return row['ord_Curr']
+    def show_message(self, text):
+        """Показать информационное сообщение"""
+        msg = QMessageBox()
+        msg.setWindowTitle("Информация")
+        msg.setIcon(QMessageBox.Information)
+        
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
+        
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
         else:
-            return row['inv_Curr']
+            msg.setText(text)
+        
+        # Кнопки
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+        ok_button = msg.addButton(QMessageBox.Ok)
+        
+        def copy_text():
+            QApplication.clipboard().setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        msg.exec_()
+
+    def show_error_message(self, text):
+        """Показать сообщение об ошибке"""
+        msg = QMessageBox()
+        msg.setWindowTitle("Ошибка")
+        msg.setIcon(QMessageBox.Critical)
+        
+        # Устанавливаем большой минимальный размер
+        msg.setMinimumSize(900, 600)
+        
+        # Всегда используем detailed text для длинных сообщений
+        if len(text) > 500:
+            short_text = "Произошла ошибка. Подробности ниже (используйте кнопку 'Show Details')"
+            msg.setText(short_text)
+            msg.setDetailedText(text)
+        else:
+            msg.setText(text)
+        
+        # Кнопки
+        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
+        ok_button = msg.addButton(QMessageBox.Ok)
+        
+        def copy_text():
+            QApplication.clipboard().setText(text)
+        
+        copy_button.clicked.connect(copy_text)
+        msg.exec_()
+
+
+

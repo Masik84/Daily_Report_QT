@@ -743,8 +743,7 @@ class TempTablesPage(QWidget):
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-            df.to_excel('test_display.xlsx')
+
             if df.empty:
                 self.show_message("Данные не найдены")
                 return
@@ -868,14 +867,18 @@ class TempTablesPage(QWidget):
         """Отображение данных в таблице с сортировкой и переименованными колонками"""
         self.table.clearContents()
 
-        # Определяем какие колонки мы хотим показать
+        # Определяем базовые колонки для показа
         base_columns_to_show = [
-            'Document', 'Date', 'Bill', 'Bill_Date', 'Status', 'Тип документа', 'Material_id', 'Артикул',
+            'Document', 'Date', 'Status', 'Тип документа', 'Material_id', 'Артикул',
             'Продукт + упаковка', 'Кол-во, шт', 'Кол-во, л', 'Amount_1C'
         ]
 
-        # Добавляем колонку контрагента в зависимости от типа таблицы
+        # Добавляем колонки счета и даты счета только для продаж и заказов клиентов
         table = self.ui.line_table.currentText()
+        if table in ["Продажи", "Заказы клиентов"]:
+            base_columns_to_show.extend(['Bill', 'Bill_Date'])
+
+        # Добавляем колонку контрагента в зависимости от типа таблицы
         if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in df.columns:
             base_columns_to_show.append('Supplier_Name')
         elif table in ["Продажи", "Заказы клиентов"] and 'Customer_Name' in df.columns:
@@ -891,12 +894,16 @@ class TempTablesPage(QWidget):
         column_rename_map = {
             'Document': 'Документ',
             'Date': 'Дата',
-            'Bill': 'Счет',
-            'Bill_Date': 'Дата счета',
             'Material_id': 'Код',
             'Status': 'Статус',
             'Amount_1C': 'Сумма 1С'
         }
+
+        # Добавляем переименование для счета и даты счета (только если они есть)
+        if 'Bill' in display_df.columns:
+            column_rename_map['Bill'] = 'Счет'
+        if 'Bill_Date' in display_df.columns:
+            column_rename_map['Bill_Date'] = 'Дата счета'
 
         # Переименовываем колонку контрагента
         if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in display_df.columns:
@@ -906,14 +913,30 @@ class TempTablesPage(QWidget):
 
         # Применяем переименование
         display_df = display_df.rename(columns=column_rename_map)
-        display_df['Дата'] = pd.to_datetime(display_df['Дата'], format='%d.%m.%Y', errors='coerce')
-        display_df['Дата счета'] = pd.to_datetime(display_df['Дата счета'], format='%d.%m.%Y', errors='coerce')
-        display_df = display_df.sort_values(by=['Дата', 'Тип документа', 'Документ', 'Дата счета', 'Счет', 'Кол-во, шт'], ascending=[True, True, True, True, True, True])
         
-        display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
-        display_df['Дата счета'] = display_df['Дата счета'].dt.strftime('%d.%m.%Y')
+        # Безопасное преобразование дат - только если колонки существуют
+        if 'Дата' in display_df.columns:
+            display_df['Дата'] = pd.to_datetime(display_df['Дата'], format='%d.%m.%Y', errors='coerce')
         
-        # display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
+        if 'Дата счета' in display_df.columns:
+            display_df['Дата счета'] = pd.to_datetime(display_df['Дата счета'], format='%d.%m.%Y', errors='coerce')
+        
+        # Сортировка только по существующим колонкам
+        sort_columns = []
+        for col in ['Дата', 'Тип документа', 'Документ', 'Дата счета', 'Счет', 'Кол-во, шт']:
+            if col in display_df.columns:
+                sort_columns.append(col)
+        
+        if sort_columns:
+            display_df = display_df.sort_values(by=sort_columns, ascending=[True] * len(sort_columns))
+        
+        # Форматирование дат обратно в строки
+        if 'Дата' in display_df.columns:
+            display_df['Дата'] = display_df['Дата'].dt.strftime('%d.%m.%Y')
+        
+        if 'Дата счета' in display_df.columns:
+            display_df['Дата счета'] = display_df['Дата счета'].dt.strftime('%d.%m.%Y')
+        
         display_columns = list(display_df.columns)
 
         # Устанавливаем колонки и строки
