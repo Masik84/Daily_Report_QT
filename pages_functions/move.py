@@ -93,18 +93,7 @@ class MovesPage(QWidget):
         self.report_start_date = date
         self.report_start_date = self.report_start_date.toPython()
         self.report_start_date = pd.to_datetime(self.report_start_date)
-        print(f"Выбрана дата: {self.report_start_date}")
 
-        self.do_something_with_date()
-
-    def do_something_with_date(self):
-        """Функция, использующая дату."""
-        if self.report_start_date:  # Проверяем, что дата была установлена
-            print(f"Обработка даты: {self.report_start_date}")
-            # Здесь ваш код, который использует self.report_start_date
-        else:
-            print("Дата еще не выбрана.")
-    
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""
         self._fill_combobox(self.ui.line_table, ["-", "Движения", "Комплектации", "Комплектации Ручные", "Списания"])
@@ -671,18 +660,23 @@ class MovesPage(QWidget):
             if isinstance(row, dict):
                 package_type = row.get('Package_type', row.get('Вид упаковки'))
                 uom = row.get('UoM', row.get('Единица измерения'))
-                package_volume = float(row.get('Package_Volume', row.get('Упаковка', 0)))
-                items_per_set = float(row.get('Items_per_Set', row.get('Кол-во в упак', 1)))
-                qty = float(row.get('Qty', row.get('Количество', 0)))
+                package_volume = self._safe_float(row.get('Package_Volume', row.get('Упаковка', 0)))
+                items_per_set = self._safe_float(row.get('Items_per_Set', row.get('Кол-во в упак', 1)))
+                qty = self._safe_float(row.get('Qty', row.get('Количество', 0)))
             else:
                 # Для объектов Row/SQLAlchemy
                 package_type = getattr(row, 'Package_type', getattr(row, 'Вид упаковки', None))
                 uom = getattr(row, 'UoM', getattr(row, 'Единица измерения', None))
-                package_volume = float(getattr(row, 'Package_Volume', getattr(row, 'Упаковка', 0)))
-                items_per_set = float(getattr(row, 'Items_per_Set', getattr(row, 'Кол-во в упак', 1)))
-                qty = float(getattr(row, 'Qty', getattr(row, 'Количество', 0)))
+                package_volume = self._safe_float(getattr(row, 'Package_Volume', getattr(row, 'Упаковка', 0)))
+                items_per_set = self._safe_float(getattr(row, 'Items_per_Set', getattr(row, 'Кол-во в упак', 1)))
+                qty = self._safe_float(getattr(row, 'Qty', getattr(row, 'Количество', 0)))
 
-            if not package_type or not qty:
+            # Проверяем обязательные поля
+            if not package_type or qty is None:
+                return 0.0
+
+            # Проверяем, что числовые значения не None
+            if any(x is None for x in [package_volume, items_per_set, qty]):
                 return 0.0
 
             if package_type == "комплект":
@@ -696,6 +690,7 @@ class MovesPage(QWidget):
 
         except Exception as e:
             print(f"Ошибка расчета количества в штуках: {str(e)}")
+            traceback.print_exc()
             return 0.0
 
     def _calculate_liters(self, row):
@@ -785,8 +780,9 @@ class MovesPage(QWidget):
             date_start = self.ui.date_Start.date()
             report_start_date = date_start.toPython()
             report_start_date = pd.to_datetime(report_start_date)
+
             move_df = self.read_movement_data(report_start_date)
-            
+            move_df.to_excel('test_move_before_write_off.xlsx')
             if move_df.empty:
                 self.show_message("Нет данных для обновления")
                 return
@@ -800,7 +796,7 @@ class MovesPage(QWidget):
             
             # Обработка списаний
             move_df = self._process_write_offs(move_df, report_start_date)
-            
+            move_df.to_excel('test_move_after_write_off.xlsx')
             # Обновление данных в БД
             self._update_moves_in_db(move_df, report_start_date)
             
@@ -869,8 +865,7 @@ class MovesPage(QWidget):
         })
         
         # Фильтрация данных
-        move_df = move_df.loc[
-            (move_df["Приход"] != "Количество приход") & 
+        move_df = move_df.loc[(move_df["Приход"] != "Количество приход") & 
             (move_df["Приход"] != "Приход") & 
             (move_df["Дата_Время"] != "Итого")
         ]
@@ -936,7 +931,7 @@ class MovesPage(QWidget):
         # 2. Условие для "5.0. Списание (недостача)"
         move_df.loc[move_df["Тип документа"] == "5.0. Списание (недостача)", "Вид операции"] = "Списание со склада"
         move_df.loc[move_df["Тип документа"] == "5.0. Списание (недостача)", "Вид документа"] = "Недостача"
-
+        move_df.to_excel('test_moves.xlsx')
         # Расчет количества
         # Условие для "5.0. Списание (недостача)" или "5.0. Списание (утилизация)"
         condition = (move_df["Тип документа"] == "5.0. Списание (недостача)") | (move_df["Тип документа"] == "5.0. Списание (утилизация)")
@@ -950,7 +945,6 @@ class MovesPage(QWidget):
         move_df.loc[~condition & move_df["Приход"].notnull() & move_df["Расход"].isnull(), "Количество"] = move_df["Приход"]
         # Условие 4: Если тип документа не "5.0. Списание (недостача)" или не "5.0. Списание (утилизация)", и "Расход" не пустой, а "Приход" пустой, то "Количество" = Расход * (-1)
         move_df.loc[~condition & move_df["Расход"].notnull() & move_df["Приход"].isnull(), "Количество"] = move_df["Расход"] * (-1)
-        
         # Фильтрация перемещений
         move_df = move_df[move_df["Тип документа"] != "3.0. Перемещение"]
         
@@ -1070,7 +1064,7 @@ class MovesPage(QWidget):
                 return
             
             move_df = self._clean_dataframe(move_df)
-
+            
             db.query(Movements).filter(Movements.Date >= report_start_date).delete()
 
             # Получаем список существующих клиентов и поставщиков из БД
@@ -1083,6 +1077,24 @@ class MovesPage(QWidget):
             
             for idx, row in move_df.iterrows():
                 try:
+                    # Получаем doc_type_id (может вернуть None)
+                    doc_type_id = self._get_doc_type_id(
+                        row.get('Вид документа', ''), 
+                        row.get('Вид операции', ''), 
+                        row.get('Тип документа', '')
+                    )
+                    
+                    # Если doc_type_id не найден, пропускаем запись
+                    if doc_type_id is None:
+                        document = row.get('Документ', 'N/A')
+                        date = row.get('Дата', 'N/A')
+                        material = row.get('Код', 'N/A')
+                        doc_type = row.get('Тип документа', 'N/A')
+                        skipped_details.append(
+                            f"Документ: {document}, Дата: {date}, Код: {material}, "
+                            f"Тип документа: {doc_type}, Причина: Не найден DocType_id"
+                        )
+                        continue
                     
                     record = {
                         'Date_Time': row.get('Дата_Время'),
@@ -1096,7 +1108,7 @@ class MovesPage(QWidget):
                         'Recipient': row.get('Грузополучатель'),
                         'Bill': row.get('Счет'),
                         'Bill_date': row.get('Дата счета'),
-                        'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
+                        'DocType_id': doc_type_id,  # Используем полученный ID
                         'Material_id': row.get('Код', '')
                     }
 
@@ -1132,7 +1144,10 @@ class MovesPage(QWidget):
                             else:
                                 reason = f"Клиент '{counterparty_code}' не существует в БД"
                                 
-                            skipped_details.append(f"Документ: {document}, Дата: {date}, Код: {material}, Причина: {reason}")
+                            skipped_details.append(
+                                f"Документ: {document}, Дата: {row.get('Дата', 'N/A')}, "
+                                f"Код: {material}, Причина: {reason}"
+                            )
                             continue
 
                     records.append(record)
@@ -1141,44 +1156,49 @@ class MovesPage(QWidget):
                     date = row.get('Дата', 'N/A')
                     material = row.get('Код', 'N/A')
                     reason = f"Ошибка обработки: {str(e)}"
-                    skipped_details.append(f"Документ: {document}, Дата: {date}, Код: {material}, Причина: {reason}")
+                    skipped_details.append(
+                        f"Документ: {document}, Дата: {date}, Код: {material}, Причина: {reason}"
+                    )
                     continue
 
             if records:
                 db.bulk_insert_mappings(Movements, records)
                 db.commit()
                 
+                # Сохраняем пропущенные записи в Excel
+                if skipped_details:
+                    self._save_skipped_to_excel(skipped_details, move_df)
+                
                 # Формируем детальное сообщение
                 msg = f"Успешно обновлено {len(records)} записей"
                 
                 if skipped_details:
                     skipped_count = len(skipped_details)
-                    msg += f"\n\nПропущено {skipped_count} записей:\n"
-                    msg += "\n".join(skipped_details[:10])  # Показываем первые 10 пропущенных
+                    msg += f"\n\nПропущено {skipped_count} записей"
                     
-                    if skipped_count > 10:
-                        msg += f"\n... и еще {skipped_count - 10} записей"
+                    # Показываем первые 5 причин в сообщении
+                    unique_reasons = list(set(skipped_details))[:5]
+                    msg += "\nПримеры причин:\n" + "\n".join(unique_reasons)
                     
-                    # Сохраняем полный список пропущенных записей в файл
-                    try:
-                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        filename = f"skipped_records_{timestamp}.txt"
-                        with open(filename, 'w', encoding='utf-8') as f:
-                            f.write("Пропущенные записи:\n")
-                            f.write("\n".join(skipped_details))
-                        msg += f"\n\nПолный список сохранен в файл: {filename}"
-                    except Exception as e:
-                        msg += f"\n\nНе удалось сохранить файл с пропущенными записями: {str(e)}"
+                    if skipped_count > 5:
+                        msg += f"\n... и еще {skipped_count - 5} записей"
+                    
+                    msg += f"\n\nПолный список сохранен в файл: skipped_records_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
                 
                 self.show_message(msg)
             else:
                 if skipped_details:
+                    # Сохраняем все пропущенные записи
+                    self._save_skipped_to_excel(skipped_details, move_df)
+                    
                     msg = "Все записи пропущены. Причины:\n"
-                    msg += "\n".join(skipped_details[:20])  # Показываем первые 20 причин
+                    unique_reasons = list(set(skipped_details))[:10]
+                    msg += "\n".join(unique_reasons)
                     
-                    if len(skipped_details) > 20:
-                        msg += f"\n... и еще {len(skipped_details) - 20} записей"
+                    if len(skipped_details) > 10:
+                        msg += f"\n... и еще {len(skipped_details) - 10} записей"
                     
+                    msg += f"\n\nПодробности сохранены в файл"
                     self.show_error_message(msg)
                 else:
                     self.show_message("Нет корректных данных для вставки")
@@ -1189,10 +1209,99 @@ class MovesPage(QWidget):
             self.show_error_message(error_msg)
             raise Exception(error_msg)
 
-    def _process_complectations(self, move_df, report_start_date):
-        """Обработка данных о комплектациях - упрощенная версия"""
+    def _save_skipped_to_excel(self, skipped_details, original_df):
+        """Сохраняет пропущенные записи в Excel файл с группировкой по причинам"""
+        if not skipped_details:
+            return None
+        
         try:
-            # 1. Читаем данные из Excel файла
+            # Группируем пропущенные записи по причинам
+            reasons_dict = {}
+            for detail in skipped_details:
+                if ", Причина: " in detail:
+                    try:
+                        doc_info, reason = detail.split(", Причина: ", 1)
+                        if reason not in reasons_dict:
+                            reasons_dict[reason] = []
+                        
+                        # Извлекаем информацию о документе из строки
+                        doc_parts = {}
+                        for part in doc_info.split(", "):
+                            if ": " in part:
+                                key, value = part.split(": ", 1)
+                                doc_parts[key] = value
+                        
+                        reasons_dict[reason].append({
+                            'doc_info': doc_info,
+                            'doc_parts': doc_parts,
+                            'reason': reason
+                        })
+                    except ValueError:
+                        # Если не удалось распарсить, добавляем как есть
+                        if "Другая причина" not in reasons_dict:
+                            reasons_dict["Другая причина"] = []
+                        reasons_dict["Другая причина"].append({
+                            'doc_info': detail,
+                            'doc_parts': {},
+                            'reason': "Не удалось распарсить причину"
+                        })
+            
+            # Создаем Excel файл с разными листами для разных причин
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"skipped_records_{timestamp}.xlsx"
+            
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                for reason, items in reasons_dict.items():
+                    # Создаем DataFrame для этой причины
+                    reason_data = []
+                    
+                    for item in items:
+                        document = item['doc_parts'].get('Документ')
+                        if document:
+                            # Ищем соответствующие строки в оригинальном DataFrame
+                            matching_rows = original_df[
+                                (original_df['Документ'] == document) & 
+                                (original_df['Код'] == item['doc_parts'].get('Код', ''))
+                            ]
+                            
+                            if not matching_rows.empty:
+                                for _, row in matching_rows.iterrows():
+                                    row_data = row.to_dict()
+                                    row_data['Причина_пропуска'] = reason
+                                    row_data['Детали_ошибки'] = item['doc_info']
+                                    reason_data.append(row_data)
+                            else:
+                                # Если не нашли полные данные, создаем упрощенную запись
+                                simple_data = {
+                                    'Документ': document,
+                                    'Дата': item['doc_parts'].get('Дата', ''),
+                                    'Код': item['doc_parts'].get('Код', ''),
+                                    'Причина_пропуска': reason,
+                                    'Детали_ошибки': item['doc_info'],
+                                    'Статус': 'Не найдены полные данные в исходном DataFrame'
+                                }
+                                reason_data.append(simple_data)
+                    
+                    if reason_data:
+                        reason_df = pd.DataFrame(reason_data)
+                        # Ограничиваем имя листа до 31 символа
+                        sheet_name = re.sub(r'[\\/*?:\[\]]', '', reason[:31])
+                        if not sheet_name.strip():
+                            sheet_name = "Другие_причины"
+                        
+                        reason_df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            return filename
+            
+        except Exception as e:
+            print(f"Ошибка при сохранении пропущенных записей: {str(e)}")
+            traceback.print_exc()
+            return None
+
+    def _process_complectations(self, move_df, report_start_date):
+        """Обработка данных о комплектациях с полной поддержкой Date_Time"""
+        try:
+            # 1. Читаем данные из Excel файла ручных комплектаций
             dtype_compl = {"Артикул": str, "Упаковка": float, "Кол-во в упак": float, "Количество": float}
             excel_complect_df = pd.read_excel(Complectation_file, sheet_name="ручные компл", dtype=dtype_compl)
             
@@ -1207,29 +1316,45 @@ class MovesPage(QWidget):
             excel_complect_df['Вид операции'] = 'Комплектация'
             excel_complect_df['Вид документа'] = 'Комплектация номенклатуры'
             
-            # 3. Обновляем БД данными из Excel
+            # 3. Убедимся, что поле Дата_Время заполнено
+            if excel_complect_df['Дата_Время'].isnull().any():
+                # Если есть пустые значения, заполняем их на основе даты
+                mask = excel_complect_df['Дата_Время'].isnull()
+                excel_complect_df.loc[mask, 'Дата_Время'] = pd.to_datetime(excel_complect_df.loc[mask, 'Дата']) + pd.Timedelta(hours=12)
+            
+            # 4. Обновляем БД данными из Excel
             self._update_complects_manual_in_db(excel_complect_df, report_start_date)
             
-            # 4. Добавляем данные из Excel в общий DataFrame движений
+            # 5. Добавляем данные из Excel в общий DataFrame движений
             move_df = pd.concat([move_df, excel_complect_df], axis=0, ignore_index=True)
             
-            # 5. Обрабатываем автоматические комплектации
+            # 6. Обрабатываем автоматические комплектации из движений
             complect_df = move_df[
                 (move_df['Тип документа'] == '2.0. Комплектация') | 
                 (move_df['Тип документа'] == '5.0. Списание') | 
                 (move_df['Тип документа'] == '6.0. Расход')
-            ]
+            ].copy()
             
             if not complect_df.empty:
+                # 7. Убедимся, что поле Дата_Время заполнено для автоматических комплектаций
+                if 'Дата_Время' not in complect_df.columns:
+                    # Если колонки нет, создаем ее
+                    complect_df['Дата_Время'] = pd.NaT
+                
+                # Заполняем пустые значения Дата_Время
+                mask = complect_df['Дата_Время'].isnull()
+                complect_df.loc[mask, 'Дата_Время'] = pd.to_datetime(complect_df.loc[mask, 'Дата']) + pd.Timedelta(hours=9)
+                
+                # 8. Обновляем БД автоматическими комплектациями
                 self._update_complects_in_db(complect_df, report_start_date)
             
             return move_df
-            
+                
         except Exception as e:
             self.show_error_message(f"Ошибка обработки комплектаций: {str(e)}")
             traceback.print_exc()
-            return move_df
-
+            return move_df    
+    
     def _update_complects_in_db(self, df, report_start_date):
         """Обновление данных о комплектациях в БД с защитой от ошибок"""
         try:
@@ -1237,7 +1362,6 @@ class MovesPage(QWidget):
                 return
 
             df = self._clean_dataframe(df)
-
             db.query(Complects).filter(Complects.Date >= report_start_date).delete()
 
             # Подготавливаем данные для вставки
@@ -1245,28 +1369,40 @@ class MovesPage(QWidget):
             for _, row in df.iterrows():
                 try:
                     record = {
-                        'Date_Time':row.get('Date_Time'),
-                        'Document': row['Документ'],
-                        'Date': row['Дата'],
-                        'Stock': row['Склад'],
-                        'Qty': row['Количество'],
-                        'DocType_id': self._get_doc_type_id(row.get('Вид документа', ''), row.get('Вид операции', ''), row.get('Тип документа', '')),
-                        'Material_id': row['Код'],
+                        'Date_Time': self._safe_datetime(row.get('Дата_Время')), 
+                        'Document': row.get('Документ', ''),
+                        'Date': row.get('Дата'),
+                        'Stock': row.get('Склад', ''),
+                        'Qty': self._safe_float(row.get('Количество')),
+                        'DocType_id': self._get_doc_type_id(
+                            row.get('Вид документа', ''), 
+                            row.get('Вид операции', ''), 
+                            row.get('Тип документа', '')
+                        ),
+                        'Material_id': row.get('Код', ''),
                     }
-                    records.append(record)
+                    
+                    # Проверяем обязательные поля
+                    if (record['Document'] and record['Date'] and record['Material_id'] and 
+                        record['Date_Time'] is not None):
+                        records.append(record)
+                        
                 except Exception as e:
-                    print(f"Ошибка обработки строки: {e}\nДанные: {row.to_dict()}")
+                    print(f"Ошибка обработки строки комплектации: {e}")
                     continue
             
-            # Вставляем данные порциями по 500 записей
-            for i in range(0, len(records), 500):
-                try:
-                    db.bulk_insert_mappings(Complects, records[i:i+500])
-                    db.commit()
-                except Exception as e:
-                    db.rollback()
-                    print(f"Ошибка вставки записей {i}-{i+500}: {str(e)}")
-                    traceback.print_exc()
+            # Вставляем данные порциями
+            if records:
+                for i in range(0, len(records), 500):
+                    try:
+                        db.bulk_insert_mappings(Complects, records[i:i+500])
+                        db.commit()
+                    except Exception as e:
+                        db.rollback()
+                        print(f"Ошибка вставки записей комплектаций {i}-{i+500}: {str(e)}")
+                        traceback.print_exc()
+            else:
+                print("Нет корректных записей комплектаций для вставки")
                     
         except Exception as e:
             db.rollback()
@@ -1611,12 +1747,10 @@ class MovesPage(QWidget):
                 # Установка форматов ячеек
                 ws.range("A2:A" + str(cells_num)).number_format = "ДД.ММ.ГГГГ чч:мм:сс"
                 ws.range("C2:C" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("F2:F" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("I2:I" + str(cells_num)).number_format = "@"
-                ws.range("L2:M" + str(cells_num)).number_format = "0"
-                ws.range("P2:R" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;\"\"-\"\""
-                ws.range("T2:T" + str(cells_num)).number_format = "@"
-                ws.range("U2:U" + str(cells_num)).number_format = "# ##0,0_ ;[Red]-# ##0,0_ ;\"\"-\"\""
+                ws.range("G2:G" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
+                ws.range("J2:J" + str(cells_num)).number_format = "@"
+                ws.range("M2:N" + str(cells_num)).number_format = "0"
+                ws.range("Q2:S" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
                 ws.range("Y2:Y" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
                 
                 # Запись данных
@@ -1645,12 +1779,10 @@ class MovesPage(QWidget):
                 # Установка форматов ячеек
                 ws.range("A2:A" + str(cells_num)).number_format = "ДД.ММ.ГГГГ чч:мм:сс"
                 ws.range("C2:C" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("F2:F" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
-                ws.range("I2:I" + str(cells_num)).number_format = "@"
-                ws.range("L2:M" + str(cells_num)).number_format = "0"
-                ws.range("P2:R" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;\"\"-\"\""
-                ws.range("T2:T" + str(cells_num)).number_format = "@"
-                ws.range("U2:U" + str(cells_num)).number_format = "# ##0,0_ ;[Red]-# ##0,0_ ;\"\"-\"\""
+                ws.range("G2:G" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
+                ws.range("J2:J" + str(cells_num)).number_format = "@"
+                ws.range("M2:N" + str(cells_num)).number_format = "0,0"
+                ws.range("Q2:S" + str(cells_num)).number_format = "# ##0,00_ ;[Red]-# ##0,00_ ;""-"""
                 ws.range("Y2:Y" + str(cells_num)).number_format = "ДД.ММ.ГГГГ"
                 
                 # Запись данных
@@ -1664,7 +1796,7 @@ class MovesPage(QWidget):
 
     @lru_cache(maxsize=128)
     def _get_doc_type_id(self, document: str, transaction: str, doc_type: str) -> int:
-        """Получение ID типа документа с защитой от NaN и None значений"""
+        """Получение ID типа документа без создания новых записей"""
         try:
             # Обработка None и NaN значений
             document = None if document is None or str(document).lower() in ['none', 'nan', ''] else str(document)
@@ -1696,27 +1828,12 @@ class MovesPage(QWidget):
             if result:
                 return result[0]
             
-            # Если запись не найдена, создаем новую (если требуется)
-            if document or transaction or doc_type:
-                try:
-                    new_doc_type = DOCType(
-                        Document=document,
-                        Transaction=transaction,
-                        Doc_type=doc_type
-                    )
-                    db.add(new_doc_type)
-                    db.commit()
-                    return new_doc_type.id
-                except Exception:
-                    db.rollback()
-                    return None
-                    
+            # ВОТ ИЗМЕНЕНИЕ: Не создаем новую запись, просто возвращаем None
             return None
-            
+                
         except Exception as e:
             print(f"Ошибка при получении ID типа документа: {str(e)}")
             traceback.print_exc()
-            db.rollback()
             return None
 
     def _get_model_for_table(self, table_name: str):
@@ -1778,11 +1895,8 @@ class MovesPage(QWidget):
         # Если значение - строка, пытаемся распарсить
         if isinstance(value, str):
             try:
-                # Убираем лишние пробелы
                 value = value.strip()
-                # Пробуем разные форматы
-                for fmt in ['%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M', '%Y-%m-%d %H:%M:%S', 
-                        '%Y-%m-%d %H:%M', '%d.%m.%Y', '%Y-%m-%d']:
+                for fmt in ['%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M', '%Y-%m-%d %H:%M:%S']:
                     try:
                         return datetime.datetime.strptime(value, fmt)
                     except ValueError:
@@ -1795,7 +1909,7 @@ class MovesPage(QWidget):
             return datetime.datetime.combine(value, datetime.time(0, 0, 0))
         
         return None
-
+    
     def _format_datetime_display(self, dt):
         """Форматирование datetime для отображения 19.08.2025 10:57:21"""
         if dt is None:

@@ -28,7 +28,7 @@ QWidget{
 
 #Title_label.QLabel {
 color: #262626;
-font: 22pt &quot;Tahoma&quot;;
+font: 18pt &quot;Tahoma&quot;;
 }
 
 QLabel {
@@ -70,19 +70,29 @@ QTableWidget::item{
 	padding-right: 5px;
 	gridline-color: #f8994a;
 	color: #262626;
+	padding: 1px;
+    font: 7pt &quot;Tahoma&quot;; 
 }
 QTableWidget::item:selected{
-	background-color: #f6c294;
-    color: #262626;
+	background-color: #f28223;
+    color: #ffffff;
+}
+QTableWidget::item:editable {
+	background-color: #ffffd0;
+	border: #ffffff;
+}
+QTableWidget::item:focus {
+	background-color: #f28223;
+	border: 2px solid #ffffff;
 }
 QHeaderView::section{
 	background-color: #f8f8f2;
-	max-width: 30px;
 	border: none;
 	border-style: none;
 }
 QTableWidget::horizontalHeader {	
 	background-color: #f8994a;
+	font: 10pt &quot;Tahoma&quot;;
 }
 QHeaderView::section:horizontal {
     border: 1px solid #f8994a;
@@ -113,6 +123,52 @@ QLineEdit:focus {
 	border: 2px solid #f28223;
 }
 
+/* Стили для множественного выбора */
+QListWidget {
+    background-color: #f8f8f2;
+    border: 2px solid #f09d54;
+    border-radius: 5px;
+    color: #262626;
+    font: 10pt &quot;Tahoma&quot;;
+}
+
+QListWidget::item {
+    padding: 5px;
+    border-bottom: 1px solid #f8994a;
+}
+
+QListWidget::item:selected {
+    background-color: #f28223;
+    color: #ffffff;
+}
+
+QListWidget::item:hover {
+    background-color: #ffd4af;
+}
+
+/* Улучшенная видимость чекбоксов */
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 2px solid #f09d54;
+    background-color: #f8f8f2;
+    border-radius: 3px;
+}
+
+QCheckBox::indicator:checked {
+    border: 2px solid #f28223;
+    background-color: #f28223;
+    border-radius: 3px;
+    image: url(:/icon/icon/check.svg);
+}
+
+QCheckBox::indicator:hover {
+    border: 2px solid #f28223;
+}
+
 QComboBox {
 	background-color: #f8f8f2;
 	border-radius: 5px;
@@ -121,7 +177,7 @@ QComboBox {
 	selection-color: #f28223;
 	selection-background-color: #f28223;
     color: #262626;
-	font: 10pt &quot;Tahoma&quot;;
+	font: 9pt &quot;Tahoma&quot;;
 }
 QComboBox:hover {
 	border: 2px solid #f28223;
@@ -164,7 +220,7 @@ QScrollBar:horizontal {
 }
 QScrollBar::handle:horizontal {
     background: #f6c294;
-    min-width: 25px;
+    min-width: 20px;
 	border-radius: 4px
 }
 QScrollBar::add-line:horizontal {
@@ -379,10 +435,16 @@ QCalendarWidget QSpinBox::down-arrow {
           <height>40</height>
          </size>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>40</height>
+         </size>
+        </property>
         <property name="font">
          <font>
           <family>Tahoma</family>
-          <pointsize>22</pointsize>
+          <pointsize>18</pointsize>
           <italic>false</italic>
           <bold>false</bold>
          </font>
@@ -542,13 +604,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                  <property name="maximumSize">
                   <size>
                    <width>16777215</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -558,7 +620,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>16777215</width>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -568,13 +636,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                  <property name="maximumSize">
                   <size>
                    <width>16777215</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -584,13 +652,13 @@ QCalendarWidget QSpinBox::down-arrow {
                  <property name="minimumSize">
                   <size>
                    <width>0</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                  <property name="maximumSize">
                   <size>
                    <width>16777215</width>
-                   <height>25</height>
+                   <height>22</height>
                   </size>
                  </property>
                 </widget>
@@ -733,13 +801,13 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="iconSize">
@@ -755,13 +823,13 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
              </widget>
@@ -771,13 +839,13 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
              </widget>
@@ -951,6 +1019,18 @@ QCalendarWidget QSpinBox::down-arrow {
             </item>
             <item>
              <widget class="QLabel" name="label_qty_pcs">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>30</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>30</height>
+               </size>
+              </property>
               <property name="styleSheet">
                <string notr="true">QLabel {
 	background-color: #f8f8f2;
@@ -1020,6 +1100,18 @@ QCalendarWidget QSpinBox::down-arrow {
             </item>
             <item>
              <widget class="QLabel" name="label_Volume">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>30</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>30</height>
+               </size>
+              </property>
               <property name="styleSheet">
                <string notr="true">QLabel {
 	background-color: #f8f8f2;
@@ -1059,7 +1151,13 @@ QCalendarWidget QSpinBox::down-arrow {
            <property name="minimumSize">
             <size>
              <width>104</width>
-             <height>32</height>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>30</height>
             </size>
            </property>
            <property name="font">
@@ -1124,7 +1222,7 @@ QCalendarWidget QSpinBox::down-arrow {
               <property name="maximumSize">
                <size>
                 <width>160</width>
-                <height>16777215</height>
+                <height>30</height>
                </size>
               </property>
               <property name="text">

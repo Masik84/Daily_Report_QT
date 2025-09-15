@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import os
+import os, re
 import datetime
 from sqlalchemy import extract
 from PySide6.QtWidgets import QMessageBox, QHeaderView, QTableWidget, QMenu, QApplication, QTableWidgetItem, QWidget
@@ -1080,9 +1080,11 @@ class TempTablesPage(QWidget):
             for name in files:
                 if name.startswith("Закупки_") and name.endswith(".xlsx"):
                     try:
-                        file_year = int(name.split("_")[1].split(".")[0])
-                        if file_year >= target_year:
-                            files_to_read.append(os.path.join(root, name))
+                        match = re.search(r'Закупки_(\d{4})', name)
+                        if match:
+                            file_year = int(match.group(1))
+                            if file_year >= target_year:
+                                files_to_read.append(os.path.join(root, name))
                     except (IndexError, ValueError):
                         continue
         
@@ -1202,9 +1204,11 @@ class TempTablesPage(QWidget):
             for name in files:
                 if name.startswith("Продажи_") and name.endswith(".xlsx"):
                     try:
-                        file_year = int(name.split("_")[1].split(".")[0])
-                        if file_year >= target_year:
-                            files_to_read.append(os.path.join(root, name))
+                        match = re.search(r'Продажи_(\d{4})', name)
+                        if match:
+                            file_year = int(match.group(1))
+                            if file_year >= target_year:
+                                files_to_read.append(os.path.join(root, name))
                     except (IndexError, ValueError):
                         continue
         
@@ -1366,6 +1370,8 @@ class TempTablesPage(QWidget):
         df["Курс взаиморасчетов"] = df["Курс взаиморасчетов_corr"].fillna(df["Курс взаиморасчетов"])
         df = df.drop(columns=["Курс взаиморасчетов_corr", "НДС"])
         
+        df["Дата"] = np.where((df["Документ"] == "00ОП-000086") & (df["ДокОсн"] == "РТ24-004577"), df["Дата ДокОсн"], df["Дата"])
+        
         df['data_source'] = '1C'
 
         marketplace_df = self.get_marketplace_data(report_start_date)
@@ -1476,9 +1482,9 @@ class TempTablesPage(QWidget):
 
         for col in columns_to_check:
             if col not in df.columns:
-                df[col] = pd.Series(dtype=float)
-                
-        df.loc[:, "columns_to_check"] = df["columns_to_check"].astype(float).fillna(1.0)
+                df[col] = pd.Series(dtype='float64')
+
+        df[columns_to_check] = df[columns_to_check].fillna(1.0).astype(float)
 
         df["Дата"] = pd.to_datetime(df["Дата"], format='%d.%m.%Y', errors="coerce")
         df["Дата счета"] = pd.to_datetime(df["Дата счета"], format='%d.%m.%Y', errors="coerce")
@@ -1547,7 +1553,7 @@ class TempTablesPage(QWidget):
         }
         
         df = df.rename(columns=column_mapping)
-        df.to_excel('test_sales.xlsx')
+
         return df
     
     def read_orders_data(self):
@@ -1885,7 +1891,7 @@ class TempTablesPage(QWidget):
                     'order': 'Закупки (заказ)'
                 })
             )
-        print(df)
+
         # Проверка продуктов
         self._check_products(df)
         

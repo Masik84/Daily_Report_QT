@@ -161,7 +161,8 @@ class CustomerPage(QWidget):
         """Чтение данных клиентов с детализацией несоответствий"""
         try:
             # Чтение и подготовка данных
-            df = pd.read_excel(All_data_file, sheet_name='Customers', dtype={'Контрагент.ИНН': str})
+            df = pd.read_excel(All_data_file, sheet_name='Customers', dtype={'Контрагент.ИНН': str}, keep_default_na=False)
+            df = df.fillna('')
             
             column_map = {
                 'Контрагент.ИНН': 'INN',
@@ -172,6 +173,15 @@ class CustomerPage(QWidget):
                 'ХОЛДИНГ': 'Holding'
             }
             df = df.rename(columns=column_map)[list(column_map.values())]
+            # Удаляем записи с пустыми ID и 'new'
+            df = df[df['id'].astype(str).str.strip() != '']  # Удаляем пустые ID
+            df = df[~df['id'].astype(str).str.contains('new', case=False, na=False)]
+            
+            # Дополнительная фильтрация невалидных данных
+            df = df[df['id'].notna()]  # Удаляем NaN
+            df = df[df['id'] != '']  # Удаляем пустые строки
+            df = df[df['Customer_name'].notna()]  # Удаляем клиентов без имени
+            
             df[['Sector', 'Price_type']] = df[['Sector', 'Price_type']].fillna("-")
             
             # Удаляем записи с 'new'
@@ -370,7 +380,7 @@ class CustomerPage(QWidget):
         existing_holdings = {h[0] for h in db.query(Holding.Holding_name).all()}
 
         # Уникальные названия холдингов из входных данных
-        holdings_names = {row['Holding'] for row in data if 'Holding' in row}
+        holdings_names = {row['Holding'] for row in data if 'Holding' in row and pd.notna(row['Holding']) and row['Holding'] != 'NaN'}
 
         # Фильтруем только новые холдинги
         new_holdings = [{'Holding_name': name} for name in holdings_names
@@ -391,17 +401,37 @@ class CustomerPage(QWidget):
         if not data:
             return
 
+        # Фильтрация данных с NaN значениями
+        valid_data = []
+        for row in data:
+            # Проверяем, что основные поля не являются NaN
+            if (pd.notna(row.get('id')) and 
+                pd.notna(row.get('Customer_name')) and 
+                pd.notna(row.get('Holding')) and 
+                row.get('Holding') != 'NaN'):
+                valid_data.append(row)
+        
+        if not valid_data:
+            self.show_error_message("Нет валидных данных для сохранения клиентов")
+            return
+
         existing_customers = {c.id: c for c in db.query(Cust_db).all()}
         to_insert = []
         to_update = []
 
-        for row in data:
+        for row in valid_data:  # Используем отфильтрованные данные
             customer_id = row['id']
+            holding_name = row['Holding']
+            if pd.isna(holding_name) or holding_name == 'NaN':
+                holding_id = None
+            else:
+                holding_id = self._get_id(Holding, 'Holding_name', holding_name)
+            
             customer_data = {
                 'id': customer_id,
                 'Customer_name': row['Customer_name'],
                 'INN': str(row['INN']),
-                'Holding_id': self._get_id(Holding, 'Holding_name', row['Holding']),
+                'Holding_id': holding_id,
                 'Sector_id': self._get_id(Sector, 'Sector_name', row['Sector']),
                 'Price_type': row['Price_type']
             }
@@ -650,7 +680,8 @@ class CustomerPage(QWidget):
     @lru_cache(maxsize=32)
     def _get_id(self, model, name_field, name):
         """Получение ID по имени (с кэшированием)"""
-        if not name or name in ('-', ''):
+        # Добавьте проверку на NaN и другие невалидные значения
+        if not name or name in ('-', '') or pd.isna(name) or str(name).lower() == 'nan':
             return None
 
         item = db.query(model).filter(getattr(model, name_field) == name).first()

@@ -165,14 +165,14 @@ class CostsPage(QWidget):
                 db.rollback()
                 error_msg = f"Ошибка при загрузке данных:\n{str(e)}\n\n"
                 error_msg += "Все изменения отменены (rollback выполнен)."
-                self.show_error_with_copy(error_msg)
+                self.show_error_message(error_msg)
                 
         except FileNotFoundError as e:
-            self.show_error_with_copy(f"Файл не найден: {str(e)}")
+            self.show_error_message(f"Файл не найден: {str(e)}")
         except Exception as e:
             error_msg = f"Критическая ошибка при загрузке:\n{str(e)}\n\n"
             error_msg += "Проверьте:\n1. Формат файла\n2. Наличие всех листов\n3. Данные в файле"
-            self.show_error_with_copy(error_msg)
+            self.show_error_message(error_msg)
         finally:
             if db.is_active:
                 db.close()
@@ -210,7 +210,8 @@ class CostsPage(QWidget):
                 "Тамож. оформление": "Customs_clearance", "Комиссия банка": "Bank_commission",
                 "Эко сбор ст-ть": "Eco_fee_amount", "Эко сбор норм": "Eco_fee_standard",
                 "Транспорт (перемещ), л": "Transportation", "Хранение, л": "Storage",
-                "Ст-ть Денег": "Money_cost", "Доп% денег": "Additional_money_percent"
+                "Ст-ть Денег": "Money_cost", "Доп% денег": "Additional_money_percent",
+                "Оклейка остатков": 'Okleyka'
             }
             df = df.rename(columns=column_map)
 
@@ -362,13 +363,24 @@ class CostsPage(QWidget):
             dtype_tnved = {"Код ТНВЭД": str, "Пошлина": float}
             df = pd.read_excel(file_path, sheet_name="Пошлины", dtype=dtype_tnved)
             
+            # Фильтруем строки с NaN в коде ТНВЭД
+            df = df.dropna(subset=["Код ТНВЭД"])
+            
+            # Также фильтруем строки, где код ТНВЭД равен строке "NaN"
+            df = df[df["Код ТНВЭД"].str.lower() != "nan"]
+            
             # Добавляем новые коды ТНВЭД, если их нет
             existing_tnved = {t.code for t in db.query(TNVED.code).all()}
             new_tnved = set(df["Код ТНВЭД"].unique()) - existing_tnved
             
             if new_tnved:
-                db.bulk_insert_mappings(TNVED, [{"code": code} for code in new_tnved])
-                db.commit()
+                # Дополнительная фильтрация - только валидные коды
+                valid_new_tnved = [code for code in new_tnved 
+                                if code and str(code).strip() and str(code).lower() != 'nan']
+                
+                if valid_new_tnved:
+                    db.bulk_insert_mappings(TNVED, [{"code": code} for code in valid_new_tnved])
+                    db.commit()
             
             # Получаем ID всех ТНВЭД
             tnved_ids = {t.code: t.id for t in db.query(TNVED).all()}
@@ -376,7 +388,12 @@ class CostsPage(QWidget):
             # Подготовка данных для вставки
             customs_data = []
             for _, row in df.iterrows():
-                tnved_id = tnved_ids.get(row["Код ТНВЭД"])
+                tnved_code = row["Код ТНВЭД"]
+                # Пропускаем невалидные коды
+                if pd.isna(tnved_code) or str(tnved_code).lower() == 'nan' or not str(tnved_code).strip():
+                    continue
+                    
+                tnved_id = tnved_ids.get(str(tnved_code).strip())
                 if tnved_id:
                     customs_data.append({
                         "TNVED_id": tnved_id,
@@ -408,7 +425,7 @@ class CostsPage(QWidget):
             return True, "Данные пошлин успешно обновлены"
         except Exception as e:
             return False, f"Ошибка загрузки данных пошлин: {str(e)}"
-        
+
     def find_cost(self):
         """Поиск данных по заданным критериям с учетом всех условий"""
         try:
@@ -495,7 +512,8 @@ class CostsPage(QWidget):
                 Fees.Transportation,
                 Fees.Storage,
                 Fees.Money_cost,
-                Fees.Additional_money_percent
+                Fees.Additional_money_percent,
+                Fees.Okleyka
             ).join(Fees.year
             ).join(Fees.month)
             
@@ -517,7 +535,8 @@ class CostsPage(QWidget):
                     "Транспорт (перемещ), л": row.Transportation,
                     "Хранение, л": row.Storage,
                     "Ст-ть Денег": row.Money_cost,
-                    "Доп% денег": row.Additional_money_percent
+                    "Доп% денег": row.Additional_money_percent,
+                    'Оклейка остатков': row.Okleyka
                 })
             
             return result

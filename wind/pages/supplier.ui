@@ -29,13 +29,15 @@
    <string>Form</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">QWidget{
+   <string notr="true">Form.QWidget{border: 2px solid #f28223;}
+
+QWidget{
 	background-color: #f8f8f2;
 }
 
 #Title_label.QLabel {
 color: #262626;
-font: 22pt &quot;Tahoma&quot;;
+font: 18pt &quot;Tahoma&quot;;
 }
 
 QLabel {
@@ -77,19 +79,29 @@ QTableWidget::item{
 	padding-right: 5px;
 	gridline-color: #f8994a;
 	color: #262626;
+	padding: 1px;
+    font: 7pt &quot;Tahoma&quot;; 
 }
 QTableWidget::item:selected{
-	background-color: #f6c294;
-    color: #262626;
+	background-color: #f28223;
+    color: #ffffff;
+}
+QTableWidget::item:editable {
+	background-color: #ffffd0;
+	border: #ffffff;
+}
+QTableWidget::item:focus {
+	background-color: #f28223;
+	border: 2px solid #ffffff;
 }
 QHeaderView::section{
 	background-color: #f8f8f2;
-	max-width: 30px;
 	border: none;
 	border-style: none;
 }
 QTableWidget::horizontalHeader {	
 	background-color: #f8994a;
+	font: 10pt &quot;Tahoma&quot;;
 }
 QHeaderView::section:horizontal {
     border: 1px solid #f8994a;
@@ -120,6 +132,52 @@ QLineEdit:focus {
 	border: 2px solid #f28223;
 }
 
+/* Стили для множественного выбора */
+QListWidget {
+    background-color: #f8f8f2;
+    border: 2px solid #f09d54;
+    border-radius: 5px;
+    color: #262626;
+    font: 10pt &quot;Tahoma&quot;;
+}
+
+QListWidget::item {
+    padding: 5px;
+    border-bottom: 1px solid #f8994a;
+}
+
+QListWidget::item:selected {
+    background-color: #f28223;
+    color: #ffffff;
+}
+
+QListWidget::item:hover {
+    background-color: #ffd4af;
+}
+
+/* Улучшенная видимость чекбоксов */
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 2px solid #f09d54;
+    background-color: #f8f8f2;
+    border-radius: 3px;
+}
+
+QCheckBox::indicator:checked {
+    border: 2px solid #f28223;
+    background-color: #f28223;
+    border-radius: 3px;
+    image: url(:/icon/icon/check.svg);
+}
+
+QCheckBox::indicator:hover {
+    border: 2px solid #f28223;
+}
+
 QComboBox {
 	background-color: #f8f8f2;
 	border-radius: 5px;
@@ -128,7 +186,7 @@ QComboBox {
 	selection-color: #f28223;
 	selection-background-color: #f28223;
     color: #262626;
-	font: 10pt &quot;Tahoma&quot;;
+	font: 9pt &quot;Tahoma&quot;;
 }
 QComboBox:hover {
 	border: 2px solid #f28223;
@@ -171,7 +229,7 @@ QScrollBar:horizontal {
 }
 QScrollBar::handle:horizontal {
     background: #f6c294;
-    min-width: 25px;
+    min-width: 20px;
 	border-radius: 4px
 }
 QScrollBar::add-line:horizontal {
@@ -236,7 +294,116 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
 
  QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
      background: none;
- }</string>
+ }
+
+QDateEdit {
+    background-color: #f8f8f2;
+    border-radius: 5px;
+    border: 2px solid #f09d54;
+    padding-left: 10px; /* Add left padding */
+    padding-right: 10px; /* Add right padding to accommodate the dropdown arrow */
+    color: #262626;
+    font: 10pt &quot;Tahoma&quot;;
+    min-width: 80px; /* Minimum width to prevent text clipping */
+}
+
+QDateEdit:hover {
+    border: 2px solid #f28223;
+}
+
+QDateEdit:focus {
+    border: 2px solid #f28223;
+}
+
+QDateEdit::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 25px; /* Keep the dropdown arrow width */
+    border-left-width: 1px;
+    border-left-color: #f8994a;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    background-color: #f8f8f2;
+}
+
+QDateEdit::down-arrow {
+	image: url(:/icon/icon/chevron-down — копия — копия.svg);
+    width: 16px;
+    height: 16px;
+}
+
+/* Calendar Styling */
+QCalendarWidget {
+    background-color: #f8f8f2;
+    border: 2px solid #f28223;
+    color: #262626;
+}
+
+QCalendarWidget QWidget {
+    color: #262626;
+}
+
+QCalendarWidget QAbstractItemView {
+    background-color: #f8f8f2;
+    selection-background-color: #f28223;
+    selection-color: #ffffff;
+}
+
+QCalendarWidget QToolButton {
+    background-color: #ffd4af;
+    color: #262626;
+    font: 10pt &quot;Tahoma&quot;;
+    border-radius: 3px;
+    padding: 5px;
+}
+
+QCalendarWidget QToolButton:hover {
+    background-color: #f28223;
+    color: #ffffff;
+}
+
+QCalendarWidget QMenu {
+    background-color: #f8f8f2;
+    border: 1px solid #f28223;
+}
+
+QCalendarWidget QSpinBox {
+    background-color: #f8f8f2;
+    color: #262626;
+    border: 1px solid #f09d54;
+}
+
+QCalendarWidget QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #f8994a;
+    border-left-style: solid;
+}
+
+QCalendarWidget QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #f8994a;
+    border-left-style: solid;
+}
+
+QCalendarWidget QSpinBox::up-arrow {
+	image: url(:/icon/icon/chevron-up — копия — копия.svg);
+    width: 10px;
+    height: 10px;
+}
+
+QCalendarWidget QSpinBox::down-arrow {
+	image: url(:/icon/icon/chevron-down — копия — копия.svg);
+    width: 10px;
+    height: 10px;
+}
+</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <property name="leftMargin">
@@ -264,13 +431,19 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>50</height>
+          <height>40</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>40</height>
          </size>
         </property>
         <property name="font">
          <font>
           <family>Tahoma</family>
-          <pointsize>22</pointsize>
+          <pointsize>18</pointsize>
           <italic>false</italic>
           <bold>false</bold>
          </font>
@@ -420,13 +593,13 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
               <property name="minimumSize">
                <size>
                 <width>0</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
                 <width>16777215</width>
-                <height>25</height>
+                <height>22</height>
                </size>
               </property>
               <property name="text">
@@ -435,10 +608,36 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="line_Suppl1"/>
+             <widget class="QComboBox" name="line_Suppl1">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>22</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>22</height>
+               </size>
+              </property>
+             </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="line_Suppl2"/>
+             <widget class="QComboBox" name="line_Suppl2">
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>22</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>22</height>
+               </size>
+              </property>
+             </widget>
             </item>
            </layout>
           </widget>

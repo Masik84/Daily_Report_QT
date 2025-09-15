@@ -285,17 +285,14 @@ class AddSupplCostsPage(QWidget):
                     delete_count = db.query(AddSupplCost).filter(AddSupplCost.id.in_(to_delete_ids)).delete(
                         synchronize_session=False
                     )
-                    print(f"Удалено {delete_count} устаревших записей")
                 
                 # Вставляем новые записи
                 if to_insert:
                     db.bulk_insert_mappings(AddSupplCost, to_insert)
-                    print(f"Добавлено {len(to_insert)} новых записей")
                 
                 # Обновляем существующие записи
                 if to_update:
                     db.bulk_update_mappings(AddSupplCost, to_update)
-                    print(f"Обновлено {len(to_update)} записей")
                 
                 db.commit()
                 

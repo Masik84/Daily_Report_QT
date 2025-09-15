@@ -555,7 +555,7 @@ class MarketplacePage(QWidget):
         group_cols = [col for col in df.columns if col not in numeric_cols]
         
         df = df.groupby(group_cols, as_index=False)[numeric_cols].sum()
-        df.to_excel('test_ya.xlsx')
+
         return df
         
     def read_cash_data(self):

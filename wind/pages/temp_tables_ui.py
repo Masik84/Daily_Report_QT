@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'temp_tablesERAQLT.ui'
+## Form generated from reading UI file 'temp_tablesOwYnqS.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -78,20 +78,21 @@ class Ui_Form(object):
 "	padding-right: 5px;\n"
 "	gridline-color: #f8994a;\n"
 "	color: #262626;\n"
-"	padding: 1px; \n"
-"    font: 5pt \"Tahoma\";\n"
+"	padding: 1px;\n"
+"    font: 7pt \"Tahoma\"; \n"
 "}\n"
-"QTableWidget::item:selected{\n"
-"	background-color: #f6c294;\n"
-"    color: #262626;\n"
+""
+                        "QTableWidget::item:selected{\n"
+"	background-color: #f28223;\n"
+"    color: #ffffff;\n"
 "}\n"
 "QTableWidget::item:editable {\n"
 "	background-color: #ffffd0;\n"
-"	border: #ffcc00;\n"
+"	border: #ffffff;\n"
 "}\n"
 "QTableWidget::item:focus {\n"
-"	background-color: #ffffa0;\n"
-"	border: 2px solid #ff9900;\n"
+"	background-color: #f28223;\n"
+"	border: 2px solid #ffffff;\n"
 "}\n"
 "QHeaderView::section{\n"
 "	background-color: #f8f8f2;\n"
@@ -121,7 +122,8 @@ class Ui_Form(object):
 "	border: 2px solid #f09d54;\n"
 "	padding-left: 10px;\n"
 "	selection-color: rgb(255, 255, 255);\n"
-"	selection-background-color: #f28223;\n"
+"	selection-background-"
+                        "color: #f28223;\n"
 "    color: #262626;\n"
 "}\n"
 "QLineEdit:hover {\n"
@@ -129,6 +131,53 @@ class Ui_Form(object):
 "}\n"
 "QLineEdit:focus {\n"
 "	border: 2px solid #f28223;\n"
+"}\n"
+"\n"
+"/* \u0421\u0442\u0438\u043b\u0438 \u0434\u043b\u044f \u043c\u043d\u043e\u0436\u0435\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0433\u043e \u0432\u044b\u0431\u043e\u0440\u0430 */\n"
+"QListWidget {\n"
+"    background-color: #f8f8f2;\n"
+"    border: 2px solid #f09d54;\n"
+"    border-radius: 5px;\n"
+"    color: #262626;\n"
+"    font: 10pt \"Tahoma\";\n"
+"}\n"
+"\n"
+"QListWidget::item {\n"
+"    padding: 5px;\n"
+"    border-bottom: 1px solid #f8994a;\n"
+"}\n"
+"\n"
+"QListWidget::item:selected {\n"
+"    background-color: #f28223;\n"
+"    color: #ffffff;\n"
+"}\n"
+"\n"
+"QListWidget::item:hover {\n"
+"    background-color: #ffd4af;\n"
+"}\n"
+"\n"
+"/* \u0423\u043b\u0443\u0447\u0448\u0435\u043d\u043d\u0430\u044f \u0432\u0438\u0434\u0438\u043c\u043e\u0441\u0442\u044c \u0447\u0435\u043a\u0431\u043e\u043a\u0441\u043e\u0432 */\n"
+"QCheckBox::indicator {\n"
+""
+                        "    width: 16px;\n"
+"    height: 16px;\n"
+"}\n"
+"\n"
+"QCheckBox::indicator:unchecked {\n"
+"    border: 2px solid #f09d54;\n"
+"    background-color: #f8f8f2;\n"
+"    border-radius: 3px;\n"
+"}\n"
+"\n"
+"QCheckBox::indicator:checked {\n"
+"    border: 2px solid #f28223;\n"
+"    background-color: #f28223;\n"
+"    border-radius: 3px;\n"
+"    image: url(:/icon/icon/check.svg);\n"
+"}\n"
+"\n"
+"QCheckBox::indicator:hover {\n"
+"    border: 2px solid #f28223;\n"
 "}\n"
 "\n"
 "QComboBox {\n"
@@ -155,12 +204,12 @@ class Ui_Form(object):
 "QComboBox QAbstractItemView::item::selected {\n"
 "	background-color: #f09d54;\n"
 "	color: #ffffff;\n"
-"}\n"
+""
+                        "}\n"
 "\n"
 "QComboBox::down-arrow {\n"
 "	\n"
-"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e"
-                        "\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/icon/icon/chevron-down \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "}\n"
 "QComboBox::drop-down {\n"
 "    subcontrol-origin: padding;\n"
@@ -191,12 +240,12 @@ class Ui_Form(object):
 "    background: #f8994a;\n"
 "    width: 20px;\n"
 "	border-top-right-radius: 4px;\n"
-"    border-bottom-right-radius: 4px;\n"
+"    border-bottom-right-r"
+                        "adius: 4px;\n"
 "    subcontrol-position: right;\n"
 "    subcontrol-origin: margin;\n"
 "}\n"
-"QScrollB"
-                        "ar::sub-line:horizontal {\n"
+"QScrollBar::sub-line:horizontal {\n"
 "    border: none;\n"
 "    background: #f8994a;\n"
 "    width: 20px;\n"
@@ -230,12 +279,12 @@ class Ui_Form(object):
 "    background: #f8994a;\n"
 "     height: 20px;\n"
 "	border-bottom-left-radius: 4px;\n"
-"    border-bottom-right-radius: 4px;\n"
+"    border-bottom-righ"
+                        "t-radius: 4px;\n"
 "     subcontrol-position: bottom;\n"
 "     subcontrol-origin: margin;\n"
 " }\n"
-" "
-                        "QScrollBar::sub-line:vertical {\n"
+" QScrollBar::sub-line:vertical {\n"
 "	border: none;\n"
 "    background: #f8994a;\n"
 "     height: 20px;\n"
@@ -266,14 +315,14 @@ class Ui_Form(object):
 "QDateEdit:hover {\n"
 "    border: 2px solid #f28223;\n"
 "}\n"
-"\n"
+""
+                        "\n"
 "QDateEdit:focus {\n"
 "    border: 2px solid #f28223;\n"
 "}\n"
 "\n"
 "QDateEdit::drop-down {\n"
-" "
-                        "   subcontrol-origin: padding;\n"
+"    subcontrol-origin: padding;\n"
 "    subcontrol-position: top right;\n"
 "    width: 25px; /* Keep the dropdown arrow width */\n"
 "    border-left-width: 1px;\n"
@@ -304,13 +353,13 @@ class Ui_Form(object):
 "QCalendarWidget QAbstractItemView {\n"
 "    background-color: #f8f8f2;\n"
 "    selection-background-color: #f28223;\n"
-"    selection-color: #ffffff;\n"
+"    selection-color: "
+                        "#ffffff;\n"
 "}\n"
 "\n"
 "QCalendarWidget QToolButton {\n"
 "    background-color: #ffd4af;\n"
-"    colo"
-                        "r: #262626;\n"
+"    color: #262626;\n"
 "    font: 10pt \"Tahoma\";\n"
 "    border-radius: 3px;\n"
 "    padding: 5px;\n"
@@ -347,12 +396,12 @@ class Ui_Form(object):
 "    width: 15px;\n"
 "    border-left-width: 1px;\n"
 "    border-left-color: #f8994a;\n"
-"    border-left-style: solid;\n"
+""
+                        "    border-left-style: solid;\n"
 "}\n"
 "\n"
 "QCalendarWidget QSpinBox::up-arrow {\n"
-"	image: url(:/"
-                        "icon/icon/chevron-up \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
+"	image: url(:/icon/icon/chevron-up \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg);\n"
 "    width: 10px;\n"
 "    height: 10px;\n"
 "}\n"
@@ -375,6 +424,7 @@ class Ui_Form(object):
         self.Title_label = QLabel(self.widget)
         self.Title_label.setObjectName(u"Title_label")
         self.Title_label.setMinimumSize(QSize(0, 40))
+        self.Title_label.setMaximumSize(QSize(16777215, 40))
         font = QFont()
         font.setFamilies([u"Tahoma"])
         font.setPointSize(18)
@@ -565,7 +615,7 @@ class Ui_Form(object):
         self.btn_find = QPushButton(self.frame_3)
         self.btn_find.setObjectName(u"btn_find")
         self.btn_find.setMinimumSize(QSize(97, 30))
-        self.btn_find.setMaximumSize(QSize(92, 16777215))
+        self.btn_find.setMaximumSize(QSize(92, 30))
         icon = QIcon()
         icon.addFile(u":/icon/icon/search \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_find.setIcon(icon)
@@ -609,6 +659,8 @@ class Ui_Form(object):
 
         self.label_qty_pcs = QLabel(self.frame_pcs)
         self.label_qty_pcs.setObjectName(u"label_qty_pcs")
+        self.label_qty_pcs.setMinimumSize(QSize(0, 30))
+        self.label_qty_pcs.setMaximumSize(QSize(16777215, 30))
         self.label_qty_pcs.setStyleSheet(u"QLabel {\n"
 "	background-color: #f8f8f2;\n"
 "	border-radius: 5px;\n"
@@ -641,6 +693,8 @@ class Ui_Form(object):
 
         self.label_Volume = QLabel(self.frame_Vol)
         self.label_Volume.setObjectName(u"label_Volume")
+        self.label_Volume.setMinimumSize(QSize(0, 30))
+        self.label_Volume.setMaximumSize(QSize(16777215, 30))
         self.label_Volume.setStyleSheet(u"QLabel {\n"
 "	background-color: #f8f8f2;\n"
 "	border-radius: 5px;\n"
@@ -662,7 +716,7 @@ class Ui_Form(object):
 
         self.date_Start = QDateEdit(self.frame_7)
         self.date_Start.setObjectName(u"date_Start")
-        self.date_Start.setMinimumSize(QSize(104, 32))
+        self.date_Start.setMinimumSize(QSize(104, 30))
         font3 = QFont()
         font3.setFamilies([u"Tahoma"])
         font3.setPointSize(10)
@@ -687,7 +741,7 @@ class Ui_Form(object):
         self.btn_refresh = QPushButton(self.frame_8)
         self.btn_refresh.setObjectName(u"btn_refresh")
         self.btn_refresh.setMinimumSize(QSize(160, 30))
-        self.btn_refresh.setMaximumSize(QSize(160, 16777215))
+        self.btn_refresh.setMaximumSize(QSize(160, 30))
         icon1 = QIcon()
         icon1.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_refresh.setIcon(icon1)
@@ -706,10 +760,6 @@ class Ui_Form(object):
 
         self.table = QTableWidget(self.widget)
         self.table.setObjectName(u"table")
-        # font4 = QFont()
-        # font4.setFamilies([u"Tahoma"])
-        # font4.setPointSize(9)
-        # self.table.setFont(font4)
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
@@ -725,8 +775,8 @@ class Ui_Form(object):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setCascadingSectionResizes(True)
-        self.table.verticalHeader().setMinimumSectionSize(20)
-        self.table.verticalHeader().setDefaultSectionSize(20)
+        self.table.verticalHeader().setMinimumSectionSize(25)
+        self.table.verticalHeader().setDefaultSectionSize(25)
         self.table.verticalHeader().setHighlightSections(False)
 
         self.verticalLayout.addWidget(self.table)

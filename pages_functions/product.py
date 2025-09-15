@@ -1,5 +1,6 @@
 import os, re
 import pandas as pd
+import numpy as np
 from sqlalchemy import func
 import datetime
 from sqlalchemy.exc import SQLAlchemyError
@@ -578,7 +579,9 @@ class ProductsPage(QWidget):
             valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
             df = df[df['Номенклатурная группа'].isin(valid_groups)]
 
-            df['Статус'] = df['Артикул'].apply(lambda x: 'не активный' if 'удален_' in str(x) else 'активный')
+            df['Статус'] = np.where((df['Недействителен'] == 'Да') | (df['Пометка удаления'] == 'Да'), 'неактивный',
+                                 np.where(df['Артикул'].apply(lambda x: 'удален_' in str(x)), 'не активный', 'активный'))
+            
             df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
             df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
             df['Type'] = df['Type'].fillna(df['Вид номенклатуры'])
@@ -621,11 +624,10 @@ class ProductsPage(QWidget):
             df['TNVED'] = df['TNVED'].astype(str).str.strip()
             
             # 4. Обработка числовых и текстовых значений
-            numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 
-                        'Net_weight', 'Gross_weight', 'Density']
+            numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 'Net_weight', 'Gross_weight', 'Density']
             text_cols = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family',
                     'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
-                    'Package_type', 'TNVED', 'Excise', 'Status']  # Добавляем Status
+                    'Package_type', 'TNVED', 'Excise', 'Status']
             
             # Замена пустот в числовых колонках на 0
             for col in numeric_cols:

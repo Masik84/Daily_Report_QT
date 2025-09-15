@@ -32,7 +32,7 @@ Contract_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реес�
 
 # Файлы отчетов
 Collection_file = MAIN_FOLDER / "! Сборщик отчета !.xlsx"
-Complectation_file = MAIN_FOLDER / "! Комплектации !.xlsx"
+Complectation_file = MAIN_FOLDER / "! Комплектации !2.xlsx"
 new_Complectation_file = MAIN_FOLDER / "ERRORs_Compectations_new.xlsx"
 
 Macro_File_Path = MAIN_FOLDER / "macro_for_report.xlsm"

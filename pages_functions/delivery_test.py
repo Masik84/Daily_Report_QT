@@ -1,10 +1,12 @@
 import os
 import pandas as pd
 import numpy as np
-from sqlalchemy import or_
-from PySide6.QtWidgets import (QMessageBox, QHeaderView, QTableWidget, QMenu, QTableWidgetItem, QWidget, QApplication)
+from PySide6.QtWidgets import (QMessageBox, QHeaderView, QTableWidget, QMenu, 
+                              QTableWidgetItem, QWidget, QApplication, QHBoxLayout, QComboBox,
+                              QPushButton, QCheckBox, QLineEdit, QListWidget, QListWidgetItem)
 from PySide6.QtCore import Qt, QDate, QRegularExpression
-from PySide6.QtGui import QShortcut, QKeySequence, QDoubleValidator, QRegularExpressionValidator
+from PySide6.QtGui import QShortcut, QKeySequence, QDoubleValidator, QRegularExpressionValidator, QFont
+from sqlalchemy import or_, and_
 
 from datetime import datetime, date, timedelta
 
@@ -74,6 +76,14 @@ class DeliveryPage(QWidget):
         # Добавляем горячие клавиши
         copy_shortcut = QShortcut(QKeySequence.Copy, self.table)
         copy_shortcut.activated.connect(self.copy_cell_content)
+        
+        # ЗДЕСЬ ДОБАВЛЯЕМ ЗАМЕНУ КОМБОБОКСОВ НА КНОПКИ МНОЖЕСТВЕННОГО ВЫБОРА
+        self.setup_multi_select_buttons()
+        
+        # А ЗАТЕМ УЖЕ ВЫЗЫВАЕМ refresh_all_comboboxes
+        # Но сначала проверяем, что кнопки созданы
+        if hasattr(self, 'customer_button'):
+            self.refresh_all_comboboxes()
 
     def show_context_menu(self, position):
         """Показ контекстного меню"""
@@ -394,17 +404,21 @@ class DeliveryPage(QWidget):
     def refresh_all_comboboxes(self):
         """Обновление всех выпадающих списков"""
         try:
+            # Проверяем, что кнопки уже созданы
+            if not hasattr(self, 'customer_button'):
+                return
+                
             # Заполнение списка контрагентов
             customers = sorted([r[0] for r in db.query(Delivery_to_Customer.Customer_name).distinct().all() if r[0]])
-            self._fill_combobox(self.ui.line_customer, customers)
+            self.customer_button.set_items(["-"] + customers)
             
             # Заполнение годов
             years = sorted([r[0] for r in db.query(Delivery_to_Customer.Year_delivery).distinct().all() if r[0]])
-            self._fill_combobox(self.ui.line_Year, years)
+            self.year_button.set_items(["-"] + [str(y) for y in years])
             
             # Заполнение месяцев
             months = list(range(1, 13))
-            self._fill_combobox(self.ui.line_Mnth, months)
+            self.month_button.set_items(["-"] + [str(m) for m in months])
             
             # Заполнение статусов проверок
             changes = ["-", "Да", "Нет"]
@@ -447,7 +461,7 @@ class DeliveryPage(QWidget):
             # Преобразование данных
             df = df.replace('#N/A', None)
             df[['Комментарий', 'ОЗОН']] = df[['Комментарий', 'ОЗОН']].replace(['', 'nan', 'NaN'], None)
-            df[['ТС', 'Наименование Клиента', 'Перевозчик']] = df[['ТС', 'Наименование Клиента', 'Перевозчик']].replace(['', 'nan', 'NaN'], '-')
+            df[['ТС', 'Наименование Клиента', 'Перевозчик']] = df[['ТС', 'Наименование Клиента', 'Перевозчик']].replace(['', 'nan', 'NaN'], '-').fillna('-')
             
             # Заполнение пустых значений
             df['Объем заказа, л'] = df['Объем заказа, л'].fillna(0.0)
@@ -936,21 +950,26 @@ class DeliveryPage(QWidget):
     def find_delivery(self):
         """Поиск данных с фильтрами"""
         try:
-            # Получаем параметры фильтрации
-            customer = self.ui.line_customer.currentText()
+            # Получаем параметры фильтрации с множественным выбором
+            # ИСПОЛЬЗУЕМ НОВЫЕ КНОПКИ ВМЕСТО СТАРЫХ КОМБОБОКСОВ
+            customers = self.customer_button.get_selected_items() if hasattr(self, 'customer_button') else []
             bill = self.ui.line_bill.text().strip()
             sborka = self.ui.line_sborka.text().strip()
             changes = self.ui.line_changes.currentText()
-            year = self.ui.line_Year.currentText()
-            month = self.ui.line_Mnth.currentText()
+            years = self.year_button.get_selected_items() if hasattr(self, 'year_button') else []
+            months = self.month_button.get_selected_items() if hasattr(self, 'month_button') else []
             date_filter = self.ui.line_date.date().toString("yyyy-MM-dd")
-            comment_filter = self.ui.line_comment.currentText()  # Новый фильтр
+            comment_filter = self.ui.line_comment.currentText()
             
             # Строим запрос
             query = db.query(Delivery_to_Customer)
             
-            if customer != "-":
-                query = query.filter(Delivery_to_Customer.Customer_name == customer)
+            # Множественный фильтр по контрагентам
+            if customers:
+                # Убираем "-" из выбранных элементов
+                filtered_customers = [c for c in customers if c != "-"]
+                if filtered_customers:
+                    query = query.filter(Delivery_to_Customer.Customer_name.in_(filtered_customers))
             
             if bill:
                 query = query.filter(Delivery_to_Customer.Bill.contains(bill))
@@ -977,11 +996,26 @@ class DeliveryPage(QWidget):
                         (Delivery_to_Customer.new_Comment.isnot(None))
                     )
             
-            if year != "-":
-                query = query.filter(Delivery_to_Customer.Year_delivery == int(year))
+            # Множественный фильтр по годам
+            if years:
+                # Убираем "-" из выбранных элементов
+                filtered_years = [y for y in years if y != "-"]
+                if filtered_years:
+                    year_values = [int(y) for y in filtered_years]
+                    query = query.filter(Delivery_to_Customer.Year_delivery.in_(year_values))
             
-            if month != "-":
-                query = query.filter(Delivery_to_Customer.Delivery_date.cast('DATE').like(f"%-{int(month):02d}-%"))
+            # Множественный фильтр по месяцам
+            if months:
+                # Убираем "-" из выбранных элементов
+                filtered_months = [m for m in months if m != "-"]
+                if filtered_months:
+                    month_values = [int(m) for m in filtered_months]
+                    month_conditions = []
+                    for month in month_values:
+                        month_conditions.append(
+                            Delivery_to_Customer.Delivery_date.cast('DATE').like(f"%-{month:02d}-%")
+                        )
+                    query = query.filter(or_(*month_conditions))
             
             if date_filter != "2022-01-01":
                 filter_date = datetime.strptime(date_filter, "%Y-%m-%d").date()
@@ -1171,6 +1205,190 @@ class DeliveryPage(QWidget):
         copy_button.clicked.connect(copy_text)
         msg.exec_()
 
+    def replace_comboboxes_with_checkable(self):
+        """Замена стандартных комбобоксов на checkable версии"""
+        # Создаем новые комбобоксы
+        self.customer_combo = MultiSelectButton()
+        self.year_combo = MultiSelectButton()
+        self.month_combo = MultiSelectButton()
+        
+        # Заменяем в layout
+        self.replace_combobox_in_layout(self.ui.line_customer, self.customer_combo)
+        self.replace_combobox_in_layout(self.ui.line_Year, self.year_combo)
+        self.replace_combobox_in_layout(self.ui.line_Mnth, self.month_combo)
+        
+        # Сохраняем ссылки для обратной совместимости
+        self.ui.line_customer = self.customer_combo
+        self.ui.line_Year = self.year_combo
+        self.ui.line_Mnth = self.month_combo
+
+    def replace_combobox_in_layout(self, old_combo, new_combo):
+        """Замена комбобокса в layout"""
+        parent = old_combo.parent()
+        if parent and hasattr(parent, 'layout'):
+            layout = parent.layout()
+            if layout:
+                index = layout.indexOf(old_combo)
+                if index >= 0:
+                    layout.removeWidget(old_combo)
+                    layout.insertWidget(index, new_combo)
+                    old_combo.setParent(None)
+                    old_combo.deleteLater()
+
+    def setup_filter_buttons(self):
+        """Настройка кнопок для фильтров"""
+        # Для контрагентов
+        customer_frame = self.ui.line_customer.parent()
+        customer_btn_layout = QHBoxLayout()
+        
+        btn_customer_all = QPushButton("Все")
+        btn_customer_clear = QPushButton("Очистить")
+        btn_customer_all.setMaximumWidth(60)
+        btn_customer_clear.setMaximumWidth(60)
+        
+        btn_customer_all.clicked.connect(self.select_all_customers)
+        btn_customer_clear.clicked.connect(self.clear_customers)
+        
+        customer_btn_layout.addWidget(btn_customer_all)
+        customer_btn_layout.addWidget(btn_customer_clear)
+        
+        if hasattr(customer_frame, 'layout'):
+            customer_frame.layout().addLayout(customer_btn_layout)
+        
+        # Для годов
+        year_frame = self.ui.line_Year.parent()
+        year_btn_layout = QHBoxLayout()
+        
+        btn_year_all = QPushButton("Все")
+        btn_year_clear = QPushButton("Очистить")
+        btn_year_all.setMaximumWidth(60)
+        btn_year_clear.setMaximumWidth(60)
+        
+        btn_year_all.clicked.connect(self.select_all_years)
+        btn_year_clear.clicked.connect(self.clear_years)
+        
+        year_btn_layout.addWidget(btn_year_all)
+        year_btn_layout.addWidget(btn_year_clear)
+        
+        if hasattr(year_frame, 'layout'):
+            year_frame.layout().addLayout(year_btn_layout)
+        
+        # Для месяцев
+        month_frame = self.ui.line_Mnth.parent()
+        month_btn_layout = QHBoxLayout()
+        
+        btn_month_all = QPushButton("Все")
+        btn_month_clear = QPushButton("Очистить")
+        btn_month_all.setMaximumWidth(60)
+        btn_month_clear.setMaximumWidth(60)
+        
+        btn_month_all.clicked.connect(self.select_all_months)
+        btn_month_clear.clicked.connect(self.clear_months)
+        
+        month_btn_layout.addWidget(btn_month_all)
+        month_btn_layout.addWidget(btn_month_clear)
+        
+        if hasattr(month_frame, 'layout'):
+            month_frame.layout().addLayout(month_btn_layout)
+
+    def select_all_customers(self):
+        """Выбрать всех контрагентов"""
+        self.ui.line_customer.selectAll()
+
+    def clear_customers(self):
+        """Очистить выбор контрагентов"""
+        self.ui.line_customer.clearSelection()
+
+    def select_all_years(self):
+        """Выбрать все годы"""
+        self.ui.line_Year.selectAll()
+
+    def clear_years(self):
+        """Очистить выбор годов"""
+        self.ui.line_Year.clearSelection()
+
+    def select_all_months(self):
+        """Выбрать все месяцы"""
+        self.ui.line_Mnth.selectAll()
+
+    def clear_months(self):
+        """Очистить выбор месяцев"""
+        self.ui.line_Mnth.clearSelection()
+
+    def show_context_menu(self, position):
+        """Показ контекстного меню"""
+        menu = QMenu()
+        
+        copy_action = menu.addAction("Копировать выделенное")
+        copy_row_action = menu.addAction("Копировать строку")
+        copy_all_action = menu.addAction("Копировать всю таблицу")
+        menu.addSeparator()
+        add_row_action = menu.addAction("Добавить строку")
+        menu.addSeparator()
+        apply_action = menu.addAction("Применить изменения")
+        revert_action = menu.addAction("Отменить изменения")
+        
+        copy_action.triggered.connect(self.copy_cell_content)
+        copy_row_action.triggered.connect(self.copy_current_row)
+        copy_all_action.triggered.connect(self.copy_whole_table)
+        add_row_action.triggered.connect(self.add_new_row)
+        apply_action.triggered.connect(self.apply_pending_changes)
+        revert_action.triggered.connect(self.revert_changes)
+        
+        menu.exec_(self.table.viewport().mapToGlobal(position))
+
+    def add_new_row(self):
+        """Открытие формы для добавления новой строки"""
+        form = DeliveryCreateForm(self)
+        form.show()
+
+    def setup_multi_select_buttons(self):
+        """Настройка кнопок для множественного выбора"""
+        # Создаем кнопки
+        self.customer_button = MultiSelectButton()
+        self.year_button = MultiSelectButton()
+        self.month_button = MultiSelectButton()
+        
+        # Заменяем комбобоксы в layout
+        self.replace_widget_in_layout(self.ui.line_customer, self.customer_button)
+        self.replace_widget_in_layout(self.ui.line_Year, self.year_button)
+        self.replace_widget_in_layout(self.ui.line_Mnth, self.month_button)
+        
+        # Добавляем кнопки управления
+        self.setup_control_buttons()
+
+    def replace_widget_in_layout(self, old_widget, new_widget):
+        """Замена виджета в layout"""
+        parent = old_widget.parent()
+        if parent and hasattr(parent, 'layout'):
+            layout = parent.layout()
+            if layout:
+                index = layout.indexOf(old_widget)
+                if index >= 0:
+                    layout.removeWidget(old_widget)
+                    layout.insertWidget(index, new_widget)
+                    old_widget.setParent(None)
+                    old_widget.deleteLater()
+
+    def setup_control_buttons(self):
+        """Настройка кнопок управления выбором"""
+        # Для контрагентов
+        customer_frame = self.customer_button.parent()
+        customer_btn_layout = QHBoxLayout()
+        
+        btn_customer_all = QPushButton("Все")
+        btn_customer_clear = QPushButton("Очистить")
+        btn_customer_all.setMaximumWidth(60)
+        btn_customer_clear.setMaximumWidth(60)
+        
+        btn_customer_all.clicked.connect(self.select_all_customers)
+        btn_customer_clear.clicked.connect(self.clear_customers)
+        
+        customer_btn_layout.addWidget(btn_customer_all)
+        customer_btn_layout.addWidget(btn_customer_clear)
+        
+        if hasattr(customer_frame, 'layout'):
+            customer_frame.layout().addLayout(customer_btn_layout)
 
 
 class DeliveryCreateForm(QWidget):
@@ -1326,6 +1544,143 @@ class DeliveryCreateForm(QWidget):
             db.rollback()
             QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении: {str(e)}")
 
+
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, QDialogButtonBox
+
+class MultiSelectDialog(QDialog):
+    def __init__(self, items, title="Выберите элементы", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.items = items
+        
+        self.setup_ui()
+        self.apply_styles()  # Добавляем применение стилей
+        
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # ListWidget для отображения элементов
+        self.list_widget = QListWidget()
+        self.list_widget.setSelectionMode(QListWidget.MultiSelection)
+        
+        for item in self.items:
+            self.list_widget.addItem(item)
+        
+        layout.addWidget(self.list_widget)
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        
+        btn_select_all = QPushButton("Выбрать все")
+        btn_clear = QPushButton("Очистить")
+        btn_ok = QPushButton("OK")
+        btn_cancel = QPushButton("Отмена")
+        
+        btn_select_all.clicked.connect(self.select_all)
+        btn_clear.clicked.connect(self.clear_selection)
+        btn_ok.clicked.connect(self.accept)
+        btn_cancel.clicked.connect(self.reject)
+        
+        button_layout.addWidget(btn_select_all)
+        button_layout.addWidget(btn_clear)
+        button_layout.addStretch()
+        button_layout.addWidget(btn_ok)
+        button_layout.addWidget(btn_cancel)
+        
+        layout.addLayout(button_layout)
+    
+    def apply_styles(self):
+        """Применяем стили для компактного отображения"""
+        # Устанавливаем высоту строки 20px
+        self.list_widget.setStyleSheet("""
+            QListWidget {
+                font: 8pt "Tahoma";
+                background-color: #f8f8f2;
+                border: 2px solid #f09d54;
+                border-radius: 5px;
+                color: #262626;
+            }
+            QListWidget::item {
+                height: 20px;
+                padding: 1px;
+                border-bottom: 1px solid #f8994a;
+            }
+            QListWidget::item:selected {
+                background-color: #f28223;
+                color: #ffffff;
+            }
+            QListWidget::item:hover {
+                background-color: #ffd4af;
+            }
+        """)
+    
+    def select_all(self):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            item.setSelected(True)
+    
+    def clear_selection(self):
+        self.list_widget.clearSelection()
+    
+    def get_selected_items(self):
+        selected = []
+        for item in self.list_widget.selectedItems():
+            selected.append(item.text())
+        return selected
+    
+
+class MultiSelectButton(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setText("Выберите...")
+        self.selected_items = []
+        self.clicked.connect(self.show_selection_dialog)
+        
+        # Устанавливаем компактный стиль для кнопки
+        self.setStyleSheet("""
+            QPushButton {
+                font: 8pt "Tahoma";
+                height: 20px;
+                background-color: #f8f8f2;
+                border: 2px solid #f09d54;
+                border-radius: 5px;
+                color: #262626;
+                padding: 2px 8px;
+            }
+            QPushButton:hover {
+                background-color: #f28223;
+                color: #ffffff;
+            }
+        """)
+    
+    def set_items(self, items):
+        self.items = items
+    
+    def show_selection_dialog(self):
+        if not hasattr(self, 'items') or not self.items:
+            return
+            
+        dialog = MultiSelectDialog(self.items, "Выберите элементы", self)
+        if dialog.exec() == QDialog.Accepted:
+            self.selected_items = dialog.get_selected_items()
+            self.update_text()
+    
+    def update_text(self):
+        if self.selected_items:
+            if len(self.selected_items) > 3:
+                self.setText(f"Выбрано: {len(self.selected_items)}")
+            else:
+                self.setText(", ".join(self.selected_items))
+        else:
+            self.setText("Выберите...")
+    
+    def get_selected_items(self):
+        return self.selected_items
+    
+    def clear_selection(self):
+        self.selected_items = []
+        self.update_text()
 
 
 

@@ -83,6 +83,7 @@ class Customer(Base):
     movements = relationship("Movements", back_populates="customer")
     temp_sales = relationship("temp_Sales", back_populates="customer")
     temp_orders = relationship("temp_Orders", back_populates="customer")
+    commissions = relationship("Commission", back_populates="customer")  # мн. число
 
 class Holding(Base):
     __tablename__ = 'holdings'
@@ -169,6 +170,7 @@ class Product_Group(Base):
     # Связи
     tnved = relationship("TNVED", back_populates="product_groups")
     product_names = relationship("Product_Names", back_populates="product_group")
+    commissions = relationship("Commission", back_populates="product_group")  # мн. число
 
 class Product_Names(Base):
     __tablename__ = 'product_names'
@@ -216,6 +218,7 @@ class Materials(Base):
     temp_sales = relationship("temp_Sales", back_populates="material")
     temp_orders = relationship("temp_Orders", back_populates="material")
     purchase_orders = relationship("Purchase_Order", back_populates="material")
+    commissions = relationship("Commission", back_populates="material")  # мн. число
 
 class ABC_list(Base):
     __tablename__ = 'abc_list'
@@ -375,6 +378,7 @@ class Fees(Base):
     Storage = Column(Numeric)  # Хранение, л
     Money_cost = Column(Numeric)  # Ст-ть Денег
     Additional_money_percent = Column(Numeric)  # Доп% денег
+    Okleyka = Column(Numeric)
 
     year = relationship("Year", back_populates="fees")
     month = relationship("Month", back_populates="fees")
@@ -913,7 +917,8 @@ class Delivery_to_Customer(Base):
     Invoice_date = Column(sqlalchemy.Date(), nullable=True)  # Дата сф
     Year_delivery = Column(Integer)  # Год отгр
     Bill_and_Date = Column(String)  # Счет & Дата
-
+    new_Comment = Column(String)
+    
     __table_args__ = (
         Index('idx_delivery_customer_name', 'Customer_name'),
         Index('idx_delivery_delivery_date', 'Delivery_date'),
@@ -922,6 +927,47 @@ class Delivery_to_Customer(Base):
         Index('idx_delivery_bill_sborka', 'Bill', 'Sborka'),
         Index('idx_delivery_inn', 'INN'),
     )
+
+class Commission(Base):
+    __tablename__ = 'commission'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Com_status = Column(String)  # Com status
+    Start_date = Column(sqlalchemy.Date(), nullable=True)  # Дата начала
+    End_date = Column(sqlalchemy.Date(), nullable=True)  # Дата окончания
+    Comm_perc = Column(Numeric, nullable=True)  # Комм %
+    Comm_rub = Column(Numeric, nullable=True)  # Комм Руб
+    Comm_Cost_perc = Column(Numeric, nullable=True)  # Ст-ть ком-ии, %
+    Comm_Cost_rub = Column(Numeric, nullable=True)  # Ст-ть ком-ии, Руб
+    Document = Column(String)  # Документ
+    Date = Column(sqlalchemy.Date(), nullable=True)  # Дата
+    Bill = Column(String)  # Счет
+    Bill_date = Column(sqlalchemy.Date(), nullable=True)  # Дата счета
+    Litres_from = Column(Numeric, nullable=True)  # л от
+    Litres_to = Column(Numeric, nullable=True)  # л до
+    Recipient_code = Column(String)  # Грузополучатель.Код
+    Recipient = Column(String)  # Грузополучатель
+    Hyundai_code = Column(String)  # Код дилера
+    Comment = Column(String)  # Комментарий
+    
+    # Внешние ключи
+    Customer_id = Column(String, ForeignKey('customers.id', name='fk_commission_customer'))  # Контрагент.Код
+    Material_id = Column(String, ForeignKey('material.Code', name='fk_commission_material'))  # Артикул
+    Product_group_id = Column(String, ForeignKey('product_group.id', name='fk_commission_product_group'))  # Product name
+    
+    # Связи
+    customer = relationship("Customer", back_populates="commissions")
+    material = relationship("Materials", back_populates="commissions")
+    product_group = relationship("Product_Group", back_populates="commissions")
+
+
+
+
+
+
+
+
+
 
 from sqlalchemy.orm import configure_mappers
 configure_mappers()
