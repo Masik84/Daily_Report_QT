@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'deliveryfBRDiF.ui'
+## Form generated from reading UI file 'deliveryPfZBOC.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -26,7 +26,7 @@ class Ui_Form(object):
     def setupUi(self, Form):
         if not Form.objectName():
             Form.setObjectName(u"Form")
-        Form.resize(1102, 710)
+        Form.resize(1332, 823)
         Form.setMinimumSize(QSize(930, 650))
         Form.setStyleSheet(u"Form.QWidget{border: 2px solid #f28223;}\n"
 "\n"
@@ -413,6 +413,7 @@ class Ui_Form(object):
 "}\n"
 "")
         self.horizontalLayout = QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.widget = QWidget(Form)
@@ -424,6 +425,7 @@ class Ui_Form(object):
         self.Title_label = QLabel(self.widget)
         self.Title_label.setObjectName(u"Title_label")
         self.Title_label.setMinimumSize(QSize(0, 40))
+        self.Title_label.setMaximumSize(QSize(16777215, 40))
         font = QFont()
         font.setFamilies([u"Tahoma"])
         font.setPointSize(18)
@@ -639,7 +641,7 @@ class Ui_Form(object):
         self.btn_find = QPushButton(self.frame_3)
         self.btn_find.setObjectName(u"btn_find")
         self.btn_find.setMinimumSize(QSize(97, 30))
-        self.btn_find.setMaximumSize(QSize(92, 16777215))
+        self.btn_find.setMaximumSize(QSize(92, 30))
         icon = QIcon()
         icon.addFile(u":/icon/icon/search \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_find.setIcon(icon)
@@ -662,7 +664,8 @@ class Ui_Form(object):
         self.verticalLayout_7.setContentsMargins(0, -1, 0, -1)
         self.btn_disputch = QPushButton(self.frame_9)
         self.btn_disputch.setObjectName(u"btn_disputch")
-        self.btn_disputch.setMinimumSize(QSize(0, 30))
+        self.btn_disputch.setMinimumSize(QSize(170, 30))
+        self.btn_disputch.setMaximumSize(QSize(170, 30))
         icon1 = QIcon()
         icon1.addFile(u":/icon/icon/refresh-cw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_disputch.setIcon(icon1)
@@ -672,7 +675,7 @@ class Ui_Form(object):
         self.btn_refresh = QPushButton(self.frame_9)
         self.btn_refresh.setObjectName(u"btn_refresh")
         self.btn_refresh.setMinimumSize(QSize(170, 30))
-        self.btn_refresh.setMaximumSize(QSize(160, 16777215))
+        self.btn_refresh.setMaximumSize(QSize(170, 30))
         icon2 = QIcon()
         icon2.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         self.btn_refresh.setIcon(icon2)
@@ -712,6 +715,23 @@ class Ui_Form(object):
 
         self.verticalLayout.addWidget(self.table)
 
+        self.frame_7 = QFrame(self.widget)
+        self.frame_7.setObjectName(u"frame_7")
+        self.frame_7.setMinimumSize(QSize(0, 25))
+        self.frame_7.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_7.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_4 = QHBoxLayout(self.frame_7)
+        self.horizontalLayout_4.setSpacing(0)
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.horizontalLayout_4.setContentsMargins(-1, 0, -1, 0)
+        self.label_msg = QLabel(self.frame_7)
+        self.label_msg.setObjectName(u"label_msg")
+
+        self.horizontalLayout_4.addWidget(self.label_msg)
+
+
+        self.verticalLayout.addWidget(self.frame_7)
+
 
         self.horizontalLayout.addWidget(self.widget)
 
@@ -735,5 +755,6 @@ class Ui_Form(object):
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
         self.btn_disputch.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0438\u0437 Disputch", None))
         self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0438\u0437 \u0414\u043e\u0441\u0442\u0430\u0432\u043a\u0430", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
     # retranslateUi
 

@@ -249,11 +249,7 @@ class CustomerPage(QWidget):
                                     [f"{col}_1C" for col in field_names.keys()]]
                         output_file = "ERRORs_Customer_mismatches.xlsx"
                         output_df.to_excel(output_file, index=False)
-                        self.show_message(
-                            f"Найдено {len(result_df)} несоответствий.\n"
-                            f"Отчет сохранен в {output_file}\n"
-                            "Проверьте данные в файле клиентов"
-                        )
+                        self.show_message(f"Найдены несоответствия. Отчет сохранен в {output_file}")
             
             # Возвращаем все данные (кроме 'new') для загрузки в БД
             return df.to_dict('records')
@@ -617,14 +613,15 @@ class CustomerPage(QWidget):
             # Формирование отчёта
             report = [
                 f"Всего обработано: {stats['total']}",
-                f"Сохранено договоров: {stats['saved']}",
-                f"Пропущено (нет менеджера): {stats['no_manager']}",
-                f"Пропущено (неверный клиент): {stats['invalid_customer']}",
-                f"Пропущено (отсутствуют поля): {stats['missing_fields']}",
+                f"Сохранено: {stats['saved']}",
+                # f"Пропущено (нет менеджера): {stats['no_manager']}",
+                # f"Пропущено (неверный клиент): {stats['invalid_customer']}",
+                # f"Пропущено (отсутствуют поля): {stats['missing_fields']}",
                 f"Всего пропущено: {len(skipped_contracts)}" + skip_info
             ]
             
-            self.show_message("\n".join(report))
+            self.show_message("; ".join(report))
+            # self.show_message("\n".join(report))
 
         except Exception as e:
             db.rollback()
@@ -965,31 +962,35 @@ class CustomerPage(QWidget):
             combobox.addItems(sorted(items))
 
     def show_message(self, text):
-            """Показать компактное информационное сообщение"""
-            msg = QMessageBox()
-            msg.setWindowTitle("Информация")
-            msg.setIcon(QMessageBox.Information)
-            msg.setText(text)
-            
-            # Уменьшаем размер окна
-            msg.setMinimumSize(400, 200)
-            
-            # Добавляем кнопку Copy
-            copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-            ok_button = msg.addButton(QMessageBox.Ok)
-            
-            # Настройка буфера обмена
-            clipboard = QApplication.clipboard()
-            
-            # Обработчики кнопок
-            def copy_text():
-                clipboard.setText(text)
-            
-            copy_button.clicked.connect(copy_text)
-            
-            # Показываем сообщение
-            msg.exec_()
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
+        
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
+        
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
+        
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()

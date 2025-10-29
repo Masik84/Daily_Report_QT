@@ -1102,31 +1102,35 @@ class PlansPage(QWidget):
             combobox.addItems(items)
     
     def show_message(self, text):
-        """Показать компактное информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
-        msg.setText(text)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
         
-        # Уменьшаем размер окна
-        msg.setMinimumSize(400, 200)
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
         
-        # Добавляем кнопку Copy
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
         
-        # Настройка буфера обмена
-        clipboard = QApplication.clipboard()
-        
-        # Обработчики кнопок
-        def copy_text():
-            clipboard.setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        
-        # Показываем сообщение
-        msg.exec_()
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать компактное сообщение об ошибке"""
         msg = QMessageBox()

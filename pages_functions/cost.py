@@ -153,10 +153,10 @@ class CostsPage(QWidget):
                 db.commit()
                 
                 # Показываем успешное сообщение
-                success_msg = "Все данные успешно загружены!\n"
-                success_msg += f"Тарифы: {msg_fees}\n"
-                success_msg += f"Экосборы: {msg_eco}\n"
-                success_msg += f"Пошлины: {msg_customs}"
+                success_msg = "Все данные успешно загружены!"
+                # success_msg += f"Тарифы: {msg_fees}\n"
+                # success_msg += f"Экосборы: {msg_eco}\n"
+                # success_msg += f"Пошлины: {msg_customs}"
                 
                 self.show_message(success_msg)
                 self.refresh_all_comboboxes()
@@ -769,19 +769,35 @@ class CostsPage(QWidget):
         return item.id if item else None
 
     def show_message(self, text):
-        """Показать информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
-        msg.setText(text)
-        msg.setMinimumSize(400, 200)
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
         
-        clipboard = QApplication.clipboard()
-        copy_button.clicked.connect(lambda: clipboard.setText(text))
-        msg.exec_()
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
+        
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
+        
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать сообщение об ошибке"""
         msg = QMessageBox()

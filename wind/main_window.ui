@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1400</width>
-    <height>820</height>
+    <width>1572</width>
+    <height>950</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -244,8 +244,8 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>178</width>
-             <height>643</height>
+             <width>202</width>
+             <height>773</height>
             </rect>
            </property>
            <attribute name="icon">
@@ -357,8 +357,8 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>178</width>
-             <height>643</height>
+             <width>202</width>
+             <height>773</height>
             </rect>
            </property>
            <attribute name="icon">
@@ -534,8 +534,8 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>178</width>
-             <height>643</height>
+             <width>202</width>
+             <height>773</height>
             </rect>
            </property>
            <property name="styleSheet">
@@ -722,8 +722,8 @@ QPushButton:pressed {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>178</width>
-             <height>643</height>
+             <width>202</width>
+             <height>773</height>
             </rect>
            </property>
            <property name="font">

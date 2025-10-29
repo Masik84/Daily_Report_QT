@@ -1118,32 +1118,35 @@ class DeliveryPage(QWidget):
         self._updating_table = False
 
     def show_message(self, text):
-        """Показать информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
         
-        # Устанавливаем большой минимальный размер
-        msg.setMinimumSize(900, 600)
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
         
-        # Всегда используем detailed text для длинных сообщений
-        if len(text) > 500:
-            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
-            msg.setText(short_text)
-            msg.setDetailedText(text)
-        else:
-            msg.setText(text)
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
         
-        # Кнопки
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
-        
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        msg.exec_()
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать сообщение об ошибке"""
         msg = QMessageBox()

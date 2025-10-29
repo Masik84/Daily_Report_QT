@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'customerssopdLQ.ui'
+## Form generated from reading UI file 'customerschlaZq.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -25,7 +25,7 @@ class Ui_Form(object):
     def setupUi(self, Form):
         if not Form.objectName():
             Form.setObjectName(u"Form")
-        Form.resize(971, 682)
+        Form.resize(1332, 823)
         Form.setMinimumSize(QSize(930, 650))
         font = QFont()
         font.setFamilies([u"Tahoma"])
@@ -417,6 +417,7 @@ class Ui_Form(object):
 "}\n"
 "")
         self.horizontalLayout = QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.widget = QWidget(Form)
@@ -427,7 +428,7 @@ class Ui_Form(object):
         self.verticalLayout_6 = QVBoxLayout(self.widget)
         self.verticalLayout_6.setSpacing(0)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
-        self.verticalLayout_6.setContentsMargins(6, 0, 0, 9)
+        self.verticalLayout_6.setContentsMargins(0, 0, 0, 9)
         self.Title_label = QLabel(self.widget)
         self.Title_label.setObjectName(u"Title_label")
         self.Title_label.setMinimumSize(QSize(0, 40))
@@ -755,6 +756,23 @@ class Ui_Form(object):
 
         self.verticalLayout_6.addWidget(self.table)
 
+        self.frame_11 = QFrame(self.widget)
+        self.frame_11.setObjectName(u"frame_11")
+        self.frame_11.setMinimumSize(QSize(0, 25))
+        self.frame_11.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_11.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_8 = QHBoxLayout(self.frame_11)
+        self.horizontalLayout_8.setSpacing(0)
+        self.horizontalLayout_8.setObjectName(u"horizontalLayout_8")
+        self.horizontalLayout_8.setContentsMargins(-1, 0, -1, 0)
+        self.label_msg = QLabel(self.frame_11)
+        self.label_msg.setObjectName(u"label_msg")
+
+        self.horizontalLayout_8.addWidget(self.label_msg)
+
+
+        self.verticalLayout_6.addWidget(self.frame_11)
+
         self.frame_Update = QFrame(self.widget)
         self.frame_Update.setObjectName(u"frame_Update")
         self.frame_Update.setFrameShape(QFrame.Shape.StyledPanel)
@@ -866,6 +884,7 @@ class Ui_Form(object):
         self.label_10.setText(QCoreApplication.translate("Form", u"\u041d\u0430\u0437\u0432 \u0414\u0438\u043b\u0435\u0440\u0430", None))
         self.label_11.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440", None))
         self.label_8.setText(QCoreApplication.translate("Form", u"Team Lead", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
         self.label_Cust_File.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0431\u0435\u0440\u0438 \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438 Upload, \u0444\u0430\u0439\u043b \u0431\u0443\u0434\u0435\u0442 \u0432\u0437\u044f\u0442 \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0430\u043f\u043a\u0438", None))
         self.btn_open_file.setText(QCoreApplication.translate("Form", u"Open", None))
         self.btn_upload_file.setText(QCoreApplication.translate("Form", u"Upload", None))

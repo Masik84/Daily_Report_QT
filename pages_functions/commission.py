@@ -982,8 +982,35 @@ class CommissionCreateForm(QDialog):
         return True
     
     def show_message(self, text):
-        """Показать сообщение"""
-        QMessageBox.information(self, "Информация", text)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
+        
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
+        
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
+        
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
+
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     
     def show_error_message(self, text):
         """Показать сообщение об ошибке"""

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'supplierSYmYsM.ui'
+## Form generated from reading UI file 'supplierUFdoaL.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -25,7 +25,7 @@ class Ui_Form(object):
     def setupUi(self, Form):
         if not Form.objectName():
             Form.setObjectName(u"Form")
-        Form.resize(971, 682)
+        Form.resize(1332, 823)
         Form.setMinimumSize(QSize(930, 650))
         font = QFont()
         font.setFamilies([u"Tahoma"])
@@ -417,6 +417,7 @@ class Ui_Form(object):
 "}\n"
 "")
         self.horizontalLayout = QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.widget = QWidget(Form)
@@ -425,7 +426,9 @@ class Ui_Form(object):
         font1.setFamilies([u"Tahoma"])
         self.widget.setFont(font1)
         self.verticalLayout_6 = QVBoxLayout(self.widget)
+        self.verticalLayout_6.setSpacing(0)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
+        self.verticalLayout_6.setContentsMargins(0, 0, 0, -1)
         self.Title_label = QLabel(self.widget)
         self.Title_label.setObjectName(u"Title_label")
         self.Title_label.setMinimumSize(QSize(0, 40))
@@ -452,6 +455,7 @@ class Ui_Form(object):
         self.frame = QFrame(self.frame_Search)
         self.frame.setObjectName(u"frame")
         self.frame.setMinimumSize(QSize(100, 0))
+        self.frame.setMaximumSize(QSize(150, 16777215))
         self.frame.setFont(font1)
         self.frame.setFrameShape(QFrame.Shape.StyledPanel)
         self.frame.setFrameShadow(QFrame.Shadow.Raised)
@@ -539,7 +543,7 @@ class Ui_Form(object):
 
         self.horizontalLayout_5.addWidget(self.frame_3)
 
-        self.horizontalSpacer_3 = QSpacerItem(400, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
+        self.horizontalSpacer_3 = QSpacerItem(700, 20, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_5.addItem(self.horizontalSpacer_3)
 
@@ -567,6 +571,23 @@ class Ui_Form(object):
         self.table.verticalHeader().setHighlightSections(False)
 
         self.verticalLayout_6.addWidget(self.table)
+
+        self.frame_6 = QFrame(self.widget)
+        self.frame_6.setObjectName(u"frame_6")
+        self.frame_6.setMinimumSize(QSize(0, 25))
+        self.frame_6.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_6.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_2 = QHBoxLayout(self.frame_6)
+        self.horizontalLayout_2.setSpacing(0)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setContentsMargins(-1, 0, -1, 0)
+        self.label_msg = QLabel(self.frame_6)
+        self.label_msg.setObjectName(u"label_msg")
+
+        self.horizontalLayout_2.addWidget(self.label_msg)
+
+
+        self.verticalLayout_6.addWidget(self.frame_6)
 
         self.frame_Update = QFrame(self.widget)
         self.frame_Update.setObjectName(u"frame_Update")
@@ -669,6 +690,7 @@ class Ui_Form(object):
         self.label.setText(QCoreApplication.translate("Form", u"\u041d\u0430\u0437\u0432. \u041f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0430 2", None))
         self.line_ID.setText(QCoreApplication.translate("Form", u"-", None))
         self.btn_find_suppl.setText(QCoreApplication.translate("Form", u"Search Supplier", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
         self.label_Supplier_File.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0431\u0435\u0440\u0438 \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438 Upload, \u0444\u0430\u0439\u043b \u0431\u0443\u0434\u0435\u0442 \u0432\u0437\u044f\u0442 \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0430\u043f\u043a\u0438", None))
         self.btn_open_file.setText(QCoreApplication.translate("Form", u"Open", None))
         self.btn_upload_file.setText(QCoreApplication.translate("Form", u"Upload", None))

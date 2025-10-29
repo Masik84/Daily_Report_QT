@@ -921,8 +921,8 @@ class MovesPage(QWidget):
         move_df = move_df[(move_df["Дата"] >= report_start_date)]
         
         # Корректировка типа документа для недостач/утилизаций
-        move_df.loc[(move_df["Склад"].str.contains("Недостач")) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (недостача)"
-        move_df.loc[(move_df["Склад"].str.contains("Утилизация|утил", na=False)) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (утилизация)"
+        move_df.loc[(move_df["Склад"].str.contains(r"(?i)недостач", regex=True)) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (недостача)"
+        move_df.loc[(move_df["Склад"].str.contains(r"(?i)утилизаци[яй]|утил", regex=True, na=False)) & (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])), "Тип документа"] = "5.0. Списание (утилизация)"
         
         # 1. Условие для "5.0. Списание (утилизация)"
         move_df.loc[move_df["Тип документа"] == "5.0. Списание (утилизация)", "Вид операции"] = "Списание со склада"
@@ -1006,7 +1006,7 @@ class MovesPage(QWidget):
                     msg = "Следующие продукты все еще отсутствуют в БД и будут пропущены:\n\n"
                     msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Номенклатура']}" 
                                     for _, row in still_missing_products.iterrows())
-                    self.show_message(msg)
+                    self.show_error_message(msg)
                     
                     # Удаляем строки с отсутствующими продуктами
                     df = df[~df['Код'].isin(still_missing)]
@@ -1537,7 +1537,7 @@ class MovesPage(QWidget):
             
             # 8. Поиск новых списаний для сохранения в Excel
             write_off_mask = (
-                (move_df["Склад"].str.contains("Недостач|Утилизация|утил", na=False)) & 
+                (move_df["Склад"].str.contains(r"(?i)(?:недостач|недопостав)", regex=True)) & 
                 (~move_df["Тип документа"].isin(["2.0. Комплектация", "4.0. Реализация"])) &
                 (move_df["CHECK_write_off"] == "no")
             )
@@ -1591,10 +1591,7 @@ class MovesPage(QWidget):
                                                                         "Кол-во в упак", "Единица измерения", "Склад", "Комментарий", "Приход", "Расход", "Количество", "Тип документа", 
                                                                         "Контрагент.Код", "Контрагент", "Грузополучатель.Код", "Грузополучатель", "Счет", "Дата счета", "CHECK_write_off" ]]
                     new_write_offs.to_excel("ERRORs_Write_OFF_new.xlsx", index=False)
-                    self.show_message(
-                        f"Найдено {len(new_write_offs)} новых списаний\n"
-                        "Сохранено в ERRORs_Write_OFF_new.xlsx"
-                    )
+                    self.show_message(f"Найдено {len(new_write_offs)} новых списаний. Сохранено в ERRORs_Write_OFF_new.xlsx")
                 except Exception as e:
                     self.show_error_message(f"Ошибка при записи данных в Excel: {str(e)}")
                     traceback.print_exc()
@@ -1951,32 +1948,35 @@ class MovesPage(QWidget):
             return 0.0
 
     def show_message(self, text):
-        """Показать информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
         
-        # Устанавливаем большой минимальный размер
-        msg.setMinimumSize(900, 600)
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
         
-        # Всегда используем detailed text для длинных сообщений
-        if len(text) > 500:
-            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
-            msg.setText(short_text)
-            msg.setDetailedText(text)
-        else:
-            msg.setText(text)
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
         
-        # Кнопки
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
-        
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        msg.exec_()
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать сообщение об ошибке"""
         msg = QMessageBox()

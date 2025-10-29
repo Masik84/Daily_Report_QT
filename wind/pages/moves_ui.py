@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'moveswCMBQt.ui'
+## Form generated from reading UI file 'movesYDSSPJ.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -26,7 +26,7 @@ class Ui_Form(object):
     def setupUi(self, Form):
         if not Form.objectName():
             Form.setObjectName(u"Form")
-        Form.resize(1102, 710)
+        Form.resize(1332, 823)
         Form.setMinimumSize(QSize(930, 650))
         Form.setStyleSheet(u"Form.QWidget{border: 2px solid #f28223;}\n"
 "\n"
@@ -413,6 +413,7 @@ class Ui_Form(object):
 "}\n"
 "")
         self.horizontalLayout = QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.widget = QWidget(Form)
@@ -791,6 +792,23 @@ class Ui_Form(object):
 
         self.verticalLayout.addWidget(self.table)
 
+        self.frame_9 = QFrame(self.widget)
+        self.frame_9.setObjectName(u"frame_9")
+        self.frame_9.setMinimumSize(QSize(0, 25))
+        self.frame_9.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_9.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_6 = QHBoxLayout(self.frame_9)
+        self.horizontalLayout_6.setSpacing(0)
+        self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
+        self.horizontalLayout_6.setContentsMargins(-1, 0, -1, 0)
+        self.label_msg = QLabel(self.frame_9)
+        self.label_msg.setObjectName(u"label_msg")
+
+        self.horizontalLayout_6.addWidget(self.label_msg)
+
+
+        self.verticalLayout.addWidget(self.frame_9)
+
 
         self.horizontalLayout.addWidget(self.widget)
 
@@ -817,5 +835,6 @@ class Ui_Form(object):
         self.label_9.setText(QCoreApplication.translate("Form", u"\u041a\u043e\u043b-\u0432\u043e, \u043b", None))
         self.label_Volume.setText("")
         self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
     # retranslateUi
 

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1102</width>
-    <height>710</height>
+    <width>1332</width>
+    <height>823</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -397,6 +397,9 @@ QCalendarWidget QSpinBox::down-arrow {
 </string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
+   <property name="spacing">
+    <number>0</number>
+   </property>
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -465,7 +468,7 @@ QCalendarWidget QSpinBox::down-arrow {
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>130</height>
+          <height>120</height>
          </size>
         </property>
         <property name="maximumSize">
@@ -475,6 +478,9 @@ QCalendarWidget QSpinBox::down-arrow {
          </size>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <property name="spacing">
+          <number>0</number>
+         </property>
          <property name="leftMargin">
           <number>9</number>
          </property>
@@ -820,7 +826,7 @@ QCalendarWidget QSpinBox::down-arrow {
               </property>
               <property name="minimumDateTime">
                <datetime>
-                <hour>21</hour>
+                <hour>18</hour>
                 <minute>0</minute>
                 <second>0</second>
                 <year>2022</year>
@@ -1086,6 +1092,40 @@ QCalendarWidget QSpinBox::down-arrow {
         <attribute name="verticalHeaderHighlightSections">
          <bool>false</bool>
         </attribute>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="frame_7">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>25</height>
+         </size>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::Shape::StyledPanel</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Shadow::Raised</enum>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="label_msg">
+           <property name="text">
+            <string>TextLabel</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </widget>
       </item>
      </layout>

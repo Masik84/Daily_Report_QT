@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'commissionAbrten.ui'
+## Form generated from reading UI file 'commissionNPKyuo.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.9.1
 ##
@@ -25,7 +25,7 @@ class Ui_Form(object):
     def setupUi(self, Form):
         if not Form.objectName():
             Form.setObjectName(u"Form")
-        Form.resize(1102, 710)
+        Form.resize(1332, 823)
         Form.setMinimumSize(QSize(930, 650))
         Form.setStyleSheet(u"Form.QWidget{border: 2px solid #f28223;}\n"
 "\n"
@@ -412,6 +412,7 @@ class Ui_Form(object):
 "}\n"
 "")
         self.horizontalLayout = QHBoxLayout(Form)
+        self.horizontalLayout.setSpacing(0)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.widget = QWidget(Form)
@@ -437,9 +438,10 @@ class Ui_Form(object):
 
         self.frame_Search = QFrame(self.widget)
         self.frame_Search.setObjectName(u"frame_Search")
-        self.frame_Search.setMinimumSize(QSize(0, 130))
+        self.frame_Search.setMinimumSize(QSize(0, 120))
         self.frame_Search.setMaximumSize(QSize(16777215, 130))
         self.horizontalLayout_5 = QHBoxLayout(self.frame_Search)
+        self.horizontalLayout_5.setSpacing(0)
         self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
         self.horizontalLayout_5.setContentsMargins(9, 0, 0, 9)
         self.frame_6 = QFrame(self.frame_Search)
@@ -680,6 +682,23 @@ class Ui_Form(object):
 
         self.verticalLayout.addWidget(self.table)
 
+        self.frame_7 = QFrame(self.widget)
+        self.frame_7.setObjectName(u"frame_7")
+        self.frame_7.setMinimumSize(QSize(0, 25))
+        self.frame_7.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_7.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_4 = QHBoxLayout(self.frame_7)
+        self.horizontalLayout_4.setSpacing(0)
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.horizontalLayout_4.setContentsMargins(-1, 0, -1, 0)
+        self.label_msg = QLabel(self.frame_7)
+        self.label_msg.setObjectName(u"label_msg")
+
+        self.horizontalLayout_4.addWidget(self.label_msg)
+
+
+        self.verticalLayout.addWidget(self.frame_7)
+
 
         self.horizontalLayout.addWidget(self.widget)
 
@@ -700,5 +719,6 @@ class Ui_Form(object):
         self.label_6.setText(QCoreApplication.translate("Form", u"Product Name", None))
         self.btn_find.setText(QCoreApplication.translate("Form", u"Search", None))
         self.btn_refresh.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0414\u0430\u043d\u043d\u044b\u0435", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
     # retranslateUi
 

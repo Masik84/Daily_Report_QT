@@ -649,7 +649,7 @@ class TempTablesPage(QWidget):
             
             if not result:
                 total_count = db.query(model).count()
-                self.show_message(f"Данные не найдены с текущими фильтрами.\nВсего записей в таблице: {total_count}")
+                self.show_message(f"Данные не найдены с текущими фильтрами")
                 return
             
             # Преобразуем результат в DataFrame
@@ -1037,13 +1037,13 @@ class TempTablesPage(QWidget):
                 orders_df = self.read_orders_data()
                 if not orders_df.empty:
                     self._update_temp_orders_in_db(orders_df)
-                    self.show_message("Данные о заказах успешно обновлены")
+                    self.show_message("Данные о заказах Покупателей успешно обновлены")
             
             elif table == "Заказы поставщиков":
                 purchase_order_df = self.read_purchase_order_data()
                 if not purchase_order_df.empty:
                     self._update_purchase_order_in_db(purchase_order_df)
-                    self.show_message("Данные о заказах поставщиков успешно обновлены")
+                    self.show_message("Данные о заказах Поставщиков успешно обновлены")
             
             # После обновления данных обновляем только базовые комбобоксы
             models = {
@@ -1606,7 +1606,9 @@ class TempTablesPage(QWidget):
         ord_df["Грузополучатель.Код"] = ord_df["Грузополучатель.Код"].fillna("-")
         ord_df["Статус оплаты"] = ord_df["Статус оплаты"].fillna("Не оплачен")
         ord_df["Склад"] = ""
-        ord_df[["Сумма", "Заказано", "Отгружено", "ОстЗак"]] = ord_df[["Сумма", "Заказано", "Отгружено", "ОстЗак"]].astype(float).fillna(0.0)
+        ord_df[["Сумма", "Заказано", "Отгружено"]] = ord_df[["Сумма", "Заказано", "Отгружено"]].astype(float).fillna(0.0)
+        ord_df["Заказано"] = np.where((ord_df["Код"] == "НМ-00003754") & (ord_df["Заказано"] == 0) , 1, ord_df["Заказано"])
+        ord_df["ОстЗак"] = np.where((ord_df["Код"] == "НМ-00003754") & (ord_df["Заказано"] == 1) & (ord_df["Отгружено"] == 0), 1, (ord_df['Заказано'] - ord_df['Отгружено']))
         ord_df["Дата счета"] = pd.to_datetime(ord_df["Дата счета"], format="%d.%m.%Y")
         ord_df["Плановая дата оплаты"] = pd.to_datetime(ord_df["Плановая дата оплаты"], format="%d.%m.%Y", errors="coerce")
         
@@ -1867,7 +1869,7 @@ class TempTablesPage(QWidget):
         
         try:
             purchase_order_df = pd.read_excel(AddCosts_File, sheet_name="Закупки в пути", skiprows=1, dtype=purch_types)
-            purchase_order_df = purchase_order_df[purchase_order_df["Статус"] == "transit"]
+            purchase_order_df = purchase_order_df[purchase_order_df["Статус"] == "in transit"]
             purchase_order_df = purchase_order_df.drop(columns=["Дата"])
             purchase_order_df["Дата"] = datetime.date.today()
             purchase_order_df["Дата"] = pd.to_datetime(purchase_order_df["Дата"])
@@ -2292,7 +2294,7 @@ class TempTablesPage(QWidget):
                     msg = "Следующие продукты все еще отсутствуют в БД и будут пропущены:\n\n"
                     msg += "\n".join(f"{row['Артикул']}, {row['Код']}, {row['Продукт + упаковка']}" 
                                     for _, row in still_missing_products.iterrows())
-                    self.show_message(msg)
+                    self.show_error_message(msg)
                     
                     # Удаляем строки с отсутствующими продуктами
                     df = df[~df['Код'].isin(still_missing)]
@@ -2427,8 +2429,7 @@ class TempTablesPage(QWidget):
                                 self._save_customer_data(df_cust1c.to_dict('records'))
                                 
                                 error_df.to_excel("ERRORs_Customer_New.xlsx", index=False)
-                                self.show_message(f"Обнаружены новые клиенты.\n"
-                                        f"Данные сохранены в файл ERRORs_Customer_New.xlsx")
+                                self.show_message(f"Обнаружены новые клиенты")
                                 # Обновляем список найденных ID
                                 found_ids = df_cust1c['id'].unique()
                                 missing_customer_ids = list(set(missing_customer_ids) - set(found_ids))
@@ -2469,8 +2470,7 @@ class TempTablesPage(QWidget):
                         
                         # Показываем сообщение
                         missing_count = len(current_missing[customer_id_column].unique())
-                        self.show_message(f"Обнаружено {missing_count} новых клиентов. Данные обновлены из файлов.\n"
-                                        f"Не найденные клиенты сохранены в файл ERRORs_Customer_NotFound.xlsx")
+                        self.show_message(f"Обнаружено {missing_count} новых клиентов. Данные обновлены из файлов")
                         
                         # Удаляем строки с отсутствующими клиентами из конечного DataFrame
                         df = df[df["Контрагент.ALLDATA"] != "не найден"]
@@ -2536,8 +2536,7 @@ class TempTablesPage(QWidget):
                 
                 # Показываем сообщение
                 missing_count = len(missing_contracts[contract_id_column].unique())
-                self.show_message(f"Обнаружено {missing_count} новых договоров. Данные обновлены из файла 1С.\n"
-                                f"Не найденные договоры сохранены в файл ERRORs_Contract.xlsx")
+                self.show_message(f"Обнаружено {missing_count} новых договоров. Данные обновлены из файла 1С.")
                 
                 # Удаляем строки с отсутствующими договорами
                 df = df[~df[contract_id_column].isin(missing_contracts[contract_id_column])]
@@ -2988,32 +2987,35 @@ class TempTablesPage(QWidget):
             return
 
     def show_message(self, text):
-        """Показать информационное сообщение"""
-        msg = QMessageBox()
-        msg.setWindowTitle("Информация")
-        msg.setIcon(QMessageBox.Information)
+        """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
+        self.ui.label_msg.setText(text)
         
-        # Устанавливаем большой минимальный размер
-        msg.setMinimumSize(900, 600)
+        # Устанавливаем стили для успешного сообщения
+        self.ui.label_msg.setStyleSheet("""
+            QLabel {
+                background-color: #CCFF99;
+                color: #12501A;
+                border: 2px solid #12501A;
+                border-radius: 5px;
+                padding: 8px;
+                font: 10pt "Tahoma";
+                margin: 2px;
+            }
+        """)
         
-        # Всегда используем detailed text для длинных сообщений
-        if len(text) > 500:
-            short_text = "Подробная информация ниже (используйте кнопку 'Show Details')"
-            msg.setText(short_text)
-            msg.setDetailedText(text)
-        else:
-            msg.setText(text)
+        # Делаем label видимым (на случай, если был скрыт)
+        self.ui.label_msg.setVisible(True)
         
-        # Кнопки
-        copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
-        ok_button = msg.addButton(QMessageBox.Ok)
-        
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
-        msg.exec_()
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
+    def clear_message(self):
+        """Очистить сообщение"""
+        self.ui.label_msg.setText("")
+        self.ui.label_msg.setStyleSheet("")
+    
     def show_error_message(self, text):
         """Показать сообщение об ошибке"""
         msg = QMessageBox()
