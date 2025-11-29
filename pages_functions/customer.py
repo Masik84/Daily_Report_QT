@@ -182,6 +182,7 @@ class CustomerPage(QWidget):
             df = df[df['id'] != '']  # Удаляем пустые строки
             df = df[df['Customer_name'].notna()]  # Удаляем клиентов без имени
             
+            
             df[['Sector', 'Price_type']] = df[['Sector', 'Price_type']].fillna("-")
             
             # Удаляем записи с 'new'
