@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'plansvQTPXn.ui'
+## Form generated from reading UI file 'plansevBWqh.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.1
+## Created by: Qt User Interface Compiler version 6.8.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -816,23 +816,6 @@ class Ui_Form(object):
 
         self.verticalLayout.addWidget(self.table)
 
-        self.frame_8 = QFrame(self.widget)
-        self.frame_8.setObjectName(u"frame_8")
-        self.frame_8.setMinimumSize(QSize(0, 25))
-        self.frame_8.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_8.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_11 = QHBoxLayout(self.frame_8)
-        self.horizontalLayout_11.setSpacing(0)
-        self.horizontalLayout_11.setObjectName(u"horizontalLayout_11")
-        self.horizontalLayout_11.setContentsMargins(-1, 0, -1, 0)
-        self.label_msg = QLabel(self.frame_8)
-        self.label_msg.setObjectName(u"label_msg")
-
-        self.horizontalLayout_11.addWidget(self.label_msg)
-
-
-        self.verticalLayout.addWidget(self.frame_8)
-
         self.frame_9 = QFrame(self.widget)
         self.frame_9.setObjectName(u"frame_9")
         self.frame_9.setFrameShape(QFrame.Shape.StyledPanel)
@@ -841,20 +824,10 @@ class Ui_Form(object):
         self.horizontalLayout_7.setSpacing(0)
         self.horizontalLayout_7.setObjectName(u"horizontalLayout_7")
         self.horizontalLayout_7.setContentsMargins(12, 0, 0, 0)
-        self.label_plan_File = QLabel(self.frame_9)
-        self.label_plan_File.setObjectName(u"label_plan_File")
-        self.label_plan_File.setMinimumSize(QSize(0, 30))
-        self.label_plan_File.setMaximumSize(QSize(16777215, 30))
-        self.label_plan_File.setStyleSheet(u"QLabel {\n"
-"	background-color: #f8f8f2;\n"
-"	border-radius: 5px;\n"
-"	border: 2px solid #f09d54;\n"
-"	padding-left: 10px;\n"
-"	color: #964b09;\n"
-"	font: 10pt \"Tahoma\";\n"
-"}")
+        self.label_msg = QLabel(self.frame_9)
+        self.label_msg.setObjectName(u"label_msg")
 
-        self.horizontalLayout_7.addWidget(self.label_plan_File)
+        self.horizontalLayout_7.addWidget(self.label_msg)
 
         self.frame_10 = QFrame(self.frame_9)
         self.frame_10.setObjectName(u"frame_10")
@@ -866,23 +839,13 @@ class Ui_Form(object):
         self.horizontalLayout_6.setSpacing(0)
         self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
         self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
-        self.btn_open_file = QPushButton(self.frame_10)
-        self.btn_open_file.setObjectName(u"btn_open_file")
-        self.btn_open_file.setMinimumSize(QSize(90, 30))
-        self.btn_open_file.setMaximumSize(QSize(90, 16777215))
-        icon1 = QIcon()
-        icon1.addFile(u":/icon/icon/folder \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_open_file.setIcon(icon1)
-
-        self.horizontalLayout_6.addWidget(self.btn_open_file)
-
         self.btn_upload_file = QPushButton(self.frame_10)
         self.btn_upload_file.setObjectName(u"btn_upload_file")
-        self.btn_upload_file.setMinimumSize(QSize(90, 30))
-        self.btn_upload_file.setMaximumSize(QSize(90, 16777215))
-        icon2 = QIcon()
-        icon2.addFile(u":/icon/icon/upload \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_upload_file.setIcon(icon2)
+        self.btn_upload_file.setMinimumSize(QSize(160, 30))
+        self.btn_upload_file.setMaximumSize(QSize(160, 16777215))
+        icon1 = QIcon()
+        icon1.addFile(u":/icon/icon/refresh-ccw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.btn_upload_file.setIcon(icon1)
 
         self.horizontalLayout_6.addWidget(self.btn_upload_file)
 
@@ -925,9 +888,7 @@ class Ui_Form(object):
         self.label_Margin.setText("")
         self.label_15.setText(QCoreApplication.translate("Form", u"uC3:", None))
         self.label_uC3.setText("")
-        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
-        self.label_plan_File.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0431\u0435\u0440\u0438 \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438 Upload, \u0444\u0430\u0439\u043b \u0431\u0443\u0434\u0435\u0442 \u0432\u0437\u044f\u0442 \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0430\u043f\u043a\u0438", None))
-        self.btn_open_file.setText(QCoreApplication.translate("Form", u"Open", None))
-        self.btn_upload_file.setText(QCoreApplication.translate("Form", u"Upload", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043d\u0435\u0442", None))
+        self.btn_upload_file.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
     # retranslateUi
 

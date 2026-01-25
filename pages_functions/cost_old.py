@@ -1,14 +1,16 @@
+
 import os
 import pandas as pd
 from sqlalchemy import select, and_, or_
 from sqlalchemy.exc import SQLAlchemyError
-from PySide6.QtWidgets import (QMessageBox, QTableWidget, QTableWidgetItem, 
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, 
                               QWidget, QHeaderView, QApplication, QMenu)
 from PySide6.QtCore import Qt
 from functools import lru_cache
+import math  # Import the math module
 
 from db import db
-from models import Fees, EcoFee_amount, EcoFee_standard, TNVED, Year, Month, Customs_Rate, Labling, Bonus, Supplier
+from models import Fees, EcoFee_amount, EcoFee_standard, TNVED, Year, Month, Customs_Rate
 from config import All_data_file
 from wind.pages.taxfees_ui import Ui_Form
 
@@ -19,7 +21,7 @@ class CostsPage(QWidget):
         self.ui.setupUi(self)
         
         self.ui.line_taxfee_type.clear()
-        self.ui.line_taxfee_type.addItems(["-", "Тарифы", "Эко Сбор", "Пошлины", "Маркировка", "Бонусы"])
+        self.ui.line_taxfee_type.addItems(["-", "Тарифы", "Эко Сбор", "Пошлины"])
 
         self._setup_ui()
         self._setup_connections()
@@ -30,15 +32,15 @@ class CostsPage(QWidget):
         self.table = self.ui.table
 
         # Базовые настройки таблицы
-        self.table.setSelectionBehavior(QTableWidget.SelectItems)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setSortingEnabled(True)
-        self.table.setWordWrap(False)
-        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.table.setSelectionBehavior(QTableWidget.SelectItems)  # Выделение отдельных ячеек
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # Запрет редактирования
+        self.table.setAlternatingRowColors(True)  # Чередование цветов строк
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)  # Изменяемые размеры
+        self.table.horizontalHeader().setStretchLastSection(True)  # Растягивание последнего столбца
+        self.table.verticalHeader().setVisible(False)  # Скрытие вертикальных заголовков
+        self.table.setSortingEnabled(True)  # Сортировка по клику на заголовок
+        self.table.setWordWrap(False)  # Запрет переноса слов
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)  # Обрезка длинного текста
 
         # Настройка контекстного меню для копирования
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -68,9 +70,11 @@ class CostsPage(QWidget):
         selected_items = self.table.selectedItems()
         if selected_items:
             clipboard = QApplication.clipboard()
+            # Если выделена одна ячейка - копируем только ее
             if len(selected_items) == 1:
                 text = selected_items[0].text()
             else:
+                # Если выделено несколько ячеек - копируем с разделением табуляцией и переносом строк
                 rows = {}
                 for item in selected_items:
                     row = item.row()
@@ -79,6 +83,7 @@ class CostsPage(QWidget):
                         rows[row] = {}
                     rows[row][col] = item.text()
 
+                # Сортируем ячейки по строкам и столбцам
                 sorted_rows = sorted(rows.items())
                 text = ""
                 for row, cols in sorted_rows:
@@ -89,14 +94,25 @@ class CostsPage(QWidget):
 
     def _setup_connections(self):
         """Настройка сигналов и слотов"""
+        self.ui.btn_open_file.clicked.connect(self.get_file)
         self.ui.btn_upload_file.clicked.connect(self.upload_data)
         self.ui.btn_find.clicked.connect(self.find_cost)
 
+    def get_file(self):
+        """Выбор файла через диалоговое окно"""
+        file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с данными')
+        if file_path:
+            self.ui.label_tax_File.setText(file_path)
+
     def upload_data(self):
-        """Загрузка всех данных в базу из All_data_file"""
+        """Загрузка данных в базу - обновление всех таблиц"""
         try:
-            if not os.path.exists(All_data_file):
-                raise FileNotFoundError(f"Файл {os.path.basename(All_data_file)} не найден")
+            file_path = self.ui.label_tax_File.text()
+            if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
+                file_path = All_data_file
+
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
 
             # Начинаем транзакцию
             db.begin()
@@ -104,14 +120,14 @@ class CostsPage(QWidget):
             try:
                 # 1. Обновляем календарные таблицы
                 try:
-                    calendar_df = pd.read_excel(All_data_file, sheet_name="Календарь")
+                    calendar_df = pd.read_excel(file_path, sheet_name="Календарь")
                     self._update_calendar_tables(calendar_df)
                 except Exception as e:
                     raise Exception(f"Ошибка обновления календаря: {str(e)}")
 
                 # 2. Загружаем данные тарифов
                 try:
-                    success_fees, msg_fees = self._upload_fees_data()
+                    success_fees, msg_fees = self._upload_fees_data(file_path)
                     if not success_fees:
                         raise Exception(msg_fees)
                 except Exception as e:
@@ -119,7 +135,7 @@ class CostsPage(QWidget):
 
                 # 3. Загружаем данные экосборов
                 try:
-                    success_eco, msg_eco = self._upload_ecofee_data()
+                    success_eco, msg_eco = self._upload_ecofee_data(file_path)
                     if not success_eco:
                         raise Exception(msg_eco)
                 except Exception as e:
@@ -127,45 +143,43 @@ class CostsPage(QWidget):
                 
                 # 4. Загружаем данные пошлин
                 try:
-                    success_customs, msg_customs = self._upload_customs_rates_data()
+                    success_customs, msg_customs = self._upload_customs_rates_data(file_path)
                     if not success_customs:
                         raise Exception(msg_customs)
                 except Exception as e:
                     raise Exception(f"Ошибка загрузки пошлин: {str(e)}")
                 
-                # 5. Загружаем данные маркировки
+                # 45 Загружаем данные Маркировка
                 try:
-                    success_labling, msg_labling = self._upload_labling_data()
-                    if not success_labling:
-                        raise Exception(msg_labling)
+                    success_customs, msg_customs = self._upload_labling_rates_data(file_path)
+                    if not success_customs:
+                        raise Exception(msg_customs)
                 except Exception as e:
-                    raise Exception(f"Ошибка загрузки маркировки: {str(e)}")
-                
-                # 6. Загружаем данные бонусов
-                try:
-                    success_bonus, msg_bonus = self._upload_bonus_data()
-                    if not success_bonus:
-                        raise Exception(msg_bonus)
-                except Exception as e:
-                    raise Exception(f"Ошибка загрузки бонусов: {str(e)}")
+                    raise Exception(f"Ошибка загрузки пошлин: {str(e)}")
 
                 # Если все успешно - коммитим
                 db.commit()
                 
                 # Показываем успешное сообщение
                 success_msg = "Все данные успешно загружены!"
+                # success_msg += f"Тарифы: {msg_fees}\n"
+                # success_msg += f"Экосборы: {msg_eco}\n"
+                # success_msg += f"Пошлины: {msg_customs}"
+                
                 self.show_message(success_msg)
                 self.refresh_all_comboboxes()
 
             except Exception as e:
                 db.rollback()
-                error_msg = f"Ошибка при загрузке данных:\n{str(e)}\n\nВсе изменения отменены."
+                error_msg = f"Ошибка при загрузке данных:\n{str(e)}\n\n"
+                error_msg += "Все изменения отменены (rollback выполнен)."
                 self.show_error_message(error_msg)
                 
         except FileNotFoundError as e:
             self.show_error_message(f"Файл не найден: {str(e)}")
         except Exception as e:
-            error_msg = f"Критическая ошибка при загрузке:\n{str(e)}\n\nПроверьте формат файла и наличие всех листов"
+            error_msg = f"Критическая ошибка при загрузке:\n{str(e)}\n\n"
+            error_msg += "Проверьте:\n1. Формат файла\n2. Наличие всех листов\n3. Данные в файле"
             self.show_error_message(error_msg)
         finally:
             if db.is_active:
@@ -174,13 +188,16 @@ class CostsPage(QWidget):
     def _update_calendar_tables(self, data):
         """Обновление таблиц Year, Month для Costs"""
         try:
+            # Получаем уникальные года и месяцы, преобразуя numpy.int64 в int
             years = [int(year) for year in data['Year'].unique()]
             months = [int(month) for month in data['Month'].unique()]
 
+            # Добавляем новые года
             for year in years:
                 if not db.query(Year).filter(Year.Year == year).first():
                     db.add(Year(Year=year))
 
+            # Добавляем новые месяцы
             for month in months:
                 if not db.query(Month).filter(Month.Month == month).first():
                     db.add(Month(Month=month))
@@ -190,11 +207,11 @@ class CostsPage(QWidget):
             db.rollback()
             raise Exception(f"Ошибка обновления календарных таблиц: {str(e)}")
 
-    def _upload_fees_data(self):
-        """Загрузка данных о тарифах"""
+    def _upload_fees_data(self, file_path):
+        """Загрузка данных о тарифах с новыми связями"""
         try:
             dtype_fees = {"Год": int, "Месяц": int}
-            df = pd.read_excel(All_data_file, sheet_name="TaxFee", dtype=dtype_fees)
+            df = pd.read_excel(file_path, sheet_name="TaxFee", dtype=dtype_fees)
             
             column_map = {
                 "Год": "year_id", 
@@ -216,29 +233,30 @@ class CostsPage(QWidget):
             df = df.rename(columns=column_map).fillna(0)
 
             # Получаем ID для года и месяца
-            df['year_id'] = df['year_id'].apply(lambda x: self._get_id(Year, 'Year', int(x) if not pd.isna(x) else None))
-            df['month_id'] = df['month_id'].apply(lambda x: self._get_id(Month, 'Month', int(x) if not pd.isna(x) else None))
-            
+            df['year_id'] = df['year_id'].apply(lambda x: self._get_id(Year, 'Year', int(x) if not pd.isna(x) else None)) # Modified line
+            df['month_id'] = df['month_id'].apply(lambda x: self._get_id(Month, 'Month', int(x) if not pd.isna(x) else None)) # Modified line
+
             records = df.to_dict('records')
 
-            existing_fees = db.query(Fees).filter(
-                Fees.year_id.in_([r['year_id'] for r in records if r['year_id'] is not None]),
-                Fees.month_id.in_([r['month_id'] for r in records if r['month_id'] is not None])
-            ).all()
+            # Fetch all existing Fees records as objects
+            existing_fees = db.query(Fees).filter(Fees.year_id.in_([r['year_id'] for r in records if r['year_id'] is not None]),
+                                                Fees.month_id.in_([r['month_id'] for r in records if r['month_id'] is not None])).all()
             existing_dict = {(f.year_id, f.month_id): f for f in existing_fees}
 
             to_insert = []
             to_update = []
 
             for record in records:
+                # Handle NaN values for year_id and month_id before inserting/updating
                 if pd.isna(record['year_id']) or pd.isna(record['month_id']):
-                    continue
+                    continue  # Skip this record if year_id or month_id is NaN
 
-                record['year_id'] = int(record['year_id'])
-                record['month_id'] = int(record['month_id'])
+                record['year_id'] = int(record['year_id'])  # Ensure it's an integer
+                record['month_id'] = int(record['month_id'])  # Ensure it's an integer
 
                 key = (record['year_id'], record['month_id'])
                 if key in existing_dict:
+                    # Add the ID to the record being updated
                     fee_object = existing_dict[key]
                     record['id'] = fee_object.id
                     to_update.append(record)
@@ -254,174 +272,156 @@ class CostsPage(QWidget):
         except Exception as e:
             return False, f"Ошибка загрузки данных тарифов: {str(e)}"
 
-    def _upload_ecofee_data(self):
-        """Загрузка данных об экосборах"""
+    def _upload_ecofee_data(self, file_path):
+        """Загрузка данных об экосборах с новыми связями"""
         try:
-            # Добавляем dtype для чтения кодов ТНВЭД как строк
             dtype_tnved = {"Код ТНВЭД": str}
-            
-            # Чтение данных о ставках с указанием типа данных
-            df_amount = pd.read_excel(All_data_file, sheet_name="экосбор_ставки", dtype=dtype_tnved, skiprows=1)
+
+            # Чтение данных о ставках
+            df_amount = pd.read_excel(file_path, sheet_name="экосбор_ставки", dtype=dtype_tnved, skiprows=1)
             df_amount_long = df_amount.melt(id_vars=["Код ТНВЭД", "признак", "группа"], var_name="year_id", value_name="ECO_amount")
             df_amount_long["year_id"] = df_amount_long["year_id"].astype(int)
-            
-            # Очистка кодов ТНВЭД
-            df_amount_long["Код ТНВЭД"] = df_amount_long["Код ТНВЭД"].astype(str).str.strip()
-            df_amount_long = df_amount_long[df_amount_long["Код ТНВЭД"] != "nan"]
-            
-            # Чтение данных о нормативах с указанием типа данных
-            df_standard = pd.read_excel(All_data_file, sheet_name="экосбор_норматив", dtype=dtype_tnved, skiprows=1)
+
+            # Чтение данных о нормативах
+            df_standard = pd.read_excel(file_path, sheet_name="экосбор_норматив", dtype=dtype_tnved, skiprows=1)
             df_standard_long = df_standard.melt(id_vars=["Код ТНВЭД", "признак", "группа"], var_name="year_id", value_name="ECO_standard")
             df_standard_long["year_id"] = df_standard_long["year_id"].astype(int)
-            
-            # Очистка кодов ТНВЭД
-            df_standard_long["Код ТНВЭД"] = df_standard_long["Код ТНВЭД"].astype(str).str.strip()
-            df_standard_long = df_standard_long[df_standard_long["Код ТНВЭД"] != "nan"]
-            
+
             # Добавляем новые коды ТНВЭД
-            existing_tnved = {str(t.code) for t in db.query(TNVED.code).all()}
-            
-            # Получаем уникальные коды из обоих датафреймов
-            unique_tnved_codes = set(df_amount_long["Код ТНВЭД"].unique()) | set(df_standard_long["Код ТНВЭД"].unique())
-            
-            # Отфильтровываем пустые и некорректные коды
-            valid_tnved_codes = {code for code in unique_tnved_codes 
-                            if code and str(code).strip() and str(code).lower() != 'nan'}
-            
-            new_tnved = valid_tnved_codes - existing_tnved
-            
+            existing_tnved = {t.code for t in db.query(TNVED.code).all()}
+            new_tnved = set(df_amount_long["Код ТНВЭД"].unique()) - existing_tnved
+
             if new_tnved:
-                # Вставка новых кодов с явным преобразованием в строку
-                to_insert = [{"code": str(code)} for code in new_tnved]
-                db.bulk_insert_mappings(TNVED, to_insert)
+                db.bulk_insert_mappings(TNVED, [{"code": code} for code in new_tnved])
                 db.commit()
-            
+
             # Получаем ID всех ТНВЭД и годов
-            tnved_records = db.query(TNVED).all()
-            tnved_ids = {str(t.code): t.id for t in tnved_records}
+            tnved_ids = {t.code: t.id for t in db.query(TNVED).all()}
             year_ids = {y.Year: y.id for y in db.query(Year).all()}
-            
+
             # Подготовка данных для amount вставки
             amount_data = []
             for _, row in df_amount_long.iterrows():
-                tnved_code = str(row["Код ТНВЭД"]).strip()
-                tnved_id = tnved_ids.get(tnved_code)
+                tnved_id = tnved_ids.get(row["Код ТНВЭД"])
                 year_id = year_ids.get(row["year_id"])
-                
                 if tnved_id and year_id:
                     amount_data.append({
                         "TNVED_id": tnved_id,
                         "year_id": year_id,
                         "ECO_amount": row["ECO_amount"],
-                        "merge": f"{tnved_code}_{row['year_id']}"
+                        "merge": f"{row['Код ТНВЭД']}_{row['year_id']}"
                     })
-            
+
             # Подготовка данных для standard вставки
             standard_data = []
             for _, row in df_standard_long.iterrows():
-                tnved_code = str(row["Код ТНВЭД"]).strip()
-                tnved_id = tnved_ids.get(tnved_code)
+                tnved_id = tnved_ids.get(row["Код ТНВЭД"])
                 year_id = year_ids.get(row["year_id"])
-                
                 if tnved_id and year_id:
                     standard_data.append({
                         "TNVED_id": tnved_id,
                         "year_id": year_id,
                         "ECO_standard": row["ECO_standard"],
-                        "merge": f"{tnved_code}_{row['year_id']}"
+                        "merge": f"{row['Код ТНВЭД']}_{row['year_id']}"
                     })
-            
-            # Получаем существующие записи для обновления
-            existing_amounts = db.query(EcoFee_amount).filter(
-                EcoFee_amount.merge.in_([d["merge"] for d in amount_data])
-            ).all()
+
+            # Fetch existing EcoFee_amount records as objects
+            existing_amounts = db.query(EcoFee_amount).filter(EcoFee_amount.merge.in_([d["merge"] for d in amount_data])).all()
             existing_amount_dict = {e.merge: e for e in existing_amounts}
-            
+
+            # Создаем списки для вставки и обновления (amount)
             to_insert_amount = []
             to_update_amount = []
-            
+
+            # Populate the `to_update_amount` and `to_insert_amount` lists correctly
             for d in amount_data:
                 if d["merge"] in existing_amount_dict:
                     ecofee_amount_object = existing_amount_dict[d["merge"]]
-                    d["id"] = ecofee_amount_object.id
+                    d["id"] = ecofee_amount_object.id  # Add the ID
                     to_update_amount.append(d)
                 else:
                     to_insert_amount.append(d)
-            
-            existing_standards = db.query(EcoFee_standard).filter(
-                EcoFee_standard.merge.in_([d["merge"] for d in standard_data])
-            ).all()
+
+            # Fetch existing EcoFee_standard records as objects (Corrected table name)
+            existing_standards = db.query(EcoFee_standard).filter(EcoFee_standard.merge.in_([d["merge"] for d in standard_data])).all()
             existing_standard_dict = {e.merge: e for e in existing_standards}
-            
+
+            # Создаем списки для вставки и обновления (standard)
             to_insert_standard = []
             to_update_standard = []
-            
+
+            # Populate the `to_update_standard` and `to_insert_standard` lists correctly
             for d in standard_data:
                 if d["merge"] in existing_standard_dict:
                     ecofee_standard_object = existing_standard_dict[d["merge"]]
-                    d["id"] = ecofee_standard_object.id
+                    d["id"] = ecofee_standard_object.id  # Add the ID
                     to_update_standard.append(d)
                 else:
                     to_insert_standard.append(d)
-            
+
+            # Выполняем операции
             if to_insert_amount:
                 db.bulk_insert_mappings(EcoFee_amount, to_insert_amount)
             if to_update_amount:
                 db.bulk_update_mappings(EcoFee_amount, to_update_amount)
-            
+
             if to_insert_standard:
                 db.bulk_insert_mappings(EcoFee_standard, to_insert_standard)
             if to_update_standard:
                 db.bulk_update_mappings(EcoFee_standard, to_update_standard)
-            
+
             return True, "Данные экосборов успешно обновлены"
         except Exception as e:
             return False, f"Ошибка загрузки данных экосборов: {str(e)}"
     
-    def _upload_customs_rates_data(self):
-        """Загрузка данных о пошлинах"""
+    def _upload_customs_rates_data(self, file_path):
+        """Загрузка данных о пошлинах из Excel"""
         try:
             dtype_tnved = {"Код ТНВЭД": str, "Пошлина": float}
-            df = pd.read_excel(All_data_file, sheet_name="Пошлины", dtype=dtype_tnved)
+            df = pd.read_excel(file_path, sheet_name="Пошлины", dtype=dtype_tnved)
             
-            # Очистка и фильтрация данных
+            # Фильтруем строки с NaN в коде ТНВЭД
             df = df.dropna(subset=["Код ТНВЭД"])
-            df["Код ТНВЭД"] = df["Код ТНВЭД"].astype(str).str.strip()
+            
+            # Также фильтруем строки, где код ТНВЭД равен строке "NaN"
             df = df[df["Код ТНВЭД"].str.lower() != "nan"]
-            df = df[df["Код ТНВЭД"] != ""]
             
-            existing_tnved = {str(t.code) for t in db.query(TNVED.code).all()}
-            unique_tnved_codes = set(df["Код ТНВЭД"].unique())
-            
-            valid_tnved_codes = {code for code in unique_tnved_codes 
-                            if code and str(code).strip() and str(code).lower() != 'nan'}
-            
-            new_tnved = valid_tnved_codes - existing_tnved
+            # Добавляем новые коды ТНВЭД, если их нет
+            existing_tnved = {t.code for t in db.query(TNVED.code).all()}
+            new_tnved = set(df["Код ТНВЭД"].unique()) - existing_tnved
             
             if new_tnved:
-                to_insert = [{"code": str(code)} for code in new_tnved]
-                db.bulk_insert_mappings(TNVED, to_insert)
-                db.commit()
+                # Дополнительная фильтрация - только валидные коды
+                valid_new_tnved = [code for code in new_tnved 
+                                if code and str(code).strip() and str(code).lower() != 'nan']
+                
+                if valid_new_tnved:
+                    db.bulk_insert_mappings(TNVED, [{"code": code} for code in valid_new_tnved])
+                    db.commit()
             
-            tnved_records = db.query(TNVED).all()
-            tnved_ids = {str(t.code): t.id for t in tnved_records}
+            # Получаем ID всех ТНВЭД
+            tnved_ids = {t.code: t.id for t in db.query(TNVED).all()}
             
+            # Подготовка данных для вставки
             customs_data = []
             for _, row in df.iterrows():
-                tnved_code = str(row["Код ТНВЭД"]).strip()
-                tnved_id = tnved_ids.get(tnved_code)
-                
+                tnved_code = row["Код ТНВЭД"]
+                # Пропускаем невалидные коды
+                if pd.isna(tnved_code) or str(tnved_code).lower() == 'nan' or not str(tnved_code).strip():
+                    continue
+                    
+                tnved_id = tnved_ids.get(str(tnved_code).strip())
                 if tnved_id:
                     customs_data.append({
                         "TNVED_id": tnved_id,
                         "Cust_rate": row["Пошлина"]
                     })
             
-            existing_rates = db.query(Customs_Rate).filter(
-                Customs_Rate.TNVED_id.in_([d["TNVED_id"] for d in customs_data])
-            ).all()
+            # Получаем существующие записи
+            existing_rates = db.query(Customs_Rate).filter(Customs_Rate.TNVED_id.in_([d["TNVED_id"] for d in customs_data])).all()
             existing_dict = {r.TNVED_id: r for r in existing_rates}
             
+            # Разделяем на вставку и обновление
             to_insert = []
             to_update = []
             
@@ -433,6 +433,7 @@ class CostsPage(QWidget):
                 else:
                     to_insert.append(d)
             
+            # Выполняем операции
             if to_insert:
                 db.bulk_insert_mappings(Customs_Rate, to_insert)
             if to_update:
@@ -442,138 +443,13 @@ class CostsPage(QWidget):
         except Exception as e:
             return False, f"Ошибка загрузки данных пошлин: {str(e)}"
 
-    def _upload_labling_data(self):
-        """Загрузка данных о маркировке"""
-        try:
-            df = pd.read_excel(All_data_file, sheet_name="Маркировка")
-            
-            # Переименование колонок для соответствия модели
-            column_rename = {
-                'Год': 'year_id',
-                'Месяц': 'month_id',
-                '1_Чехов': 'чехов_1',
-                '5_Чехов': 'чехов_5',
-                '25_Чехов': 'чехов_25',
-                '60_Чехов': 'чехов_60',
-                '230_Чехов': 'чехов_230',
-                '1_ТЛТК': 'тлтк_1',
-                '5_ТЛТК': 'тлтк_5',
-                '25_ТЛТК': 'тлтк_25',
-                '60_ТЛТК': 'тлтк_60',
-                '230_ТЛТК': 'тлтк_230',
-                '1_Баррус': 'баррус_1',
-                '5_Баррус': 'баррус_5',
-                '25_Баррус': 'баррус_25',
-                '60_Баррус': 'баррус_60',
-                '230_Баррус': 'баррус_230',
-                '1_Дельта': 'дельта_1',
-                '5_Дельта': 'дельта_5',
-                '25_Дельта': 'дельта_25',
-                '60_Дельта': 'дельта_60',
-                '230_Дельта': 'дельта_230'
-            }
-            
-            df = df.rename(columns=column_rename)
-            
-            # Получаем ID для года и месяца
-            df['year_id'] = df['year_id'].apply(lambda x: self._get_id(Year, 'Year', int(x) if not pd.isna(x) else None))
-            df['month_id'] = df['month_id'].apply(lambda x: self._get_id(Month, 'Month', int(x) if not pd.isna(x) else None))
-            
-            # Удаляем строки с отсутствующими year_id или month_id
-            df = df.dropna(subset=['year_id', 'month_id'])
-            
-            records = df.to_dict('records')
-            
-            # Получаем существующие записи
-            existing_lablings = db.query(Labling).filter(
-                Labling.year_id.in_([r['year_id'] for r in records]),
-                Labling.month_id.in_([r['month_id'] for r in records])
-            ).all()
-            existing_dict = {(l.year_id, l.month_id): l for l in existing_lablings}
-            
-            to_insert = []
-            to_update = []
-            
-            for record in records:
-                key = (int(record['year_id']), int(record['month_id']))
-                if key in existing_dict:
-                    labling_object = existing_dict[key]
-                    record['id'] = labling_object.id
-                    to_update.append(record)
-                else:
-                    to_insert.append(record)
-            
-            if to_insert:
-                db.bulk_insert_mappings(Labling, to_insert)
-            if to_update:
-                db.bulk_update_mappings(Labling, to_update)
-            
-            return True, "Данные маркировки успешно обновлены"
-        except Exception as e:
-            return False, f"Ошибка загрузки данных маркировки: {str(e)}"
-
-    def _upload_bonus_data(self):
-        """Загрузка данных о бонусах"""
-        try:
-            df = pd.read_excel(All_data_file, sheet_name="Бонус TEBOIL", dtype={'Артикул': str, 'Контрагент.Код': str})
-            
-            # Переименование колонок
-            column_rename = {
-                'с': 'Start_date',
-                'по': 'End_date',
-                'Контрагент.Код': 'Supplier_id',
-                'Column1': 'Column1',
-                'Вид цены': 'Price_type',
-                'Type': 'Product_Type',
-                'Family': 'Product_Family',
-                'Продукт + упаковка': 'Material_name',
-                'Артикул': 'Article',
-                'Бонус, %': 'Bonus_pers',
-                'Бонус, р/кг': 'Bonus_rub'
-            }
-            
-            df = df.rename(columns=column_rename)
-            
-            # Преобразование дат
-            df['Start_date'] = pd.to_datetime(df['Start_date'], dayfirst=True, errors='coerce')
-            df['End_date'] = pd.to_datetime(df['End_date'], dayfirst=True, errors='coerce')
-            
-            df[['Bonus_pers', 'Bonus_rub']] = df[['Bonus_pers', 'Bonus_rub']].astype(float).fillna(0)
-            
-            # Проверяем существование поставщиков
-            supplier_ids = {s.id for s in db.query(Supplier).all()}
-            
-            # Фильтруем только существующих поставщиков
-            df = df[df['Supplier_id'].isin(supplier_ids)]
-            
-            records = df.to_dict('records')
-            
-            # Получаем максимальный ID
-            max_id = db.query(db.func.max(Bonus.id)).scalar() or 0
-            next_id = max_id + 1
-            
-            to_insert = []
-            for record in records:
-                record['id'] = next_id
-                to_insert.append(record)
-                next_id += 1
-            
-            # Удаляем старые записи и вставляем новые
-            db.query(Bonus).delete()
-            if to_insert:
-                db.bulk_insert_mappings(Bonus, to_insert)
-            
-            return True, f"Загружено {len(to_insert)} записей о бонусах"
-        except Exception as e:
-            return False, f"Ошибка загрузки данных бонусов: {str(e)}"
-
     def find_cost(self):
-        """Поиск данных по заданным критериям"""
+        """Поиск данных по заданным критериям с учетом всех условий"""
         try:
             data_type = self.ui.line_taxfee_type.currentText()
 
             if data_type == "-":
-                self.show_error_message("Выберите тип данных")
+                self.show_error_message("Выбери тип данных")
                 return
 
             if data_type == "Тарифы":
@@ -635,27 +511,6 @@ class CostsPage(QWidget):
                 tnved_filter = tnved_code if tnved_code != "-" and tnved_code else None
                 data = self._get_customs_rates_data(tnved_code=tnved_filter)
                 self._display_customs_rates_data(data)
-                
-            elif data_type == "Маркировка":
-                year = self.ui.line_Year.currentText()
-                month = self.ui.line_Mnth.currentText()
-                
-                if year == "-" and month == "-":
-                    data = self._get_labling_data()
-                elif year != "-" and month == "-":
-                    data = self._get_labling_data(year=year)
-                elif year != "-" and month != "-":
-                    data = self._get_labling_data(year=year, month=month)
-                elif year == "-" and month != "-":
-                    data = self._get_labling_data(month=month)
-                    
-                self._display_labling_data(data)
-                
-            elif data_type == "Бонусы":
-                supplier_id = self.ui.lineEdit_TNVED.text().strip()
-                
-                data = self._get_bonus_data(supplier_id=supplier_id if supplier_id and supplier_id != "-" else None)
-                self._display_bonus_data(data)
 
         except Exception as e:
             self.show_error_message(f"Ошибка при поиске данных: {str(e)}")
@@ -709,6 +564,7 @@ class CostsPage(QWidget):
             
             return result
         except Exception as e:
+            print(f"Ошибка в _get_fees_data: {e}")  # Добавьте логирование
             self.show_error_message(f"Ошибка получения данных тарифов: {str(e)}")
             return []
 
@@ -719,8 +575,8 @@ class CostsPage(QWidget):
                 db.query(
                     TNVED.code.label("ТНВЭД"),
                     Year.Year.label("Год"),
-                    EcoFee_amount.ECO_amount.label("Эко_Ставка"),
-                    EcoFee_standard.ECO_standard.label("Эко_Норматив")
+                    EcoFee_amount.ECO_amount.label("Эко_Ставка"),  # Изменено с "Эко Ставка" на "Эко_Ставка"
+                    EcoFee_standard.ECO_standard.label("Эко_Норматив")  # Изменено с "Эко Норматив" на "Эко_Норматив"
                 )
                 .join(EcoFee_amount, EcoFee_amount.TNVED_id == TNVED.id)
                 .join(EcoFee_amount.year)
@@ -742,7 +598,7 @@ class CostsPage(QWidget):
                 result.append({
                     "ТНВЭД": row.ТНВЭД,
                     "Год": row.Год,
-                    "Эко Ставка": row.Эко_Ставка,
+                    "Эко Ставка": row.Эко_Ставка,  # Используем правильные имена атрибутов
                     "Эко Норматив": row.Эко_Норматив
                 })
             
@@ -775,117 +631,6 @@ class CostsPage(QWidget):
         except Exception as e:
             self.show_error_message(f"Ошибка получения данных пошлин: {str(e)}")
             return []
-            
-    def _get_labling_data(self, year=None, month=None):
-        """Получение данных о маркировке с фильтрацией"""
-        try:
-            query = db.query(
-                Year.Year.label("Год"),
-                Month.Month.label("Месяц"),
-                Labling.чехов_1,
-                Labling.чехов_5,
-                Labling.чехов_25,
-                Labling.чехов_60,
-                Labling.чехов_230,
-                Labling.тлтк_1,
-                Labling.тлтк_5,
-                Labling.тлтк_25,
-                Labling.тлтк_60,
-                Labling.тлтк_230,
-                Labling.баррус_1,
-                Labling.баррус_5,
-                Labling.баррус_25,
-                Labling.баррус_60,
-                Labling.баррус_230,
-                Labling.дельта_1,
-                Labling.дельта_5,
-                Labling.дельта_25,
-                Labling.дельта_60,
-                Labling.дельта_230
-            ).join(Labling.year
-            ).join(Labling.month)
-            
-            if year and year != '-':
-                query = query.filter(Year.Year == int(year))
-            if month and month != '-':
-                query = query.filter(Month.Month == int(month))
-            
-            labling_data = query.order_by(Year.Year, Month.Month).all()
-            
-            result = []
-            for row in labling_data:
-                result.append({
-                    "Год": row.Год,
-                    "Месяц": row.Месяц,
-                    "1_Чехов": row.чехов_1,
-                    "5_Чехов": row.чехов_5,
-                    "25_Чехов": row.чехов_25,
-                    "60_Чехов": row.чехов_60,
-                    "230_Чехов": row.чехов_230,
-                    "1_ТЛТК": row.тлтк_1,
-                    "5_ТЛТК": row.тлтк_5,
-                    "25_ТЛТК": row.тлтк_25,
-                    "60_ТЛТК": row.тлтк_60,
-                    "230_ТЛТК": row.тлтк_230,
-                    "1_Баррус": row.баррус_1,
-                    "5_Баррус": row.баррус_5,
-                    "25_Баррус": row.баррус_25,
-                    "60_Баррус": row.баррус_60,
-                    "230_Баррус": row.баррус_230,
-                    "1_Дельта": row.дельта_1,
-                    "5_Дельта": row.дельта_5,
-                    "25_Дельта": row.дельта_25,
-                    "60_Дельта": row.дельта_60,
-                    "230_Дельта": row.дельта_230
-                })
-            
-            return result
-        except Exception as e:
-            self.show_error_message(f"Ошибка получения данных маркировки: {str(e)}")
-            return []
-            
-    def _get_bonus_data(self, supplier_id=None):
-        """Получение данных о бонусах с фильтрацией"""
-        try:
-            query = db.query(
-                Bonus.Start_date,
-                Bonus.End_date,
-                Bonus.Supplier_id,
-                Supplier.Supplier_Name.label("Поставщик"),
-                Bonus.Price_type,
-                Bonus.Product_Type,
-                Bonus.Product_Family,
-                Bonus.Material_name,
-                Bonus.Article,
-                Bonus.Bonus_pers,
-                Bonus.Bonus_rub
-            ).join(Bonus.supplier)
-            
-            if supplier_id and supplier_id != "-":
-                query = query.filter(Bonus.Supplier_id == supplier_id)
-            
-            bonus_data = query.order_by(Bonus.Start_date, Bonus.Supplier_id).all()
-            
-            result = []
-            for row in bonus_data:
-                result.append({
-                    "Дата начала": row.Start_date.strftime('%d.%m.%Y') if row.Start_date else '',
-                    "Дата окончания": row.End_date.strftime('%d.%m.%Y') if row.End_date else '',
-                    "Код поставщика": row.Supplier_id,
-                    "Поставщик": row.Поставщик,
-                    "Вид цены": row.Price_type,
-                    "Тип": row.Product_Type,
-                    "Семейство": row.Product_Family,
-                    "Продукт + упаковка": row.Material_name,
-                    "Артикул": row.Article,
-                    "Бонус, %": row.Bonus_pers,
-                    "Бонус, р/кг": row.Bonus_rub
-                })
-            
-            return result
-        except Exception as e:
-            self.show_error_message(f"Ошибка получения данных бонусов: {str(e)}")
-            return []
         
     def _display_fees_data(self, data):
         """Отображение данных о тарифах"""
@@ -908,7 +653,11 @@ class CostsPage(QWidget):
                 if value is None or (hasattr(value, 'is_nan') and value.is_nan()):
                     display_value = ""
                 elif col_name in ["Комиссия банка", "Ст-ть Денег", "Доп% денег"]:
+                    # Вариант 1: Если в БД 0.0108 → умножаем на 100
                     display_value = f"{float(value) * 100:.2f}%".replace(".", ",")
+                    
+                    # Вариант 2: Если в БД уже 1.08 → просто добавляем %
+                    # display_value = f"{float(value):.2f}%".replace(".", ",")
                 elif col_name == "Год":
                     display_value = str(int(value)) if value is not None else ""
                 elif col_name == "Месяц":
@@ -922,7 +671,7 @@ class CostsPage(QWidget):
         self.table.resizeColumnsToContents()
 
     def _display_ecofee_data(self, data):
-        """Отображение данных об экосборах"""
+        """Отображение данных об экосборах (ставки и нормативы)"""
         self.table.clearContents()
         self.table.setRowCount(0)
         
@@ -930,25 +679,31 @@ class CostsPage(QWidget):
             self.show_message("Нет данных об экосборах для отображения")
             return
 
+        # Устанавливаем заголовки
         headers = ["ТНВЭД", "Год", "Эко Ставка", "Эко Норматив"]
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(data))
         
         for row_idx, row_data in enumerate(data):
+            # ТНВЭД
             tnved_item = QTableWidgetItem(str(row_data.get("ТНВЭД", "")))
             self.table.setItem(row_idx, 0, tnved_item)
             
+            # Год
             year_item = QTableWidgetItem(str(row_data.get("Год", "")))
             self.table.setItem(row_idx, 1, year_item)
             
+            # Эко Ставка (число, форматируем с 2 знаками)
             eco_amount = row_data.get("Эко Ставка")
             eco_amount_display = f"{float(eco_amount):,.2f}".replace(",", " ").replace(".", ",") if eco_amount is not None else ""
             amount_item = QTableWidgetItem(eco_amount_display)
             self.table.setItem(row_idx, 2, amount_item)
             
+            # Эко Норматив (процент, умножаем на 100)
             eco_standard = row_data.get("Эко Норматив")
             if eco_standard is not None:
+                # Проверяем, нужно ли умножать на 100 (если значение < 1)
                 eco_standard_val = float(eco_standard)
                 if eco_standard_val < 1:
                     eco_standard_display = f"{eco_standard_val * 100:.2f}%".replace(".", ",")
@@ -976,9 +731,11 @@ class CostsPage(QWidget):
         self.table.setRowCount(len(data))
         
         for row_idx, row_data in enumerate(data):
+            # ТНВЭД
             item_tnved = QTableWidgetItem(str(row_data["ТНВЭД"]))
             self.table.setItem(row_idx, 0, item_tnved)
             
+            # Пошлина (умножаем на 100 для отображения в процентах)
             rate = row_data["Пошлина"]
             if rate is not None:
                 display_rate = f"{float(rate)*100:.2f}%".replace(".", ",")
@@ -987,70 +744,6 @@ class CostsPage(QWidget):
                 
             item_rate = QTableWidgetItem(display_rate)
             self.table.setItem(row_idx, 1, item_rate)
-        
-        self.table.resizeColumnsToContents()
-        
-    def _display_labling_data(self, data):
-        """Отображение данных о маркировке"""
-        self.table.clearContents()
-        self.table.setRowCount(0)
-        
-        if not data:
-            self.show_message("Нет данных о маркировке для отображения")
-            return
-        
-        headers = list(data[0].keys())
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        self.table.setRowCount(len(data))
-        
-        for row_idx, row_data in enumerate(data):
-            for col_idx, col_name in enumerate(headers):
-                value = row_data[col_name]
-                
-                if col_name in ["Год", "Месяц"]:
-                    display_value = str(int(value)) if value is not None else ""
-                elif value is None or (hasattr(value, 'is_nan') and value.is_nan()):
-                    display_value = ""
-                else:
-                    display_value = f"{float(value):,.2f}".replace(",", " ").replace(".", ",")
-                
-                item = QTableWidgetItem(display_value)
-                self.table.setItem(row_idx, col_idx, item)
-        
-        self.table.resizeColumnsToContents()
-        
-    def _display_bonus_data(self, data):
-        """Отображение данных о бонусах"""
-        self.table.clearContents()
-        self.table.setRowCount(0)
-        
-        if not data:
-            self.show_message("Нет данных о бонусах для отображения")
-            return
-        
-        headers = list(data[0].keys())
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
-        self.table.setRowCount(len(data))
-        
-        for row_idx, row_data in enumerate(data):
-            for col_idx, col_name in enumerate(headers):
-                value = row_data[col_name]
-                
-                if col_name in ["Бонус, %"] and value is not None:
-                    # Умножаем на 100 для отображения процентов
-                    bonus_val = float(value) * 100
-                    display_value = f"{bonus_val:.1f}%".replace(".", ",")
-                elif col_name in ["Бонус, р/кг"] and value is not None:
-                    display_value = f"{float(value):,.2f}".replace(",", " ").replace(".", ",")
-                elif value is None or (hasattr(value, 'is_nan') and value.is_nan()):
-                    display_value = ""
-                else:
-                    display_value = str(value)
-                
-                item = QTableWidgetItem(display_value)
-                self.table.setItem(row_idx, col_idx, item)
         
         self.table.resizeColumnsToContents()
                 
@@ -1062,10 +755,12 @@ class CostsPage(QWidget):
     def fill_in_year_list(self):
         """Заполнение списка годов"""
         try:
+            # Получаем года из Year
             years = db.query(Year.Year).distinct().order_by(Year.Year.desc()).all()
             years_list = [str(y[0]) for y in years] if years else []
             self._fill_combobox(self.ui.line_Year, years_list)
         except Exception as e:
+            print(f"Ошибка при загрузке списка годов: {str(e)}")
             self._fill_combobox(self.ui.line_Year, [])
         finally:
             db.close()
@@ -1098,7 +793,10 @@ class CostsPage(QWidget):
 
     def show_message(self, text):
         """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
         self.ui.label_msg.setText(text)
+        
+        # Устанавливаем стили для успешного сообщения
         self.ui.label_msg.setStyleSheet("""
             QLabel {
                 background-color: #CCFF99;
@@ -1110,7 +808,13 @@ class CostsPage(QWidget):
                 margin: 2px;
             }
         """)
+        
+        # Делаем label видимым (на случай, если был скрыт)
         self.ui.label_msg.setVisible(True)
+        
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
     def clear_message(self):
         """Очистить сообщение"""
@@ -1118,7 +822,7 @@ class CostsPage(QWidget):
         self.ui.label_msg.setStyleSheet("")
     
     def show_error_message(self, text):
-        """Показать сообщение об ошибке в окне"""
+        """Показать сообщение об ошибке"""
         msg = QMessageBox()
         msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
@@ -1127,8 +831,8 @@ class CostsPage(QWidget):
         copy_button = msg.addButton("Copy", QMessageBox.ActionRole)
         ok_button = msg.addButton(QMessageBox.Ok)
         
-        def copy_text():
-            QApplication.clipboard().setText(text)
-        
-        copy_button.clicked.connect(copy_text)
+        clipboard = QApplication.clipboard()
+        copy_button.clicked.connect(lambda: clipboard.setText(text))
         msg.exec_()
+
+

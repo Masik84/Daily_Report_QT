@@ -23,17 +23,21 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx'}
 # Основные файлы
 All_data_file = MAIN_FOLDER / "! All DATA !.xlsx"
 AddCosts_File = MAIN_FOLDER / "! ДопРасходы !.xlsx"
-CustDelivery_File = MAIN_FOLDER / "! Доставка клиентам !2.xlsx"
+CustDelivery_File = MAIN_FOLDER / "! Доставка клиентам !.xlsx"
 Total_DISPATCHED = MAIN_FOLDER / "WorkFiles" / "Total DISPATCHED_2025.xlsx"
+
 # Файлы реестров
-Material_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реестр номенклатур XLSX.xlsx"
-Customer_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реестр контрагентов XLSX.xlsx"
-Contract_file = MAIN_FOLDER / "Выгрузки" / "Реестры" / "Реестр договоров XLSX.xlsx"
+Material_file = MAIN_FOLDER / "Выгрузки" / "Phoenix" / "Реестры" / "Реестр номенклатур XLSX.xlsx"
+Customer_file = MAIN_FOLDER / "Выгрузки" / "Phoenix" /  "Реестры" / "Реестр контрагентов XLSX.xlsx"
+Contract_file = MAIN_FOLDER / "Выгрузки" / "Phoenix" /  "Реестры" / "Реестр договоров XLSX.xlsx"
+
+Customer_teboil_file = MAIN_FOLDER / "Выгрузки" / "TEBOIL" /  "Реестры" / "Контрагенты (все реквизиты) (XLSX).xlsx"
+Contract_teboil_file = MAIN_FOLDER / "Выгрузки" / "TEBOIL" /  "Реестры" / "Договора (все реквизиты) XLSX.xlsx"
 
 # Файлы отчетов
 Collection_file = MAIN_FOLDER / "! Сборщик отчета !.xlsx"
-Complectation_file = MAIN_FOLDER / "! Комплектации !2.xlsx"
-new_Complectation_file = MAIN_FOLDER / "ERRORs_Compectations_new.xlsx"
+Complectation_file = MAIN_FOLDER / "! Комплектации !.xlsx"
+new_Complectation_file = MAIN_FOLDER / "ERRORs_Complectations_new.xlsx"
 
 Macro_File_Path = MAIN_FOLDER / "macro_for_report.xlsm"
 
@@ -41,6 +45,10 @@ Macro_File_Path = MAIN_FOLDER / "macro_for_report.xlsm"
 Movement_folder = MAIN_FOLDER / "Выгрузки" / "Движение"
 Purchase_folder = MAIN_FOLDER / "Выгрузки" / "Закупки"
 Sales_folder = MAIN_FOLDER / "Выгрузки" / "Продажи"
+
+Teboil_Purchase_folde = MAIN_FOLDER / 'Выгрузки' / 'TEBOIL' / 'Закупки'
+Teboil_Sales_folder = MAIN_FOLDER / 'Выгрузки' / 'TEBOIL' / 'Продажи'
+Teboil_Contracts_file = MAIN_FOLDER / 'Выгрузки' / 'TEBOIL' / 'Реестры' / 'Договора (все реквизиты) XLSX.xlsx'
 
 # Файлы счетов
 Orders_file = MAIN_FOLDER / "Выгрузки" / "Счета" / "Заказ_для отчета XLSX.xlsx"

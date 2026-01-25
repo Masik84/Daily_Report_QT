@@ -3,8 +3,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config import SQLALCHEMY_DATABASE_URI
 
-
-
 engine = create_engine(SQLALCHEMY_DATABASE_URI)
 db = scoped_session(sessionmaker(bind=engine))
 

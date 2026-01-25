@@ -12,7 +12,7 @@ from wind.pages.delivery_ui import Ui_Form
 from wind.pages.delivery_create_form_ui import Ui_Form as DeliveryCreateFormUI
 
 from config import CustDelivery_File, Total_DISPATCHED
-from models import Delivery_to_Customer, temp_Sales, Materials, Customer
+from models import Delivery_to_Customer, temp_Sales_Orders, Materials, Customer
 from db import db
 
 class DeliveryPage(QWidget):
@@ -343,9 +343,9 @@ class DeliveryPage(QWidget):
         """Обновление данных инвойса при изменении Sborka или Bill"""
         try:
             # Ищем данные в temp_Sales
-            sales_data = db.query(temp_Sales).filter(
-                temp_Sales.Bill == delivery.Bill,
-                temp_Sales.Sborka == delivery.Sborka
+            sales_data = db.query(temp_Sales_Orders).filter(
+                temp_Sales_Orders.Bill == delivery.Bill,
+                temp_Sales_Orders.Sborka == delivery.Sborka
             ).first()
             
             if sales_data:

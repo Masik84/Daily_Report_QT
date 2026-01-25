@@ -12,7 +12,7 @@ from pages_functions.customer import CustomerPage
 from pages_functions.plans import PlansPage
 from pages_functions.cost import CostsPage
 from pages_functions.supplier import SupplierPage
-from pages_functions.add_costs import AddSupplCostsPage
+from pages_functions.add_suppl_costs import AddSupplCostsPage
 
 from pages_functions.move import MovesPage
 from pages_functions.marketplace import MarketplacePage

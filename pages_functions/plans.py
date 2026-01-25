@@ -171,17 +171,11 @@ class PlansPage(QWidget):
 
     def read_calendar_file(self, file_path):
         """Чтение и валидация данных календаря из Excel"""
-        dtype_cal = {
-            "Year": int, "Quarter": int, "Month": int, 
-            "Week of Year": int, "Week of Month": int, "NETWORKDAYS": int
-        }
+        dtype_cal = {"Year": int, "Quarter": int, "Month": int, "Week of Year": int, "Week of Month": int, "NETWORKDAYS": int}
         
         try:
             # Чтение данных с явным указанием формата даты
-            calendar = pd.read_excel(
-                file_path, 
-                sheet_name="Календарь", 
-                dtype=dtype_cal)
+            calendar = pd.read_excel(file_path, sheet_name="Календарь", dtype=dtype_cal)
             
             # Удаление строк с некорректными датами
             calendar = calendar[calendar["День"].notna()]

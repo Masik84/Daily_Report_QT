@@ -7,12 +7,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from PySide6.QtWidgets import (QFileDialog, QMessageBox, QHeaderView, QTableWidget, QMenu, 
                               QTableWidgetItem, QWidget, QApplication)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QDoubleValidator, QIntValidator
 from functools import lru_cache
-
+import traceback
 
 from wind.pages.products_ui import Ui_Form
 from config import Material_file, All_data_file
-from models import ABC_cat, TNVED, Product_Family, Product_Group, Product_Names, Materials, ABC_list
+from models import ABC_cat, TNVED, Product_Group, Product_Names, Materials, ABC_list
 from db import db
 
 
@@ -94,6 +95,7 @@ class ProductsPage(QWidget):
             self.table.itemChanged.connect(self.on_item_changed)
             self.ui.line_Brand.currentTextChanged.connect(self.fill_in_prod_fam_list)
             self.ui.line_Prod_Fam.currentTextChanged.connect(self.fill_in_prod_name_list)
+            self.ui.btn_open_file.clicked.connect(self.get_file)
             self.ui.btn_upload_file.clicked.connect(self.upload_data)
             self.ui.btn_find.clicked.connect(self.find_Product)
 
@@ -390,7 +392,9 @@ class ProductsPage(QWidget):
             if not material:
                 return False
             
-            product_name = db.query(Product_Names).filter(Product_Names.id == material.Product_Names_id).first()
+            product_name = db.query(Product_Names).filter(
+                Product_Names.id == material.Product_Names_id
+            ).first()
             
             if product_name:
                 product_name.Product_name = new_product_name
@@ -412,7 +416,9 @@ class ProductsPage(QWidget):
             if not material:
                 raise Exception("Материал не найден")
             
-            product_name = db.query(Product_Names).filter(Product_Names.id == material.Product_Names_id).first()
+            product_name = db.query(Product_Names).filter(
+                Product_Names.id == material.Product_Names_id
+            ).first()
             
             if not product_name:
                 raise Exception("Наименование продукта не найдено")
@@ -426,7 +432,9 @@ class ProductsPage(QWidget):
                 
             # Находим или создаем product_group
             if product_name.Product_Group_id:
-                product_group = db.query(Product_Group).filter(Product_Group.id == product_name.Product_Group_id).first()
+                product_group = db.query(Product_Group).filter(
+                    Product_Group.id == product_name.Product_Group_id
+                ).first()
                 if product_group:
                     product_group.TNVED_id = tnved.id
             else:
@@ -452,38 +460,52 @@ class ProductsPage(QWidget):
             if db.is_active:
                 db.close()
 
+    def get_file(self):
+        """Выбор файла через диалоговое окно"""
+        file_path, _ = QFileDialog.getOpenFileName(self, 'Выберите файл с данными продуктов')
+        if file_path:
+            self.ui.label_Prod_File.setText(file_path)
+
     def upload_data(self):
-        """Загрузка данных продуктов в базу данных из предопределенных файлов"""
+        """Загрузка данных продуктов в базу данных"""
         try:
             # Закрываем предыдущие сессии, если они есть
             if db.is_active:
                 db.close()
             
-            # Основные операции выполняем в отдельной сессии
-            db.begin()
-            
+            # Определяем путь к файлу
+            file_path = self.ui.label_Prod_File.text()
+            if not file_path or file_path == 'Выбери файл или нажми Upload, файл будет взят из основной папки':
+                file_path = Material_file
+
             try:
-                # Чтение и обработка данных из Material_file
-                data = self.read_product_files()
+                # Основные операции выполняем в отдельной сессии
+                db.begin()
                 
-                # Сохранение данных (каждый метод сам управляет своими транзакциями)
-                self.save_TNVED(data)
-                self.save_Product_Family(data)
-                self.save_Product_Group(data)
-                self.save_Product_Names(data)
-                self.save_Materials(data)
-                self.update_ABC_cat()
-                
-                # Финализируем транзакцию
-                db.commit()
-                
-                # Обновляем интерфейс
-                self.refresh_all_comboboxes()
-                self.show_message('Данные продуктов успешно загружены!')
-                
-            except Exception as e:
-                db.rollback()
-                raise
+                try:
+                    # Чтение и обработка данных
+                    data = self.read_product_file(file_path)
+                    
+                    # Сохранение данных (каждый метод сам управляет своими транзакциями)
+                    self.save_TNVED(data)
+                    self.save_Product_Group(data)
+                    self.save_Product_Names(data)
+                    self.save_Materials(data)
+                    self.update_ABC_cat()
+                    
+                    # Финализируем транзакцию
+                    db.commit()
+                    
+                    # Обновляем интерфейс
+                    self.refresh_all_comboboxes()
+                    self.show_message('Данные продуктов успешно загружены!')
+                    
+                except Exception as e:
+                    db.rollback()
+                    raise
+                    
+            except SQLAlchemyError as e:
+                raise Exception(f"Ошибка базы данных: {str(e)}")
                 
         except FileNotFoundError as e:
             self.show_error_message(str(e))
@@ -496,42 +518,76 @@ class ProductsPage(QWidget):
             if db.is_active:
                 db.close()
 
-    def read_product_files(self):
-        """Чтение данных из обоих файлов с обработкой"""
+    def _handle_upload_error(self, error):
+        """Обработка ошибок загрузки"""
+        if "transaction is already begun" in str(error):
+            msg = "Ошибка БД. Закройте программу и попробуйте снова."
+        elif "required columns" in str(error).lower():
+            msg = "Файл не содержит всех необходимых столбцов."
+        else:
+            msg = f"Ошибка загрузки данных продуктов: {str(error)}"
+        self.show_error_message(msg)
+
+    def read_product_file(self, file_path):
+        """Чтение данных из Excel с фильтрацией и обработкой значений"""
         try:
-            # Чтение данных из Material_file
-            dtype_material = {"Код": str, "Артикул": str, "ТН ВЭД": str}
-            material_df = pd.read_excel(Material_file, sheet_name=0, dtype=dtype_material)
+            # Чтение файла с новыми продуктами (из All_data_file)
+            dtype_prod = {"Артикул": str, "ТН ВЭД": str}
+            new_df_oil = pd.read_excel(All_data_file, sheet_name="Oils", dtype=dtype_prod)
+            new_df_other = pd.read_excel(All_data_file, sheet_name="Other", dtype=dtype_prod)
+            
+            # Объединяем и фильтруем новые продукты (только те, где ID начинается с 'new')
+            new_df = pd.concat([new_df_oil, new_df_other], ignore_index=True)
+            new_df = new_df[new_df['ID 1C'].str.startswith('new', na=False)]
+            
+            # Переименовываем колонки для соответствия с основной таблицей
+            new_df = new_df.rename(columns={
+                'ID 1C': 'Code',
+                'Артикул': 'Article',
+                'Продукт + упаковка': 'Material_Name',
+                'Product name': 'Product_name',
+                'Type': 'Product_type',
+                'Brand': 'Brand',
+                'Family': 'Family',
+                'ЕИ в 1С': 'UoM',
+                'ЕИ': 'Report_UoM',
+                'Вид упаковки': 'Package_type',
+                'Акциз (да/нет)': 'Excise',
+                'Упаковка': 'Package_Volume',
+                'Кол-во в упак': 'Items_per_Package',
+                'Плотность': 'Density',
+                'Вес Нетто кг': 'Net_weight',
+                'Вес Брутто кг': 'Gross_weight',
+                'Код ТНВЭД': 'TNVED',
+                'Полное наименование': 'Full_name',
+                'Код группы': 'Код_группы'
+            })
+            
+            # Устанавливаем фиксированные значения для новых продуктов
+            new_df['Items_per_Set'] = 1
+            new_df['Status'] = 'новый'
+
+            df = pd.read_excel(file_path, sheet_name=0, dtype=dtype_prod)
             
             required_columns = ['Код', 'Product name', 'Шт в комплекте', 'Единица измерения отчетов']
-            if not all(col in material_df.columns for col in required_columns):
-                raise ValueError("Material file не содержит необходимых столбцов")
+            if not all(col in df.columns for col in required_columns):
+                raise ValueError("Файл не содержит необходимых столбцов")
 
-            # Фильтрация по виду номенклатуры
             valid_types = ['Товары', 'Услуги', 'Нефтепродукты', 'Продукция']
-            material_df = material_df[material_df['Вид номенклатуры'].isin(valid_types)]
+            df = df[df['Вид номенклатуры'].isin(valid_types)]
 
-            # Фильтрация по номенклатурной группе
             valid_groups = ['Доставка (курьерская)', 'ГСМ', 'ЗАПАСНЫЕ ЧАСТИ']
-            material_df = material_df[material_df['Номенклатурная группа'].isin(valid_groups)]
+            df = df[df['Номенклатурная группа'].isin(valid_groups)]
 
-            # Обработка статуса
-            material_df['Статус'] = np.where(
-                (material_df['Недействителен'] == 'Да') | (material_df['Пометка удаления'] == 'Да'), 'неактивный',
-                np.where(
-                    material_df['Артикул'].apply(lambda x: 'удален_' in str(x)), 
-                    'не активный', 
-                    'активный'
-                )
-            )
+            df['Статус'] = np.where((df['Недействителен'] == 'Да') | (df['Пометка удаления'] == 'Да'), 'неактивный',
+                                 np.where(df['Артикул'].apply(lambda x: 'удален_' in str(x)), 'не активный', 'активный'))
             
-            # Очистка данных
-            material_df['Артикул'] = material_df['Артикул'].str.replace('удален_', '', regex=False)
-            material_df['Наименование'] = material_df['Наименование'].str.replace('удален_', '', regex=False)
-            material_df['Type'] = material_df['Type'].fillna(material_df['Вид номенклатуры'])
+            df['Артикул'] = df['Артикул'].str.replace('удален_', '', regex=False)
+            df['Наименование'] = df['Наименование'].str.replace('удален_', '', regex=False)
+            df['Type'] = df['Type'].fillna(df['Вид номенклатуры'])
             
-            # Переименование колонок для Material_file
-            column_map_material = {
+            # 3. Переименование колонок
+            column_map = {
                 'Код': 'Code', 
                 'Артикул': 'Article', 
                 'Наименование': 'Material_Name',
@@ -551,90 +607,46 @@ class ProductsPage(QWidget):
                 'Плотность': 'Density', 
                 'ТН ВЭД': 'TNVED', 
                 'Акциз': 'Excise',
-                'Экосбор': 'Ecofee',
-                'ЧЗ': 'Labling',
                 'Код группы': 'Код_группы',
-                'Статус': 'Status'
+                'Статус': 'Status'  # Добавляем новую колонку в маппинг
             }
-            material_df = material_df.rename(columns=column_map_material)
+            df = df.rename(columns=column_map)
+            df = pd.concat([df, new_df], ignore_index=True)
             
-            # Обработка Package_type и Package_Volume
-            material_df["Package_type"] = material_df["Package_type"].replace({"комплект кан": "комплект", "комплект туб": "комплект"})
-            material_df.loc[material_df["Package_type"] == "комплект", "Package_Volume"] = material_df["Package_Volume"] / material_df["Items_per_Set"]
+            df["Package_type"] = df["Package_type"].replace({"комплект кан": "комплект", "комплект туб": "комплект"})
+            df.loc[df["Package_type"] == "комплект", "Package_Volume"] = df["Package_Volume"] / df["Items_per_Set"]
             
-            # Обработка UoM
-            for_replace = {'канистра': 'шт', 'Канистра': 'шт', 'бочка': 'шт', 'Туба': 'шт', 'банка': 'шт', 'л ': 'л'}
-            material_df["UoM"] = material_df["UoM"].replace(for_replace)
+            for_replace = {"Канистра": "шт", "бочка": "шт", "Туба": "шт", "банка": "шт", "л ": "л"}
+            df["UoM"] = df["UoM"].replace(for_replace)
             
-            # Обработка TNVED
-            material_df['TNVED'] = material_df['TNVED'].fillna('-')
-            material_df['TNVED'] = material_df['TNVED'].replace({'': '-', 'nan': '-', 'None': '-', None: '-'})
-            material_df['TNVED'] = material_df['TNVED'].astype(str).str.strip()
+            df['TNVED'] = df['TNVED'].fillna('-')
+            df['TNVED'] = df['TNVED'].replace({'': '-', 'nan': '-', 'None': '-', None: '-'})
+            df['TNVED'] = df['TNVED'].astype(str).str.strip()
             
-            # Чтение данных из All_data_file (новые продукты)
-            dtype_all = {"Артикул": str, "ID 1C": str, "Код ТНВЭД": str}
-            new_df_oil = pd.read_excel(All_data_file, sheet_name="Oils", dtype=dtype_all)
-            new_df_other = pd.read_excel(All_data_file, sheet_name="Other", dtype=dtype_all)
-            
-            # Объединяем и фильтруем новые продукты (только те, где ID начинается с 'new')
-            new_df = pd.concat([new_df_oil, new_df_other], ignore_index=True)
-            new_df = new_df[new_df['ID 1C'].str.startswith('new', na=False)]
-            
-            # Переименовываем колонки для All_data_file
-            new_df = new_df.rename(columns={
-                'ID 1C': 'Code',
-                'Артикул': 'Article',
-                'Продукт + упаковка': 'Material_Name',
-                'Product name': 'Product_name',
-                'Type': 'Product_type',
-                'Brand': 'Brand',
-                'Family': 'Family',
-                'ЕИ в 1С': 'UoM',
-                'ЕИ': 'Report_UoM',
-                'Вид упаковки': 'Package_type',
-                'Акциз (да/нет)': 'Excise',
-                'ЭкоСбор (да/нет)': 'Ecofee',
-                'Упаковка': 'Package_Volume',
-                'Кол-во в упак': 'Items_per_Package',
-                'Плотность': 'Density',
-                'Вес Нетто кг': 'Net_weight',
-                'Вес Брутто кг': 'Gross_weight',
-                'Код ТНВЭД': 'TNVED',
-                'Полное наименование': 'Full_name',
-                'Код группы': 'Код_группы',
-                'Обяз.маркировка': 'Labling'
-            })
-            
-            # Устанавливаем фиксированные значения для новых продуктов
-            new_df['Items_per_Set'] = 1
-            new_df['Status'] = 'новый'
-            
-            # Объединяем данные из обоих файлов
-            combined_df = pd.concat([material_df, new_df], ignore_index=True)
-            
-            # Обработка числовых и текстовых значений
+            # 4. Обработка числовых и текстовых значений
             numeric_cols = ['Items_per_Package', 'Items_per_Set', 'Package_Volume', 'Net_weight', 'Gross_weight', 'Density']
-            text_cols = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family','Product_name', 'Product_type', 'UoM', 'Report_UoM', 
-                                'Package_type', 'TNVED', 'Excise', 'Ecofee', 'Labling', 'Status']
+            text_cols = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family',
+                    'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
+                    'Package_type', 'TNVED', 'Excise', 'Status']
             
             # Замена пустот в числовых колонках на 0
             for col in numeric_cols:
-                if col in combined_df.columns:
-                    combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce').fillna(0)
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
             # Замена пустот в текстовых колонках на "-"
             for col in text_cols:
-                if col in combined_df.columns:
-                    combined_df[col] = combined_df[col].fillna('-')
+                if col in df.columns:
+                    df[col] = df[col].fillna('-')
             
-            return combined_df[combined_df['Code'].notna()].replace({pd.NA: None}).to_dict('records')
+            return df[df['Code'].notna()].replace({pd.NA: None}).to_dict('records')
             
         except Exception as e:
-            self.show_error_message(f"Ошибка чтения файлов продуктов: {str(e)}")
+            self.show_error_message(f"Ошибка чтения файла продуктов: {str(e)}")
             return []
 
     def save_TNVED(self, data):
-        """Сохранение данных TNVED"""
+        """Сохранение данных TNVED с правильным приведением типов"""
         if not data:
             return
 
@@ -653,7 +665,7 @@ class ProductsPage(QWidget):
             
             if new_tnved_codes:
                 try:
-                    # Вставка новых кодов
+                    # Вставка в вашем стиле с явным приведением типов
                     to_insert = [{"code": str(code)} for code in new_tnved_codes]
                     db.bulk_insert_mappings(TNVED, to_insert)
                     db.commit()
@@ -666,7 +678,7 @@ class ProductsPage(QWidget):
                     db.rollback()
                     raise Exception(f"Ошибка сохранения TNVED: {str(e)}")
 
-            # Получаем соответствие кодов и ID
+            # Получаем соответствие кодов и ID (с явным приведением типов)
             tnved_mapping = {
                 str(t.code): t.id 
                 for t in db.query(TNVED).all()
@@ -682,178 +694,105 @@ class ProductsPage(QWidget):
         finally:
             db.close()
 
-    def save_Product_Family(self, data):
-        """Сохранение данных Product_Family"""
-        if not data:
-            return
-
-        try:
-            # Собираем уникальные семейства продуктов
-            product_families = {}
-            for row in data:
-                if row.get('Family') and row['Family'] != '-':
-                    # Создаем ID из Family (можно преобразовать для уникальности)
-                    family_id = f"FAM-{row['Family'].replace(' ', '_').upper()}"
-                    product_families[family_id] = {
-                        'id': family_id,
-                        'Product_family': row['Family']
-                    }
-
-            # Получаем существующие семейства из БД
-            existing_families = {f.id for f in db.query(Product_Family.id).all()}
-            
-            # Разделяем на новые и существующие семейства
-            to_insert = []
-            
-            for family_id, family_data in product_families.items():
-                if family_id not in existing_families:
-                    to_insert.append(family_data)
-        
-            if to_insert:
-                db.bulk_insert_mappings(Product_Family, to_insert)
-                db.commit()
-                
-        except SQLAlchemyError as e:
-            db.rollback()
-            raise Exception(f"Ошибка сохранения Product_Family: {str(e)}")
-        finally:
-            db.close()
-
     def save_Product_Group(self, data):
-        """Сохранение данных Product_Group с обработкой новых групп"""
+        """Сохранение данных Product_Group"""
         if not data:
             return
 
-        try:
-            # Создаем mapping для Product_Family (Family -> Product_Family_id)
-            family_mapping = {}
-            for family in db.query(Product_Family).all():
-                # Нормализуем название семейства для поиска
-                family_key = family.Product_family.strip().lower()
-                family_mapping[family_key] = family.id
-            
-            # Собираем уникальные группы продуктов
-            product_groups = {}
-            new_group_counter = 1
-            
-            for row in data:
-                if row.get('Product_name') and row['Product_name'] != '-':
-                    group_id = row.get('Код_группы', '')
-                    
-                    # Проверяем, является ли это новой группой
-                    is_new_product = str(row.get('Code', '')).startswith('new')
-                    
-                    if not group_id or (is_new_product and 'PL-' not in str(group_id)):
-                        # Генерируем новый ID для группы
-                        group_id = f"PL-new{new_group_counter:02d}"
-                        new_group_counter += 1
-                    
-                    # Находим TNVED_id
-                    tnved_id = None
-                    if row.get('TNVED') and str(row['TNVED']) != '-':
-                        tnved = db.query(TNVED.id).filter(TNVED.code == row['TNVED']).first()
-                        tnved_id = tnved[0] if tnved else None
-                    
-                    # Находим Product_Family_id
-                    product_family_id = None
-                    if row.get('Family') and row['Family'] != '-':
-                        family_key = row['Family'].strip().lower()
-                        product_family_id = family_mapping.get(family_key)
-                    
-                    product_groups[group_id] = {
-                        'id': group_id,
+        # Собираем уникальные группы продуктов
+        product_groups = {}
+        for row in data:
+            if row.get('Код_группы') and row.get('Product_name') != '-' and row.get('TNVED'):
+                # Находим ID TNVED для этой группы
+                tnved_id = db.query(TNVED.id).filter(TNVED.code == row['TNVED']).scalar()
+                if tnved_id:
+                    product_groups[row['Код_группы']] = {
+                        'id': row['Код_группы'],
                         'Product_name': row['Product_name'],
-                        'TNVED_id': tnved_id,
-                        'Product_Family_id': product_family_id
+                        'TNVED_id': tnved_id
                     }
 
-            # Получаем существующие группы из БД
-            existing_groups = {g.id: g for g in db.query(Product_Group).all()}
-            
-            # Разделяем на новые и существующие группы
-            to_insert = []
-            to_update = []
-            
-            for group_id, group_data in product_groups.items():
-                if group_id in existing_groups:
-                    # Обновляем существующую группу
-                    existing_group = existing_groups[group_id]
-                    if (existing_group.Product_name != group_data['Product_name'] or
-                        existing_group.TNVED_id != group_data['TNVED_id'] or
-                        existing_group.Product_Family_id != group_data['Product_Family_id']):
-                        to_update.append(group_data)
-                else:
-                    # Вставляем новую группу
-                    to_insert.append(group_data)
+        # Получаем существующие группы из БД
+        existing_groups = {g.id for g in db.query(Product_Group.id).all()}
         
+        # Разделяем на новые и существующие группы
+        to_insert = []
+        to_update = []
+        
+        for group_id, group_data in product_groups.items():
+            if group_id in existing_groups:
+                to_update.append({
+                    'id': group_id,
+                    **group_data
+                })
+            else:
+                to_insert.append({
+                    'id': group_id,
+                    **group_data
+                })
+        
+        try:
             if to_insert:
                 db.bulk_insert_mappings(Product_Group, to_insert)
             if to_update:
                 db.bulk_update_mappings(Product_Group, to_update)
             db.commit()
-            
         except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Ошибка сохранения Product_Group: {str(e)}")
         finally:
-            db.close()
+                db.close()
 
     def save_Product_Names(self, data):
         """Сохранение данных Product_Names"""
         if not data:
             return
 
-        try:
-            # Собираем уникальные наименования продуктов
-            product_names = {}
-            for row in data:
-                if row.get('Material_Name') and row['Material_Name'] != '-':
-                    product_group_id = None
-                    if row.get('Код_группы'):
-                        product_group = db.query(Product_Group).filter(Product_Group.id == row['Код_группы']).first()
-                        if product_group:
-                            product_group_id = product_group.id
-                    
-                    product_names[row['Material_Name']] = {
-                        'Product_name': row['Material_Name'], 
-                        'Product_Group_id': product_group_id
-                    }
+        # Собираем уникальные наименования продуктов
+        product_names = {}
+        for row in data:
+            if row.get('Material_Name'):
+                product_group_id = row['Код_группы'] if row.get('Код_группы') and row.get('Product_name') != '-' else None
+                product_names[row['Material_Name']] = {
+                    'Product_name': row['Material_Name'], 
+                    'Product_Group_id': product_group_id
+                }
 
-            # Получаем существующие наименования из БД
-            existing_names = {n.Product_name: n for n in db.query(Product_Names).all()}
-            
-            # Разделяем на новые и существующие наименования
-            to_insert = []
-            to_update = []
-            
-            for name, name_data in product_names.items():
-                if name in existing_names:
-                    # Обновляем только если изменилась группа
-                    if existing_names[name].Product_Group_id != name_data['Product_Group_id']:
-                        to_update.append({
-                            'id': existing_names[name].id,
-                            'Product_Group_id': name_data['Product_Group_id']
-                        })
-                else:
-                    to_insert.append({
-                        'Product_name': name_data['Product_name'],
+        # Получаем существующие наименования из БД
+        existing_names = {n.Product_name: n for n in db.query(Product_Names).all()}
+        
+        # Разделяем на новые и существующие наименования
+        to_insert = []
+        to_update = []
+        
+        for name, name_data in product_names.items():
+            if name in existing_names:
+                # Обновляем только если изменилась группа
+                if existing_names[name].Product_Group_id != name_data['Product_Group_id']:
+                    to_update.append({
+                        'id': existing_names[name].id,
                         'Product_Group_id': name_data['Product_Group_id']
                     })
+            else:
+                to_insert.append({
+                    'Product_name': name_data['Product_name'],
+                    'Product_Group_id': name_data['Product_Group_id']
+                })
         
+        try:
             if to_insert:
                 db.bulk_insert_mappings(Product_Names, to_insert)
             if to_update:
                 db.bulk_update_mappings(Product_Names, to_update)
             db.commit()
-                
         except SQLAlchemyError as e:
             db.rollback()
             raise Exception(f"Ошибка сохранения Product_Names: {str(e)}")
         finally:
-            db.close()
+                db.close()
 
     def save_Materials(self, data):
-        """Сохранение данных Materials"""
+        """Сохранение данных Materials (адаптированная версия)"""
         if not data:
             return
 
@@ -864,14 +803,12 @@ class ProductsPage(QWidget):
             # Получаем mapping наименований продуктов к их ID
             name_to_id = {n.Product_name: n.id for n in db.query(Product_Names).all()}
             
-            # Получаем список новых продуктов из текущих данных
+            # Получаем список новых продуктов из текущего файла
             current_new_products = {row['Code'] for row in data if str(row.get('Code', '')).startswith('new')}
 
-            # Удаляем старые новые продукты, которых нет в текущих данных
             to_delete = [
-                code for code in existing_materials.keys()
-                if str(code).startswith('new') and code not in current_new_products
-            ]
+                code for code in existing_materials.items() 
+                if str(code).startswith('new') and code not in current_new_products]
             
             if to_delete:
                 db.query(Materials).filter(Materials.Code.in_(to_delete)).delete(synchronize_session=False)
@@ -888,31 +825,24 @@ class ProductsPage(QWidget):
                 if not product_name_id:
                     continue
                     
-                # Преобразование Yes/No значений
-                excise_value = 'Да' if str(row.get('Excise', '')).lower() in ['да', 'yes', 'true', '1'] else 'Нет'
-                ecotee_value = 'Да' if str(row.get('Ecofee', '')).lower() in ['да', 'yes', 'true', '1'] else 'Нет'
-                labling_value = 'Да' if str(row.get('Labling', '')).lower() in ['да', 'yes', 'true', '1'] else 'Нет'
-                
                 material_data = {
                     'Code': row['Code'],
-                    'Article': row.get('Article', ''),
-                    'Full_name': row.get('Full_name', ''),
-                    'Brand': row.get('Brand', ''),
-                    'Family': row.get('Family', ''),
-                    'Product_type': row.get('Product_type', ''),
-                    'UoM': row.get('UoM', ''),
-                    'Report_UoM': row.get('Report_UoM', ''),
-                    'Package_type': row.get('Package_type', ''),
-                    'Items_per_Package': row.get('Items_per_Package', 0),
-                    'Items_per_Set': row.get('Items_per_Set', 0),
-                    'Package_Volume': row.get('Package_Volume', 0),
-                    'Net_weight': row.get('Net_weight', 0),
-                    'Gross_weight': row.get('Gross_weight', 0),
-                    'Density': row.get('Density', 0),
-                    'Excise': excise_value,
-                    'Ecofee': ecotee_value,
-                    'Labling': labling_value,
-                    'Status': row.get('Status', 'активный'),
+                    'Article': row.get('Article'),
+                    'Full_name': row.get('Full_name'),
+                    'Brand': row.get('Brand'),
+                    'Family': row.get('Family'),
+                    'Product_type': row.get('Product_type'),
+                    'UoM': row.get('UoM'),
+                    'Report_UoM': row.get('Report_UoM'),
+                    'Package_type': row.get('Package_type'),
+                    'Items_per_Package': row.get('Items_per_Package'),
+                    'Items_per_Set': row.get('Items_per_Set'),
+                    'Package_Volume': row.get('Package_Volume'),
+                    'Net_weight': row.get('Net_weight'),
+                    'Gross_weight': row.get('Gross_weight'),
+                    'Density': row.get('Density'),
+                    'Excise': row.get('Excise'),
+                    'Status': row.get('Status', 'активный'),  # Добавляем статус
                     'Product_Names_id': product_name_id
                 }
                 
@@ -934,19 +864,19 @@ class ProductsPage(QWidget):
             db.close()
     
     def update_ABC_cat(self):
-        """Обновление ABC категорий для продуктов"""
+        """Обновление ABC категорий для продуктов с улучшенной обработкой"""
         try:
             # Чтение файла
-            if not os.path.exists(All_data_file):
-                raise FileNotFoundError(f"Файл {os.path.basename(All_data_file)} не найден")
+            file_path = All_data_file
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"Файл {os.path.basename(file_path)} не найден")
 
-            with pd.ExcelFile(All_data_file) as excel:
+            with pd.ExcelFile(file_path) as excel:
                 df = pd.read_excel(excel, sheet_name="ABC")
 
             if 'Категория ABCD' not in df.columns:
                 raise ValueError("Файл не содержит обязательной колонки 'Категория ABCD'")
             
-            # Преобразование дат
             df["Дата изм"] = pd.to_datetime(df["Дата изм"], format="%d.%m.%Y", errors="coerce")
             df["Дата оконч"] = pd.to_datetime(df["Дата оконч"], format="%d.%m.%Y", errors="coerce")
             
@@ -972,17 +902,18 @@ class ProductsPage(QWidget):
                 self.show_message("Нет данных для обработки после очистки")
                 return
 
-            # Получаем данные из БД
+            # Получаем данные из БД с нормализацией
             products = {n.Product_name.lower().strip(): n.id for n in db.query(Product_Names).all()}
             categories = {c.ABC_category.lower().strip(): c.id for c in db.query(ABC_list).all()}
             
-            # Добавляем новые категории в БД
+            # Создаем временный словарь для новых категорий
             new_categories = {}
             for cat in df['ABC_category'].unique():
                 norm_cat = str(cat).lower().strip()
                 if norm_cat not in categories and norm_cat not in new_categories:
-                    new_categories[norm_cat] = cat
+                    new_categories[norm_cat] = cat  # Сохраняем оригинальное написание
 
+            # Добавляем новые категории в БД
             if new_categories:
                 for norm_cat, orig_cat in new_categories.items():
                     db.add(ABC_list(ABC_category=orig_cat))
@@ -1026,12 +957,20 @@ class ProductsPage(QWidget):
                 db.bulk_insert_mappings(ABC_cat, to_insert)
                 db.commit()
             
-            if missing_products:
-                self.show_message(f"Пропущено ABCD из-за отсутствия продукта: {len(missing_products)}")
+            # Формирование отчета
+            # report = [
+            #     f"Пропущено ABCD из-за отсутствия продукта: {len(missing_products)}"
+            # ]
+            
+            # if missing_products:
+            #     report.append("\nПримеры отсутствующих продуктов:")
+            #     report.extend(list(missing_products)[:5])
+            
+            self.show_message(f"Пропущено ABCD из-за отсутствия продукта: {len(missing_products)}")
             
         except Exception as e:
             db.rollback()
-            raise Exception(f"Ошибка обновления ABC: {str(e)}")
+            self.show_error_message(f"Ошибка обновления ABC: {str(e)}")
         finally:
             db.close()
 
@@ -1040,11 +979,8 @@ class ProductsPage(QWidget):
         """Получение уникальных значений с фильтрацией"""
         try:
             # Специальная обработка для product_name
-            if column == "product_name":
+            if column == "product_name":  # Changed from Materials.product_name
                 query = db.query(Product_Names.Product_name).join(Materials, Materials.Product_Names_id == Product_Names.id)
-            elif hasattr(column, '__table__') and column.__table__.name == 'material':
-                # Это колонка из Materials
-                query = db.query(column)
             else:
                 query = db.query(column)
             
@@ -1053,7 +989,7 @@ class ProductsPage(QWidget):
                 if filter_column == "product_name":
                     query = query.join(Product_Names, Materials.Product_Names_id == Product_Names.id)
                     query = query.filter(Product_Names.Product_name == filter_value)
-                elif hasattr(filter_column, '__table__'):
+                else:
                     query = query.filter(filter_column == filter_value)
             
             # Получаем и сортируем уникальные значения
@@ -1082,60 +1018,44 @@ class ProductsPage(QWidget):
         """Заполняет список Family только для выбранного Brand"""
         brand = self.ui.line_Brand.currentText()
         
-        try:
-            if brand == '-':
-                # Если бренд не выбран, показываем все семейства из Product_Family
-                families = db.query(Product_Family.Product_family).distinct().all()
-                families = sorted([f[0] for f in families if f[0]])
-            else:
-                # Фильтруем Family через Product_Group
-                families = db.query(
-                    Product_Family.Product_family
-                ).join(
-                    Product_Group, Product_Group.Product_Family_id == Product_Family.id
-                ).join(
-                    Product_Names, Product_Names.Product_Group_id == Product_Group.id
-                ).join(
-                    Materials, Materials.Product_Names_id == Product_Names.id
-                ).filter(
-                    Materials.Brand == brand
-                ).distinct().all()
-                families = sorted([f[0] for f in families if f[0]])
-            
-            self._fill_combobox(self.ui.line_Prod_Fam, families)
-            
-        except Exception as e:
-            self.show_error_message(f"Ошибка при получении семейств: {str(e)}")
-            self._fill_combobox(self.ui.line_Prod_Fam, [])
+        if brand == '-':
+            # Если бренд не выбран, показываем все семейства
+            families = self._get_unique_values(Materials.Family)
+        else:
+            # Фильтруем Family только для выбранного Brand
+            families = self._get_unique_values(
+                Materials.Family,
+                filter_column=Materials.Brand,
+                filter_value=brand
+            )
+        
+        self._fill_combobox(self.ui.line_Prod_Fam, families)
 
     def fill_in_prod_name_list(self):
         """Заполняет список Product_name только для выбранных Brand и Family"""
         brand = self.ui.line_Brand.currentText()
         family = self.ui.line_Prod_Fam.currentText()
         
-        try:
-            query = db.query(Product_Names.Product_name).join(Materials, Materials.Product_Names_id == Product_Names.id)
-            
-            if brand != '-':
-                query = query.filter(Materials.Brand == brand)
-            
-            if family != '-':
-                # Фильтруем через Product_Family
-                query = query.join(
-                    Product_Group, Product_Names.Product_Group_id == Product_Group.id
-                ).join(
-                    Product_Family, Product_Group.Product_Family_id == Product_Family.id
-                ).filter(Product_Family.Product_family == family)
-            
-            products = query.distinct().all()
-            products = sorted([p[0] for p in products if p[0]])
-            
-            self._fill_combobox(self.ui.line_Prod_name, products)
-            
-        except Exception as e:
-            self.show_error_message(f"Ошибка при получении продуктов: {str(e)}")
-            self._fill_combobox(self.ui.line_Prod_name, [])
-
+        if family == '-':
+            # Если Family не выбрано, фильтруем только по Brand (если выбран)
+            if brand == '-':
+                products = self._get_unique_values("product_name")  # Все продукты
+            else:
+                products = self._get_unique_values(
+                    "product_name",
+                    filter_column=Materials.Brand,
+                    filter_value=brand
+                )
+        else:
+            # Фильтруем Product_name по Brand + Family
+            products = self._get_unique_values(
+                "product_name",
+                filter_column=Materials.Family,
+                filter_value=family
+            )
+        
+        self._fill_combobox(self.ui.line_Prod_name, products)
+    
     def _fill_combobox(self, combobox, items):
         """Универсальное заполнение комбобокса"""
         combobox.clear()
@@ -1159,15 +1079,15 @@ class ProductsPage(QWidget):
             .subquery()
         )
         
-        # Основной запрос
+        # Основной запрос с JOIN к TNVED и Product_Names
         query = (
             db.query(
                 Materials.Code,
                 Materials.Article,
                 Materials.Full_name,
-                Product_Names.Product_name.label('Material_Name'),
+                Product_Names.Product_name.label('Material_Name'),  # Берем из Product_Names
                 Materials.Brand,
-                Product_Family.Product_family.label('Family'),  # Получаем из Product_Family
+                Materials.Family,
                 Materials.Product_type,
                 Materials.UoM,
                 Materials.Report_UoM,
@@ -1179,16 +1099,13 @@ class ProductsPage(QWidget):
                 Materials.Gross_weight,
                 Materials.Density,
                 Materials.Excise,
-                Materials.Ecofee,
-                Materials.Labling,
-                Materials.Status,
+                Materials.Status,  # Добавляем статус
                 TNVED.code.label('TNVED'),
                 subq.c.ABC_category
             )
             .join(Product_Names, Materials.Product_Names_id == Product_Names.id)
-            .outerjoin(Product_Group, Product_Names.Product_Group_id == Product_Group.id)
-            .outerjoin(Product_Family, Product_Group.Product_Family_id == Product_Family.id)  # JOIN с Product_Family
-            .outerjoin(TNVED, Product_Group.TNVED_id == TNVED.id)
+            .join(Product_Group, Product_Names.Product_Group_id == Product_Group.id)
+            .join(TNVED, Product_Group.TNVED_id == TNVED.id)
             .outerjoin(subq, Product_Names.id == subq.c.product_name_id)
         )
         
@@ -1213,7 +1130,7 @@ class ProductsPage(QWidget):
             if code:
                 prod_df = prod_df[prod_df["Code"].astype(str).str.startswith(code, na=False)]
                 
-            # Для Article: обычный contains
+            # Для Article: обычный contains (без regex) для избежания проблем со спецсимволами
             if article:
                 prod_df = prod_df[prod_df["Article"].astype(str).str.contains(article, case=False, na=False)]
                 
@@ -1257,7 +1174,7 @@ class ProductsPage(QWidget):
         # Определение типов колонок
         text_columns = ['Article', 'Material_Name', 'Full_name', 'Brand', 'Family', 
                     'Product_name', 'Product_type', 'UoM', 'Report_UoM', 
-                    'Package_type', 'TNVED', 'Excise', 'Ecofee', 'Labling', 'Status']
+                    'Package_type', 'TNVED', 'Excise', 'Status']
         
         # Заполнение данных
         for i in range(len(df)):
@@ -1320,7 +1237,10 @@ class ProductsPage(QWidget):
 
     def show_message(self, text):
         """Показать успешное сообщение в label_msg"""
+        # Устанавливаем текст сообщения
         self.ui.label_msg.setText(text)
+        
+        # Устанавливаем стили для успешного сообщения
         self.ui.label_msg.setStyleSheet("""
             QLabel {
                 background-color: #CCFF99;
@@ -1332,7 +1252,13 @@ class ProductsPage(QWidget):
                 margin: 2px;
             }
         """)
+        
+        # Делаем label видимым (на случай, если был скрыт)
         self.ui.label_msg.setVisible(True)
+        
+        # Опционально: автоматически скрыть сообщение через 5 секунд
+        # from PySide6.QtCore import QTimer
+        # QTimer.singleShot(5000, self.clear_message)
 
     def clear_message(self):
         """Очистить сообщение"""
@@ -1340,7 +1266,7 @@ class ProductsPage(QWidget):
         self.ui.label_msg.setStyleSheet("")
     
     def show_error_message(self, text):
-        """Показать сообщение об ошибке в окне"""
+        """Показать сообщение об ошибке"""
         msg = QMessageBox()
         msg.setWindowTitle("Ошибка")
         msg.setIcon(QMessageBox.Critical)
@@ -1365,5 +1291,6 @@ class ProductsPage(QWidget):
         
         copy_button.clicked.connect(copy_text)
         msg.exec_()
-        
-        
+
+    
+    

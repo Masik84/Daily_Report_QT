@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'customerschlaZq.ui'
+## Form generated from reading UI file 'customersBrvfvM.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.1
+## Created by: Qt User Interface Compiler version 6.8.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -756,23 +756,6 @@ class Ui_Form(object):
 
         self.verticalLayout_6.addWidget(self.table)
 
-        self.frame_11 = QFrame(self.widget)
-        self.frame_11.setObjectName(u"frame_11")
-        self.frame_11.setMinimumSize(QSize(0, 25))
-        self.frame_11.setFrameShape(QFrame.Shape.StyledPanel)
-        self.frame_11.setFrameShadow(QFrame.Shadow.Raised)
-        self.horizontalLayout_8 = QHBoxLayout(self.frame_11)
-        self.horizontalLayout_8.setSpacing(0)
-        self.horizontalLayout_8.setObjectName(u"horizontalLayout_8")
-        self.horizontalLayout_8.setContentsMargins(-1, 0, -1, 0)
-        self.label_msg = QLabel(self.frame_11)
-        self.label_msg.setObjectName(u"label_msg")
-
-        self.horizontalLayout_8.addWidget(self.label_msg)
-
-
-        self.verticalLayout_6.addWidget(self.frame_11)
-
         self.frame_Update = QFrame(self.widget)
         self.frame_Update.setObjectName(u"frame_Update")
         self.frame_Update.setFrameShape(QFrame.Shape.StyledPanel)
@@ -783,8 +766,8 @@ class Ui_Form(object):
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.frame_cust_file = QFrame(self.frame_Update)
         self.frame_cust_file.setObjectName(u"frame_cust_file")
-        self.frame_cust_file.setMinimumSize(QSize(0, 45))
-        self.frame_cust_file.setMaximumSize(QSize(16777215, 45))
+        self.frame_cust_file.setMinimumSize(QSize(0, 35))
+        self.frame_cust_file.setMaximumSize(QSize(16777215, 35))
         self.frame_cust_file.setFrameShape(QFrame.Shape.StyledPanel)
         self.frame_cust_file.setFrameShadow(QFrame.Shadow.Raised)
         self.horizontalLayout_4 = QHBoxLayout(self.frame_cust_file)
@@ -793,34 +776,26 @@ class Ui_Form(object):
         self.horizontalLayout_4.setContentsMargins(0, 0, 0, 0)
         self.frame_4 = QFrame(self.frame_cust_file)
         self.frame_4.setObjectName(u"frame_4")
-        self.frame_4.setMinimumSize(QSize(0, 50))
+        self.frame_4.setMinimumSize(QSize(0, 35))
+        self.frame_4.setMaximumSize(QSize(16777215, 35))
         self.frame_4.setFrameShadow(QFrame.Shadow.Raised)
         self.verticalLayout_5 = QVBoxLayout(self.frame_4)
         self.verticalLayout_5.setSpacing(0)
         self.verticalLayout_5.setObjectName(u"verticalLayout_5")
         self.verticalLayout_5.setContentsMargins(0, 0, 0, 0)
-        self.label_Cust_File = QLabel(self.frame_4)
-        self.label_Cust_File.setObjectName(u"label_Cust_File")
-        self.label_Cust_File.setMinimumSize(QSize(0, 30))
-        self.label_Cust_File.setMaximumSize(QSize(16777215, 30))
-        self.label_Cust_File.setStyleSheet(u"QLabel {\n"
-"	background-color: #f8f8f2;\n"
-"	border-radius: 5px;\n"
-"	border: 2px solid #f09d54;\n"
-"	padding-left: 10px;\n"
-"	color: #964b09;\n"
-"	font: 10pt \"Tahoma\";\n"
-"}\n"
-"")
+        self.label_msg = QLabel(self.frame_4)
+        self.label_msg.setObjectName(u"label_msg")
+        self.label_msg.setMinimumSize(QSize(0, 35))
+        self.label_msg.setMaximumSize(QSize(16777215, 35))
 
-        self.verticalLayout_5.addWidget(self.label_Cust_File)
+        self.verticalLayout_5.addWidget(self.label_msg)
 
 
         self.horizontalLayout_4.addWidget(self.frame_4)
 
         self.frame_5 = QFrame(self.frame_cust_file)
         self.frame_5.setObjectName(u"frame_5")
-        self.frame_5.setMinimumSize(QSize(120, 50))
+        self.frame_5.setMinimumSize(QSize(120, 35))
         self.frame_5.setMaximumSize(QSize(250, 16777215))
         self.frame_5.setFrameShape(QFrame.Shape.StyledPanel)
         self.frame_5.setFrameShadow(QFrame.Shadow.Raised)
@@ -828,23 +803,13 @@ class Ui_Form(object):
         self.horizontalLayout_3.setSpacing(0)
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.btn_open_file = QPushButton(self.frame_5)
-        self.btn_open_file.setObjectName(u"btn_open_file")
-        self.btn_open_file.setMinimumSize(QSize(90, 30))
-        self.btn_open_file.setMaximumSize(QSize(90, 16777215))
-        icon1 = QIcon()
-        icon1.addFile(u":/icon/icon/folder \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_open_file.setIcon(icon1)
-
-        self.horizontalLayout_3.addWidget(self.btn_open_file)
-
         self.btn_upload_file = QPushButton(self.frame_5)
         self.btn_upload_file.setObjectName(u"btn_upload_file")
-        self.btn_upload_file.setMinimumSize(QSize(90, 30))
-        self.btn_upload_file.setMaximumSize(QSize(90, 16777215))
-        icon2 = QIcon()
-        icon2.addFile(u":/icon/icon/upload \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
-        self.btn_upload_file.setIcon(icon2)
+        self.btn_upload_file.setMinimumSize(QSize(155, 30))
+        self.btn_upload_file.setMaximumSize(QSize(120, 16777215))
+        icon1 = QIcon()
+        icon1.addFile(u":/icon/icon/refresh-cw \u2014 \u043a\u043e\u043f\u0438\u044f \u2014 \u043a\u043e\u043f\u0438\u044f.svg", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        self.btn_upload_file.setIcon(icon1)
 
         self.horizontalLayout_3.addWidget(self.btn_upload_file)
 
@@ -884,9 +849,7 @@ class Ui_Form(object):
         self.label_10.setText(QCoreApplication.translate("Form", u"\u041d\u0430\u0437\u0432 \u0414\u0438\u043b\u0435\u0440\u0430", None))
         self.label_11.setText(QCoreApplication.translate("Form", u"\u041c\u0435\u043d\u0435\u0434\u0436\u0435\u0440", None))
         self.label_8.setText(QCoreApplication.translate("Form", u"Team Lead", None))
-        self.label_msg.setText(QCoreApplication.translate("Form", u"TextLabel", None))
-        self.label_Cust_File.setText(QCoreApplication.translate("Form", u"\u0412\u044b\u0431\u0435\u0440\u0438 \u0444\u0430\u0439\u043b \u0438\u043b\u0438 \u043d\u0430\u0436\u043c\u0438 Upload, \u0444\u0430\u0439\u043b \u0431\u0443\u0434\u0435\u0442 \u0432\u0437\u044f\u0442 \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u043f\u0430\u043f\u043a\u0438", None))
-        self.btn_open_file.setText(QCoreApplication.translate("Form", u"Open", None))
-        self.btn_upload_file.setText(QCoreApplication.translate("Form", u"Upload", None))
+        self.label_msg.setText(QCoreApplication.translate("Form", u"\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0439 \u043d\u0435\u0442", None))
+        self.btn_upload_file.setText(QCoreApplication.translate("Form", u"\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435", None))
     # retranslateUi
 

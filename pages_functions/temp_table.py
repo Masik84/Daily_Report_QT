@@ -10,7 +10,7 @@ import traceback
 import sys
 
 from db import db
-from models import (temp_Purchase, temp_Sales, temp_Orders, Purchase_Order, DOCType, Materials, 
+from models import (temp_Purchase, temp_Sales_Orders, Purchase_Order, DOCType, Materials, 
         Customer, Supplier, Contract, Manager, Product_Names, Complects, Complects_manual, Holding, Marketplace, Hyundai_Dealer)
 from config import Purchase_folder, Sales_folder, Orders_file, Reserve_file, Customer_file, Contract_file, AddCosts_File, CustDelivery_File, All_data_file
 from wind.pages.temp_tables_ui import Ui_Form
@@ -135,8 +135,7 @@ class TempTablesPage(QWidget):
         """Инициализация комбобоксов без загрузки данных"""
         models = {
             "Закупки": temp_Purchase,
-            "Продажи": temp_Sales,
-            "Заказы клиентов": temp_Orders,
+            "Продажи и Заказы": temp_Sales_Orders,
             "Заказы поставщиков": Purchase_Order
         }
         self._fill_combobox(self.ui.line_table, ["-"] + list(models.keys()))
@@ -169,7 +168,7 @@ class TempTablesPage(QWidget):
         
         # Обновляем клиента/поставщика в зависимости от типа таблицы
         table = self.ui.line_table.currentText()
-        if table in ["Продажи", "Заказы клиентов"]:
+        if table in ["Продажи и Заказы"]:
             self.fill_customer_list()
         elif table in ["Закупки", "Заказы поставщиков"]:
             self.fill_supplier_list()
@@ -341,8 +340,7 @@ class TempTablesPage(QWidget):
         # Всегда обновляем список таблиц
         models = {
             "Закупки": temp_Purchase,
-            "Продажи": temp_Sales,
-            "Заказы клиентов": temp_Orders,
+            "Продажи и Заказы": temp_Sales_Orders,
             "Заказы поставщиков": Purchase_Order
         }
         self._fill_combobox(self.ui.line_table, list(models.keys()))
@@ -367,7 +365,7 @@ class TempTablesPage(QWidget):
             self.fill_doc_type_list()
             
             # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
-            if table in ["Продажи", "Заказы клиентов"]:
+            if table in ["Продажи и Заказы"]:
                 self.fill_customer_list()
             elif table in ["Закупки", "Заказы поставщиков"]:
                 self.fill_supplier_list()
@@ -417,7 +415,7 @@ class TempTablesPage(QWidget):
             self.fill_doc_type_list()
             
             # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
-            if table in ["Продажи", "Заказы клиентов"]:
+            if table in ["Продажи и Заказы"]:
                 self.fill_customer_list()
             elif table in ["Закупки", "Заказы поставщиков"]:
                 self.fill_supplier_list()
@@ -530,8 +528,7 @@ class TempTablesPage(QWidget):
         # Всегда обновляем список таблиц
         models = {
             "Закупки": temp_Purchase,
-            "Продажи": temp_Sales,
-            "Заказы клиентов": temp_Orders,
+            "Продажи и Заказы": temp_Sales_Orders,
             "Заказы поставщиков": Purchase_Order
         }
         self._fill_combobox(self.ui.line_table, list(models.keys()))
@@ -556,7 +553,7 @@ class TempTablesPage(QWidget):
             self.fill_doc_type_list()
             
             # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
-            if table in ["Продажи", "Заказы клиентов"]:
+            if table in ["Продажи и Заказы"]:
                 self.fill_customer_list()
             elif table in ["Закупки", "Заказы поставщиков"]:
                 self.fill_supplier_list()
@@ -606,7 +603,7 @@ class TempTablesPage(QWidget):
             self.fill_doc_type_list()
             
             # Обновляем список клиентов/поставщиков в зависимости от типа таблицы
-            if table in ["Продажи", "Заказы клиентов"]:
+            if table in ["Продажи и Заказы"]:
                 self.fill_customer_list()
             elif table in ["Закупки", "Заказы поставщиков"]:
                 self.fill_supplier_list()
@@ -801,7 +798,7 @@ class TempTablesPage(QWidget):
         # Фильтр по контрагенту (клиент или поставщик) - добавляем JOIN только если нужен
         customer_supplier = self.ui.line_customer.currentText()
         if customer_supplier != "-" and customer_supplier != "":
-            if model in [temp_Sales, temp_Orders]:
+            if model in [temp_Sales]:
                 query = query.join(Customer, model.Customer_id == Customer.id)
                 query = query.filter(Customer.Customer_name == customer_supplier)
             elif model in [temp_Purchase, Purchase_Order]:
@@ -875,13 +872,13 @@ class TempTablesPage(QWidget):
 
         # Добавляем колонки счета и даты счета только для продаж и заказов клиентов
         table = self.ui.line_table.currentText()
-        if table in ["Продажи", "Заказы клиентов"]:
+        if table in ["Продажи и Заказы"]:
             base_columns_to_show.extend(['Bill', 'Bill_Date'])
 
         # Добавляем колонку контрагента в зависимости от типа таблицы
         if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in df.columns:
             base_columns_to_show.append('Supplier_Name')
-        elif table in ["Продажи", "Заказы клиентов"] and 'Customer_Name' in df.columns:
+        elif table in ["Продажи и Заказы"] and 'Customer_Name' in df.columns:
             base_columns_to_show.append('Customer_Name')
 
         # Фильтруем только существующие колонки
@@ -908,7 +905,7 @@ class TempTablesPage(QWidget):
         # Переименовываем колонку контрагента
         if table in ["Закупки", "Заказы поставщиков"] and 'Supplier_Name' in display_df.columns:
             column_rename_map['Supplier_Name'] = 'Контрагент'
-        elif table in ["Продажи", "Заказы клиентов"] and 'Customer_Name' in display_df.columns:
+        elif table in ["Продажи и Заказы"] and 'Customer_Name' in display_df.columns:
             column_rename_map['Customer_Name'] = 'Контрагент'
 
         # Применяем переименование
@@ -1027,17 +1024,17 @@ class TempTablesPage(QWidget):
                     self._update_temp_purchase_in_db(purchase_df, self.report_start_date)
                     self.show_message("Данные о закупках успешно обновлены")
             
-            elif table == "Продажи":
+            elif table == "Продажи и Заказы":
                 sales_df = self.read_sales_data(self.report_start_date)
                 if not sales_df.empty:
                     self._update_temp_sales_in_db(sales_df)
-                    self.show_message("Данные о продажах успешно обновлены")
-            
-            elif table == "Заказы клиентов":
+                    
                 orders_df = self.read_orders_data()
                 if not orders_df.empty:
                     self._update_temp_orders_in_db(orders_df)
-                    self.show_message("Данные о заказах Покупателей успешно обновлены")
+                
+                self.show_message("Данные о продажах и заказах успешно обновлены")
+            
             
             elif table == "Заказы поставщиков":
                 purchase_order_df = self.read_purchase_order_data()
@@ -1048,8 +1045,7 @@ class TempTablesPage(QWidget):
             # После обновления данных обновляем только базовые комбобоксы
             models = {
                 "Закупки": temp_Purchase,
-                "Продажи": temp_Sales,
-                "Заказы клиентов": temp_Orders,
+                "Продажи и Заказы": temp_Sales_Orders,
                 "Заказы поставщиков": Purchase_Order
             }
             self._fill_combobox(self.ui.line_table, list(models.keys()))
@@ -1558,7 +1554,7 @@ class TempTablesPage(QWidget):
     
     def read_orders_data(self):
         """Чтение данных о заказах"""
-        max_date = db.query(temp_Sales.Date).order_by(temp_Sales.Date.desc()).first()
+        max_date = db.query(temp_Sales_Orders.Date).order_by(temp_Sales_Orders.Date.desc()).first()
         if max_date:
             sales_max_date = max_date[0]
             sales_max_date = pd.to_datetime(sales_max_date)
@@ -2703,8 +2699,7 @@ class TempTablesPage(QWidget):
         """Получение модели SQLAlchemy по имени таблицы"""
         models = {
             "Закупки": temp_Purchase,
-            "Продажи": temp_Sales,
-            "Заказы клиентов": temp_Orders,
+            "Продажи и Заказы": temp_Sales_Orders,
             "Заказы поставщиков": Purchase_Order
         }
         return models.get(table_name)
@@ -2803,7 +2798,7 @@ class TempTablesPage(QWidget):
         try:
             df = self._clean_dataframe(df)
             
-            db.query(temp_Sales).delete()
+            db.query(temp_Sales_Orders).delete()
             
             # Подготовка данных для bulk вставки
             sales_data = []
@@ -2850,13 +2845,13 @@ class TempTablesPage(QWidget):
             
             # Bulk вставка
             if sales_data:
-                db.bulk_insert_mappings(temp_Sales, sales_data)
+                db.bulk_insert_mappings(temp_Sales_Orders, sales_data)
             
             db.commit()
             
         except Exception as e:
             db.rollback()
-            self.show_error_message(f"Ошибка при обновлении temp_Sales: {str(e)}")
+            self.show_error_message(f"Ошибка при обновлении temp_Sales_Orders: {str(e)}")
             return
 
     def _update_temp_orders_in_db(self, df):

@@ -891,40 +891,6 @@ QCalendarWidget QSpinBox::down-arrow {
        </widget>
       </item>
       <item>
-       <widget class="QFrame" name="frame_4">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::Shape::StyledPanel</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Shadow::Raised</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_3">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="topMargin">
-          <number>0</number>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
-         <item>
-          <widget class="QLabel" name="label_msg">
-           <property name="text">
-            <string>TextLabel</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item>
        <widget class="QFrame" name="frame_9">
         <property name="frameShape">
          <enum>QFrame::Shape::StyledPanel</enum>
@@ -949,31 +915,9 @@ QCalendarWidget QSpinBox::down-arrow {
           <number>0</number>
          </property>
          <item>
-          <widget class="QLabel" name="label_manager_File">
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>30</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QLabel {
-	background-color: #f8f8f2;
-	border-radius: 5px;
-	border: 2px solid #f09d54;
-	padding-left: 10px;
-	color: #964b09;
-	font: 10pt &quot;Tahoma&quot;;
-}</string>
-           </property>
+          <widget class="QLabel" name="label_msg">
            <property name="text">
-            <string>Выбери файл или нажми Upload, файл будет взят из основной папки</string>
+            <string>Сообщений нет</string>
            </property>
           </widget>
          </item>
@@ -1014,33 +958,10 @@ QCalendarWidget QSpinBox::down-arrow {
              <number>0</number>
             </property>
             <item>
-             <widget class="QPushButton" name="btn_open_file_manager">
-              <property name="minimumSize">
-               <size>
-                <width>90</width>
-                <height>30</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>90</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>Open</string>
-              </property>
-              <property name="icon">
-               <iconset resource="../resource.qrc">
-                <normaloff>:/icon/icon/folder — копия — копия.svg</normaloff>:/icon/icon/folder — копия — копия.svg</iconset>
-              </property>
-             </widget>
-            </item>
-            <item>
              <widget class="QPushButton" name="btn_upload_file_manager">
               <property name="minimumSize">
                <size>
-                <width>90</width>
+                <width>160</width>
                 <height>30</height>
                </size>
               </property>
@@ -1051,11 +972,11 @@ QCalendarWidget QSpinBox::down-arrow {
                </size>
               </property>
               <property name="text">
-               <string>Upload</string>
+               <string>Обновить данные</string>
               </property>
               <property name="icon">
                <iconset resource="../resource.qrc">
-                <normaloff>:/icon/icon/upload — копия — копия.svg</normaloff>:/icon/icon/upload — копия — копия.svg</iconset>
+                <normaloff>:/icon/icon/refresh-ccw — копия — копия.svg</normaloff>:/icon/icon/refresh-ccw — копия — копия.svg</iconset>
               </property>
              </widget>
             </item>
