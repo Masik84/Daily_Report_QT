@@ -5,7 +5,7 @@ import os
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 # SQLALCHEMY_DATABASE_URI = 'sqlite:///Report_db.db'
-SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:qwerty@localhost:5432/report_db'
+SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:qwerty@localhost:5432/report_db_qt'
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
