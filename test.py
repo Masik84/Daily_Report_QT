@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, text
 
 def simple_test():
     try:
-        engine = create_engine('postgresql://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
+        engine = create_engine('postgresql+psycopg2://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
         
         with engine.connect() as conn:
             print("✅ Подключение к PostgreSQL успешно!")
@@ -61,57 +61,57 @@ simple_test()
 
 
 
-# %%
-import paramiko
-import psycopg2
-from sqlalchemy import create_engine, text
-import time
+# # %%
+# import paramiko
+# import psycopg2
+# from sqlalchemy import create_engine, text
+# import time
 
-def create_ssh_tunnel():
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+# def create_ssh_tunnel():
+#     client = paramiko.SSHClient()
+#     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
-    try:
-        print("🔗 Подключаемся к серверу...")
-        client.connect(
-            '217.65.3.240',
-            port=5432,
-            username='FokinaM',
-            password='Wk6t%#Xv',
-            look_for_keys=False,
-            allow_agent=False
-        )
+#     try:
+#         print("🔗 Подключаемся к серверу...")
+#         client.connect(
+#             '217.65.3.240',
+#             port=5432,
+#             username='FokinaM',
+#             password='Wk6t%#Xv',
+#             look_for_keys=False,
+#             allow_agent=False
+#         )
         
-        print("✅ SSH подключение установлено")
+#         print("✅ SSH подключение установлено")
         
-        # Создаем туннель
-        transport = client.get_transport()
-        local_port = 5432
-        transport.request_port_forward('', local_port)
+#         # Создаем туннель
+#         transport = client.get_transport()
+#         local_port = 5432
+#         transport.request_port_forward('', local_port)
         
-        print("🔌 Туннель создан на localhost:5432")
+#         print("🔌 Туннель создан на localhost:5432")
         
-        # Подключаемся к БД
-        engine = create_engine('postgresql://postgres:33ZqPiWj33@localhost:5432/report_db')
+#         # Подключаемся к БД
+#         engine = create_engine('postgresql://postgres:33ZqPiWj33@localhost:5432/report_db')
         
-        with engine.connect() as conn:
-            print("✅ Подключение к PostgreSQL установлено!")
-            result = conn.execute(text("SELECT version()"))
-            print(f"📊 Версия: {result.scalar()}")
+#         with engine.connect() as conn:
+#             print("✅ Подключение к PostgreSQL установлено!")
+#             result = conn.execute(text("SELECT version()"))
+#             print(f"📊 Версия: {result.scalar()}")
             
-        # Держим соединение открытым
-        print("⏳ Туннель активен... Нажмите Ctrl+C для закрытия")
-        while True:
-            time.sleep(1)
+#         # Держим соединение открытым
+#         print("⏳ Туннель активен... Нажмите Ctrl+C для закрытия")
+#         while True:
+#             time.sleep(1)
             
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-    finally:
-        client.close()
-        print("🔚 Соединение закрыто")
+#     except Exception as e:
+#         print(f"❌ Ошибка: {e}")
+#     finally:
+#         client.close()
+#         print("🔚 Соединение закрыто")
 
-if __name__ == "__main__":
-    create_ssh_tunnel()
+# if __name__ == "__main__":
+#     create_ssh_tunnel()
     
     
 #%%
@@ -138,78 +138,78 @@ ports_to_check = [22, 49155, 5432, 3389, 80, 443]
 scan_ports('217.65.3.240', ports_to_check)
 
 # %%
-from sqlalchemy import create_engine, text
+# from sqlalchemy import create_engine, text
 
-try:
-    print("🔧 Пробуем подключиться к PostgreSQL на порту 49155...")
-    engine = create_engine('postgresql://postgres:33ZqPiWj33@217.65.3.240:49155/report_db')
+# try:
+#     print("🔧 Пробуем подключиться к PostgreSQL на порту 49155...")
+#     engine = create_engine('postgresql://postgres:33ZqPiWj33@217.65.3.240:49155/report_db')
     
-    with engine.connect() as conn:
-        print("🎉 УСПЕХ! PostgreSQL работает на порту 49155")
-        result = conn.execute(text("SELECT version()"))
-        print(f"📊 Версия: {result.scalar()}")
+#     with engine.connect() as conn:
+#         print("🎉 УСПЕХ! PostgreSQL работает на порту 49155")
+#         result = conn.execute(text("SELECT version()"))
+#         print(f"📊 Версия: {result.scalar()}")
         
-except Exception as e:
-    print(f"❌ Это не PostgreSQL: {e}")
-# %%
+# except Exception as e:
+#     print(f"❌ Это не PostgreSQL: {e}")
+# # %%
 
-import telnetlib
+# import telnetlib
 
-try:
-    print("🔧 Проверяем Telnet...")
-    tn = telnetlib.Telnet('217.65.3.240', 49155, timeout=5)
-    print("✅ Подключение по Telnet установлено")
-    tn.close()
-except:
-    print("❌ Не Telnet")
-# %%
-import telnetlib
-import time
-from sqlalchemy import create_engine, text
+# try:
+#     print("🔧 Проверяем Telnet...")
+#     tn = telnetlib.Telnet('217.65.3.240', 49155, timeout=5)
+#     print("✅ Подключение по Telnet установлено")
+#     tn.close()
+# except:
+#     print("❌ Не Telnet")
+# # %%
+# import telnetlib
+# import time
+# from sqlalchemy import create_engine, text
 
-def create_telnet_tunnel():
-    try:
-        print("🔗 Подключаемся к серверу через Telnet...")
+# def create_telnet_tunnel():
+#     try:
+#         print("🔗 Подключаемся к серверу через Telnet...")
         
-        # Подключаемся через Telnet
-        tn = telnetlib.Telnet('217.65.3.240', 49155, timeout=10)
+#         # Подключаемся через Telnet
+#         tn = telnetlib.Telnet('217.65.3.240', 49155, timeout=10)
         
-        # Ждем приглашения для логина и отправляем учетные данные
-        tn.read_until(b"login:", timeout=5)
-        tn.write(b"FokinaM\n")
-        time.sleep(1)
+#         # Ждем приглашения для логина и отправляем учетные данные
+#         tn.read_until(b"login:", timeout=5)
+#         tn.write(b"FokinaM\n")
+#         time.sleep(1)
         
-        tn.read_until(b"password:", timeout=5)
-        tn.write(b"Wk6t%#Xv\n")
-        time.sleep(1)
+#         tn.read_until(b"password:", timeout=5)
+#         tn.write(b"Wk6t%#Xv\n")
+#         time.sleep(1)
         
-        print("✅ Telnet подключение установлено")
+#         print("✅ Telnet подключение установлено")
         
-        # Теперь пробуем подключиться к PostgreSQL
-        print("🔧 Подключаемся к PostgreSQL...")
-        engine = create_engine('postgresql://postgres:33ZqPiWj33@localhost:5432/report_db')
+#         # Теперь пробуем подключиться к PostgreSQL
+#         print("🔧 Подключаемся к PostgreSQL...")
+#         engine = create_engine('postgresql://postgres:33ZqPiWj33@localhost:5432/report_db')
         
-        with engine.connect() as conn:
-            print("🎉 УСПЕХ! Подключение к PostgreSQL установлено!")
-            result = conn.execute(text("SELECT version()"))
-            print(f"📊 Версия: {result.scalar()}")
+#         with engine.connect() as conn:
+#             print("🎉 УСПЕХ! Подключение к PostgreSQL установлено!")
+#             result = conn.execute(text("SELECT version()"))
+#             print(f"📊 Версия: {result.scalar()}")
             
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
+#     except Exception as e:
+#         print(f"❌ Ошибка: {e}")
 
-create_telnet_tunnel()
-# %%
+# create_telnet_tunnel()
+# # %%
 
-import requests
+# import requests
 
-try:
-    response = requests.post('https://217.65.3.240/api/query', 
-        json={"query": "SELECT version()"},
-        auth=('postgres', '33ZqPiWj33')
-    )
-    if response.status_code == 200:
-        print("✅ Есть веб-API для запросов")
-except:
-    print("❌ Нет веб-API")
+# try:
+#     response = requests.post('https://217.65.3.240/api/query', 
+#         json={"query": "SELECT version()"},
+#         auth=('postgres', '33ZqPiWj33')
+#     )
+#     if response.status_code == 200:
+#         print("✅ Есть веб-API для запросов")
+# except:
+#     print("❌ Нет веб-API")
 
 # %%
