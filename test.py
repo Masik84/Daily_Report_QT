@@ -1,40 +1,38 @@
-#%%
+# %%
 from sqlalchemy import create_engine, text
 
-def simple_test():
-    try:
-        engine = create_engine('postgresql+psycopg2://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
+try:
+    engine = create_engine('postgresql+psycopg2://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
+    
+    with engine.connect() as conn:
+        print("✅ Подключение к PostgreSQL успешно!")
         
-        with engine.connect() as conn:
-            print("✅ Подключение к PostgreSQL успешно!")
+        # Простая проверка - можем ли выполнять запросы
+        result = conn.execute(text("SELECT 1 as test"))
+        test_value = result.scalar()
+        print(f"✅ Тестовый запрос выполнен: {test_value}")
+        
+        # Проверяем существование базы
+        result = conn.execute(text("SELECT EXISTS(SELECT 1 FROM information_schema.tables)"))
+        has_tables = result.scalar()
+        
+        if has_tables:
+            print("📋 В базе есть таблицы")
+        else:
+            print("📭 База пустая - можно создавать таблицы")
             
-            # Простая проверка - можем ли выполнять запросы
-            result = conn.execute(text("SELECT 1 as test"))
-            test_value = result.scalar()
-            print(f"✅ Тестовый запрос выполнен: {test_value}")
-            
-            # Проверяем существование базы
-            result = conn.execute(text("SELECT EXISTS(SELECT 1 FROM information_schema.tables)"))
-            has_tables = result.scalar()
-            
-            if has_tables:
-                print("📋 В базе есть таблицы")
-            else:
-                print("📭 База пустая - можно создавать таблицы")
-                
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-
-simple_test()
+except Exception as e:
+    print(f"❌ Ошибка: {e}")
 
 
 
 
-# #%%
+
+#%%
 # from sqlalchemy import create_engine, text
 
 # try:
-#     engine = create_engine('postgresql://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
+#     engine = create_engine('postgresql+psycopg2://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
     
 #     with engine.connect() as conn:
 #         print("✅ Подключение к PostgreSQL установлено!")
@@ -114,7 +112,7 @@ simple_test()
 #     create_ssh_tunnel()
     
     
-#%%
+# %%
 
 import socket
 
@@ -136,6 +134,33 @@ def scan_ports(host, ports):
 # Проверим основные порты
 ports_to_check = [22, 49155, 5432, 3389, 80, 443]
 scan_ports('217.65.3.240', ports_to_check)
+
+from sqlalchemy import create_engine, text
+
+try:
+    engine = create_engine('postgresql+psycopg2://postgres:33ZqPiWj33@217.65.3.240:5432/report_db')
+    
+    with engine.connect() as conn:
+        print("✅ Подключение к PostgreSQL установлено!")
+        
+        # Проверяем версию БД
+        result = conn.execute(text("SELECT version()"))
+        db_version = result.scalar()
+        print(f"📊 Версия PostgreSQL: {db_version}")
+        
+        # Проверяем таблицы
+        result = conn.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """))
+        tables = result.fetchall()
+        print(f"📋 Найдено таблиц: {len(tables)}")
+        for table in tables:
+            print(f"   - {table[0]}")
+            
+except Exception as e:
+    print(f"❌ Ошибка подключения: {e}")
 
 # %%
 # from sqlalchemy import create_engine, text
